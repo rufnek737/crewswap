@@ -1,0 +1,9 @@
+node_modules/
+.netlify/
+*.bak
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.vscode/
+.idea/

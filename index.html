@@ -1,0 +1,574 @@
+﻿<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>제주항공 스케줄 스왑 (기획 프로토타입 v2)</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">J</div>
+          <div>
+            <strong>JJ Swap</strong>
+            <span>제주항공 승무원 스케줄 매칭 · 기획 v2</span>
+          </div>
+        </div>
+        <div class="status-strip">
+          <span id="airlineBadge" class="airline-pill">제주항공·조종사</span>
+          <span id="roleBadge">B등급 부기장</span>
+          <span id="aircraftBadge">NG + MAX</span>
+          <span id="qualBadge">EDTO / CAT III</span>
+          <span id="baseBadge">GMP</span>
+          <span class="rating-pill" id="ratingBadge">★ 4.8</span>
+          <span><b id="creditCount">5</b> 크레딧</span>
+          <button id="bellButton" class="bell-button" aria-label="알림">
+            🔔<span class="bell-badge" id="bellBadge">3</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- ===================== 회원가입 (모달) ===================== -->
+      <dialog id="signupPanel" class="signup-dialog">
+        <div class="signup-head">
+          <p class="eyebrow">회원가입 / Sign up</p>
+          <h2>JJ Swap</h2>
+          <p>제주항공 승무원 스케줄 매칭<br/>Jeju Air crew schedule swap</p>
+          <p class="signup-bonus">🎁 가입 보너스 5크레딧 / 5 free credits</p>
+        </div>
+        <form id="signupForm" class="signup-form">
+          <label>닉네임 <input id="signupNickname" value="OrangeFlight" /></label>
+          <label>
+            소속 항공사
+            <select id="signupAirline">
+              <option value="JEJU" selected>제주항공</option>
+              <option value="KOREAN" disabled>대한항공 (출시 후 지원)</option>
+              <option value="ASIANA" disabled>아시아나 (출시 후 지원)</option>
+              <option value="TWAY" disabled>티웨이 (출시 후 지원)</option>
+              <option value="AIRBUSAN" disabled>에어부산 (출시 후 지원)</option>
+              <option value="JINAIR" disabled>진에어 (출시 후 지원)</option>
+            </select>
+          </label>
+          <label>
+            직군
+            <select id="signupCrewType">
+              <option value="PILOT" selected>조종사</option>
+              <option value="CABIN" disabled>객실 승무원 (베타 다음 단계)</option>
+            </select>
+          </label>
+          <div class="signup-verify-block">
+            <strong class="field-label">회사 인증 · 제주항공 이메일</strong>
+            <div class="verify-email-row">
+              <input id="signupEmail" type="email" placeholder="ID@jejuair.net" autocomplete="email" />
+              <button type="button" id="sendVerifyBtn" class="secondary-button">코드 발송</button>
+            </div>
+            <div id="verifyCodeRow" class="verify-email-row" hidden>
+              <input id="verifyCodeInput" type="text" inputmode="numeric" maxlength="6" placeholder="6자리 인증 코드" />
+              <button type="button" id="checkVerifyBtn" class="secondary-button">인증 확인</button>
+            </div>
+            <p id="verifyStatus" class="hint" style="margin:0;"></p>
+          </div>
+          <label>
+            직책/등급
+            <select id="signupRole">
+              <option value="CAPTAIN_C">C등급 기장</option>
+              <option value="CAPTAIN_B">B등급 기장</option>
+              <option value="CAPTAIN_A">A등급 기장</option>
+              <option value="FO_C">C등급 부기장</option>
+              <option value="FO_B" selected>B등급 부기장</option>
+              <option value="FO_A">A등급 부기장</option>
+            </select>
+          </label>
+          <label>
+            기종 자격
+            <select id="signupAircraft">
+              <option value="NG">NG</option>
+              <option value="NG_MAX" selected>NG + MAX</option>
+            </select>
+          </label>
+          <label>
+            베이스
+            <select id="signupBase">
+              <option value="GMP" selected>GMP (김포)</option>
+              <option value="PUS">PUS (부산)</option>
+            </select>
+          </label>
+          <div>
+            <strong class="field-label">특수 자격</strong>
+            <div class="check-row">
+              <label><input id="signupEdto" type="checkbox" checked /> EDTO</label>
+              <label><input id="signupCat2" type="checkbox" /> CAT II</label>
+              <label><input id="signupCat3" type="checkbox" checked /> CAT III</label>
+            </div>
+          </div>
+          <div>
+            <strong class="field-label">알림 동의</strong>
+            <div class="check-row">
+              <label><input type="checkbox" checked /> 매칭 알림</label>
+              <label><input type="checkbox" checked /> 마감 알림</label>
+              <label><input type="checkbox" /> 마케팅 알림</label>
+            </div>
+          </div>
+          <button class="primary-button" type="submit">가입 완료 / Sign up</button>
+        </form>
+      </dialog>
+
+      <!-- ===================== 내 스케줄 ===================== -->
+      <section id="schedule" class="view is-active">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">CrewConnex 자동 파싱 · 회사 룰 자동 계산</p>
+            <h2>내 스케줄</h2>
+            <p>같은 비행 패턴(국제선+LAYOV+복귀)은 자동 묶음. 연속 RSV/STBY는 통째로만 SWAP 가능.</p>
+          </div>
+          <div class="actions">
+            <div class="view-toggle">
+              <button class="is-active" data-view="month">월</button>
+              <button data-view="week">주</button>
+              <button data-view="list">리스트</button>
+            </div>
+            <button id="importScheduleButton" class="primary-button">📥 CrewConnex 불러오기</button>
+            <button id="deleteScheduleButton" class="secondary-button">데이터 삭제</button>
+          </div>
+        </div>
+
+        <!-- 누적 진행바 -->
+        <div class="metrics-strip">
+          <div class="metric">
+            <span class="metric-label">월 승무시간</span>
+            <div class="metric-bar"><div id="hoursBar" class="metric-fill"></div></div>
+            <strong id="hoursText">0h / 90h</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">최대 연속 근무</span>
+            <div class="metric-bar"><div id="consecBar" class="metric-fill"></div></div>
+            <strong id="consecText">0 / 5일</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">월 SWAP 횟수</span>
+            <div class="metric-bar"><div id="swapBar" class="metric-fill"></div></div>
+            <strong id="swapText">0 / 3회</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">다음 마감</span>
+            <strong id="nextDeadline" class="deadline-text">계산 중...</strong>
+          </div>
+        </div>
+
+        <div class="schedule-layout">
+          <div class="calendar-panel">
+            <div class="calendar-month">
+              <div class="month-nav">
+                <button type="button" class="month-nav-btn" id="prevMonthBtn" aria-label="이전 달">‹</button>
+                <div>
+                  <strong id="calendarMonthLabel">2026년 6월</strong>
+                  <span>패턴은 가로 색띠로 묶임 · 셀 색상 = 스케줄 유형</span>
+                </div>
+                <button type="button" class="month-nav-btn" id="nextMonthBtn" aria-label="다음 달">›</button>
+              </div>
+              <div id="availableMonths" class="available-months"></div>
+              <div class="legend">
+                <span class="lg lg-off">OFF</span>
+                <span class="lg lg-dom">국내</span>
+                <span class="lg lg-intl">국제</span>
+                <span class="lg lg-lay">LAYOV</span>
+                <span class="lg lg-rsv">RSV</span>
+                <span class="lg lg-stby">STBY</span>
+              </div>
+            </div>
+            <div class="calendar-weekdays">
+              <span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span>
+            </div>
+            <div id="calendarGrid" class="calendar-grid" aria-label="월간 스케줄 달력"></div>
+          </div>
+          <aside class="side-panel">
+            <h3>선택한 패턴</h3>
+            <div id="selectedSummary" class="empty-state">달력에서 패턴을 드래그하거나 클릭하세요.</div>
+            <div id="ruleCheck" class="rule-check"></div>
+            <button id="registerSelectionButton" class="primary-button" disabled>이 패턴으로 스왑 등록</button>
+            <button id="clearSelectionButton" class="secondary-button" disabled>선택 해제</button>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ===================== 스왑 찾기 ===================== -->
+      <section id="find" class="view">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">자동 필터 · 양방향 매칭</p>
+            <h2>스왑 찾기</h2>
+            <p>같은 등급·직책·기종 호환 글만 노출됩니다. 매칭 점수와 근거가 함께 표시됩니다.</p>
+          </div>
+          <select id="sortSelect" aria-label="정렬 기준">
+            <option value="score">매칭 점수 높은 순</option>
+            <option value="deadline">마감 임박순 (D-2 17시)</option>
+            <option value="newest">새로 올라온 순</option>
+            <option value="off">OFF 포함 우선</option>
+            <option value="base">같은 베이스 우선</option>
+            <option value="flightShort">비행시간 적은 순</option>
+          </select>
+        </div>
+
+        <!-- 방향 변환 chips -->
+        <div class="filter-panel">
+          <div>
+            <strong>방향 변환</strong>
+            <div class="chip-row" id="directionChips">
+              <button class="filter-chip is-active" data-dir="all">전체</button>
+              <button class="filter-chip" data-dir="AM_TO_PM">오전→오후</button>
+              <button class="filter-chip" data-dir="PM_TO_AM">오후→오전</button>
+              <button class="filter-chip" data-dir="FLY_TO_OFF">비행→OFF</button>
+              <button class="filter-chip" data-dir="OFF_TO_FLY">OFF→비행</button>
+              <button class="filter-chip" data-dir="RSV_TO_OFF">RSV→OFF</button>
+              <button class="filter-chip" data-dir="OFF_TO_RSV">OFF→RSV</button>
+              <button class="filter-chip" data-dir="LAY_TO_DOM">LAYOV→국내</button>
+              <button class="filter-chip" data-dir="INTL_TO_DOM">국제→국내</button>
+            </div>
+          </div>
+          <div>
+            <strong>스케줄 유형</strong>
+            <div class="chip-row" id="typeFilters">
+              <button class="filter-chip is-active" data-filter="all">전체</button>
+              <button class="filter-chip" data-filter="OFF">OFF</button>
+              <button class="filter-chip" data-filter="국내선">국내선</button>
+              <button class="filter-chip" data-filter="국제선">국제선</button>
+              <button class="filter-chip" data-filter="LAYOV">LAYOV</button>
+              <button class="filter-chip" data-filter="RSV">RSV</button>
+              <button class="filter-chip" data-filter="STBY">STBY</button>
+            </div>
+          </div>
+          <div class="filter-grid">
+            <label>날짜
+              <select id="dateFilter">
+                <option value="all">전체</option>
+                <option value="thisMonth">이번 달</option>
+                <option value="weekend">주말만</option>
+                <option value="weekday">평일만</option>
+                <option value="d7">D-7 이내</option>
+              </select>
+            </label>
+            <label>시간대
+              <select id="timeFilter">
+                <option value="all">전체</option>
+                <option value="AM">오전 출근 (~10시)</option>
+                <option value="PM">오후 출근</option>
+                <option value="NIGHT">야간 출근</option>
+                <option value="noEarlyArr">새벽 도착 제외</option>
+              </select>
+            </label>
+            <label>권역
+              <select id="regionFilter">
+                <option value="all">전체</option>
+                <option value="DOMESTIC">국내선만</option>
+                <option value="JAPAN">일본</option>
+                <option value="SEA">동남아</option>
+                <option value="CHINA">중국</option>
+                <option value="exCHINA">중국 제외</option>
+                <option value="exCXR">CXR 제외</option>
+                <option value="exBKI">BKI 제외</option>
+              </select>
+            </label>
+            <label>LAYOV 박수
+              <select id="layoverFilter">
+                <option value="all">전체</option>
+                <option value="1">1박</option>
+                <option value="2">2박</option>
+                <option value="3">3박+</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="match-summary" id="matchSummary"></div>
+        <div id="matchList" class="card-list"></div>
+      </section>
+
+      <!-- ===================== 스왑 등록 (양방향) ===================== -->
+      <section id="post" class="view">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">양방향 등록 · 1크레딧 또는 광고 1회</p>
+            <h2>스왑 등록</h2>
+            <p>왼쪽 = 내가 내놓을 패턴 (달력에서 자동 입력) · 오른쪽 = 내가 원하는 조건</p>
+          </div>
+          <button id="watchAdButton" class="secondary-button">📺 광고 보고 등록권 받기</button>
+        </div>
+
+        <!-- 내가 등록한 글 -->
+        <div id="myPostList" class="my-post-list"></div>
+
+        <div class="bidirectional-form">
+          <!-- 왼쪽: 내가 내놓을 것 -->
+          <div class="form-side">
+            <div class="side-head">
+              <span class="side-num">①</span>
+              <h3>내가 내놓을 것</h3>
+            </div>
+            <div id="offeredSlot" class="slot-card empty">
+              <div>달력에서 패턴을 선택하면 자동 입력됩니다.</div>
+              <button class="link-button" id="goToCalendar">달력으로 이동 →</button>
+            </div>
+          </div>
+
+          <div class="swap-arrow" aria-hidden="true">⇄</div>
+
+          <!-- 오른쪽: 내가 원하는 것 -->
+          <div class="form-side">
+            <div class="side-head">
+              <span class="side-num">②</span>
+              <h3>내가 원하는 것</h3>
+            </div>
+            <label>유형 (복수 선택)
+              <div id="wantedTypeChips" class="chip-row chip-multi"></div>
+            </label>
+            <label>날짜 유연성
+              <select id="wantedDateFlex">
+                <option value="sameDay">선택 날짜와 동일</option>
+                <option value="sameMonth" selected>이번 달 내</option>
+                <option value="any">날짜 무관</option>
+                <option value="weekend">주말 우선</option>
+              </select>
+            </label>
+            <label>시간대 선호
+              <div id="wantedTimeChips" class="chip-row chip-multi">
+                <button data-time="AM">오전</button>
+                <button data-time="PM">오후</button>
+                <button data-time="NIGHT">야간</button>
+                <button data-time="noEarlyArr">새벽 도착 제외</button>
+              </div>
+            </label>
+            <label>포함 공항 <input id="includedAirports" placeholder="예: CJU, KIX (쉼표 구분)" /></label>
+            <label>제외 공항 <input id="excludedAirports" placeholder="예: CXR, BKI, TAG" /></label>
+            <label>공개 메모 <textarea id="postMemo" rows="3" placeholder="상대에게 보일 추가 희망 조건"></textarea></label>
+          </div>
+        </div>
+
+        <!-- 등록 전 요약 -->
+        <div class="post-footer">
+          <div class="preview-stats" id="previewStats">
+            <div class="stat-cell"><span>예상 노출</span><strong id="exposureCount">-</strong><small>같은 등급·자격 사용자</small></div>
+            <div class="stat-cell"><span>현재 매칭 후보</span><strong id="candidateCount">-</strong><small>역방향 검색 기준</small></div>
+            <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>또는 광고 1회</small></div>
+          </div>
+          <div class="rule-check-summary" id="postRuleCheck"></div>
+          <div class="post-footer-btns">
+            <button id="saveDraftButton" class="secondary-button" disabled>임시 저장</button>
+            <button id="submitPostButton" class="primary-button" disabled>등록하기 · 1크레딧</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== 요청함 ===================== -->
+      <section id="requests" class="view">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">4단계 프라이버시 공개</p>
+            <h2>요청함</h2>
+            <p>실명·사번·연락처는 회사 시스템 승인 후에만 공개됩니다.</p>
+          </div>
+          <div class="actions">
+            <div class="view-toggle">
+              <button class="is-active" data-req-view="sent">보낸 요청</button>
+              <button data-req-view="received">받은 요청</button>
+            </div>
+          </div>
+        </div>
+        <div id="requestList" class="card-list"></div>
+      </section>
+
+      <!-- ===================== 내 정보 ===================== -->
+      <section id="profile" class="view">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">매칭 기준 · 평판 관리</p>
+            <h2>내 정보</h2>
+            <p>회원 유형을 바꾸면 검색 결과가 즉시 재필터링됩니다.</p>
+          </div>
+        </div>
+
+        <div class="profile-grid">
+          <div class="profile-card rating-card">
+            <h3>내 신뢰도</h3>
+            <div class="big-rating">★ 4.8 <span>/ 5.0</span></div>
+            <div class="rating-stats">
+              <div><span>매칭 성공률</span><strong>92%</strong></div>
+              <div><span>회사 승인률</span><strong>98%</strong></div>
+              <div><span>평균 응답</span><strong>1.2h</strong></div>
+              <div><span>노쇼 신고</span><strong>0건</strong></div>
+            </div>
+            <p class="hint">신뢰도가 높을수록 매칭 결과 상단에 우선 노출됩니다.</p>
+          </div>
+
+          <form id="profileForm" class="profile-form">
+            <label>닉네임 <input id="nicknameInput" value="OrangeFlight" /></label>
+            <label>
+              소속 항공사
+              <select id="airlineInput">
+                <option value="JEJU" selected>제주항공</option>
+                <option value="KOREAN" disabled>대한항공 (출시 후)</option>
+                <option value="ASIANA" disabled>아시아나 (출시 후)</option>
+                <option value="TWAY" disabled>티웨이 (출시 후)</option>
+                <option value="AIRBUSAN" disabled>에어부산 (출시 후)</option>
+                <option value="JINAIR" disabled>진에어 (출시 후)</option>
+              </select>
+            </label>
+            <label>
+              직군
+              <select id="crewTypeInput">
+                <option value="PILOT" selected>조종사</option>
+                <option value="CABIN" disabled>객실 (다음 단계)</option>
+              </select>
+            </label>
+            <label>
+              직책/등급
+              <select id="roleTypeInput">
+                <option value="CAPTAIN_C">C등급 기장</option>
+                <option value="CAPTAIN_B">B등급 기장</option>
+                <option value="CAPTAIN_A">A등급 기장</option>
+                <option value="FO_C">C등급 부기장</option>
+                <option value="FO_B" selected>B등급 부기장</option>
+                <option value="FO_A">A등급 부기장</option>
+              </select>
+            </label>
+            <label>
+              기종 자격
+              <select id="aircraftInput">
+                <option value="NG">NG</option>
+                <option value="NG_MAX" selected>NG + MAX</option>
+              </select>
+            </label>
+            <label>
+              베이스
+              <select id="baseInput">
+                <option value="GMP" selected>GMP</option>
+                <option value="PUS">PUS</option>
+              </select>
+            </label>
+            <div>
+              <strong class="field-label">특수 자격</strong>
+              <div class="check-row">
+                <label><input id="edtoInput" type="checkbox" checked /> EDTO</label>
+                <label><input id="cat2Input" type="checkbox" /> CAT II</label>
+                <label><input id="cat3Input" type="checkbox" checked /> CAT III</label>
+              </div>
+            </div>
+            <button class="primary-button" type="submit">내 정보 저장</button>
+          </form>
+
+          <div class="profile-card">
+            <h3>크레딧</h3>
+            <div class="credit-balance"><strong id="profileCredits">5</strong> 크레딧</div>
+            <div class="beta-credit-notice">🎁 베타 기간 동안 무료 제공</div>
+            <p class="hint">매칭 실패 시 사용한 크레딧 50% 환급. 광고 시청 등록권은 24시간 만료.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-tabs" aria-label="메인 메뉴">
+      <button class="tab is-active" data-tab="schedule">📅 내 스케줄</button>
+      <button class="tab" data-tab="find">🔍 스왑 찾기</button>
+      <button class="tab" data-tab="post">➕ 스왑 등록</button>
+      <button class="tab" data-tab="requests">📨 요청함</button>
+      <button class="tab" data-tab="profile">👤 내 정보</button>
+    </nav>
+
+    <!-- 알림 패널 -->
+    <aside id="alertPanel" class="alert-panel" hidden>
+      <header class="alert-head">
+        <h3>알림</h3>
+        <button id="closeAlerts" aria-label="닫기">×</button>
+      </header>
+      <div class="alert-filters">
+        <button class="is-active" data-alert="all">전체</button>
+        <button data-alert="match">매칭</button>
+        <button data-alert="urgent">마감</button>
+        <button data-alert="announce">공지</button>
+      </div>
+      <div id="alertList" class="alert-list"></div>
+    </aside>
+
+    <!-- 실 데이터 입력 다이얼로그 -->
+    <dialog id="crewDialog">
+      <form method="dialog" class="dialog-body import-dialog">
+        <h2>📋 실 데이터 입력 (테스트용)</h2>
+        <div class="notice">
+          정적 HTML 환경에서는 CrewConnex API/웹뷰 자동 파싱이 불가합니다 (CORS·인증·TOS).
+          본인 CrewConnex 화면을 보고 <strong>텍스트 붙여넣기 또는 직접 편집</strong>하여 실 데이터로 테스트하세요.
+          입력값은 브라우저 메모리에만 저장되며 새로고침 시 사라집니다.
+        </div>
+
+        <div id="autoMode" class="import-mode">
+          <div class="notice" style="background:#e8f6ed;border-color:#8bd2ac;color:#0d5a37;">
+            ⚡ 본인 대신 CrewConnex에 로그인 → 자동 파싱 → 즉시 적용.
+            아이디/비밀번호는 <strong>저장하지 않고</strong> 1회 요청 후 즉시 폐기됩니다.
+          </div>
+          <label>CrewConnex ID
+            <input type="text" id="ccUsername" autocomplete="username" placeholder="사번 또는 ID" />
+          </label>
+          <label>CrewConnex 비밀번호
+            <input type="password" id="ccPassword" autocomplete="current-password" placeholder="저장 안 됨" />
+          </label>
+          <label>본인 한글 이름 (편조에서 자기 제외용)
+            <input type="text" id="ccUserName" placeholder="예: 홍길동 (선택, 자동 감지)" />
+          </label>
+          <button type="button" class="primary-button" id="ccLoginButton">🚀 자동 로그인 + 파싱</button>
+          <div id="ccLoginStatus" class="hint" style="text-align:center;"></div>
+        </div>
+
+
+        <div id="parsePreview" hidden>
+          <h3>파싱 결과 — 확인 / 수정 / 저장</h3>
+          <p class="hint">잘못 인식된 항목은 직접 수정하세요. 매칭 정확도를 위해 <strong>편조 등급(C/F)</strong>, <strong>EDTO/CAT3</strong>, <strong>패턴 ID</strong>(같은 패턴은 동일 P1/P2 등)를 점검하세요.</p>
+          <div id="previewTable" class="preview-wrap"></div>
+          <div class="dialog-actions">
+            <button type="button" class="secondary-button" id="addRowButton">+ 행 추가</button>
+            <button type="button" class="secondary-button" id="reparseButton">← 다시 입력</button>
+            <button type="button" class="primary-button" id="confirmImportButton">이 스케줄로 저장 → 메인 적용</button>
+          </div>
+        </div>
+
+        <div class="dialog-actions" id="defaultDialogActions">
+          <button value="cancel" type="submit" class="secondary-button">닫기</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- WARN 항목 확인 다이얼로그 -->
+    <dialog id="warnConfirmDialog">
+      <div class="dialog-body">
+        <div class="warn-confirm-head">
+          <span class="warn-confirm-icon">⚠️</span>
+          <div>
+            <h3 style="margin:0 0 4px;">확인 항목이 있습니다</h3>
+            <p class="hint" style="margin:0;">아래 항목은 등록 후 <strong>회사 문의가 필요</strong>합니다.<br/>내용을 확인하고 등록을 진행하시겠습니까?</p>
+          </div>
+        </div>
+        <ul id="warnConfirmList" class="warn-confirm-list"></ul>
+        <div class="dialog-actions" style="margin-top:16px;">
+          <button class="secondary-button" id="warnConfirmCancel">취소</button>
+          <button class="primary-button" id="warnConfirmOk">확인 후 등록하기</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- 양도 의향 묻기 dialog -->
+    <dialog id="askDialog">
+      <div class="dialog-body">
+        <h3 id="askDialogTitle">💬 양도 의향 묻기</h3>
+        <p class="hint" style="margin-bottom:10px;">크레딧 없이 관심을 먼저 전달합니다. 상대방이 수락하면 정식 요청으로 전환됩니다.</p>
+        <textarea id="askMessage" rows="4" placeholder="안녕하세요, 해당 스케줄 스왑에 관심이 있습니다. 조건이 맞으면 연락 주세요!" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+        <div class="dialog-actions" style="margin-top:12px;">
+          <button class="secondary-button" id="askCancelButton">취소</button>
+          <button class="primary-button" id="askSendButton">보내기</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
+
