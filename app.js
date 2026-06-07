@@ -1881,13 +1881,36 @@ function bindEvents() {
     showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
   });
 
-  $("#deleteScheduleButton").addEventListener("click", () => {
-    if (!confirm("저장된 모든 데이터(스케줄·요청·크레딧·내정보)를 영구 삭제합니다. 계속?")) return;
+  document.getElementById("withdrawButton")?.addEventListener("click", async () => {
+    if (!confirm("탈퇴하면 스케줄·크레딧·등록된 스왑 글이 모두 삭제됩니다.\n정말 탈퇴하시겠습니까?")) return;
+    // 서버에 올린 내 포스트 모두 삭제
+    const toDelete = state.myPosts.filter(p => p.deleteToken);
+    await Promise.allSettled(
+      toDelete.map(p => fetch("/.netlify/functions/posts-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
+      }).catch(e => console.warn("posts-delete failed:", e)))
+    );
+    // 로컬 초기화
     state.selectedDays.clear();
     state.schedules = [];
+    state.myPosts = [];
+    state.requests = { sent: [], received: [] };
+    state.alerts = createMockAlerts();
+    state.credits = 5;
+    state.user = {
+      hasSignedUp: false, airline: "JEJU", crewType: "PILOT",
+      nickname: "OrangeFlight", roleType: "FO_B", aircraft: "NG_MAX",
+      edto: true, cat2: false, cat3: true, base: "GMP", rating: 4.8,
+      monthlySwapUsed: 1, monthlySwapLimit: 3,
+    };
     clearStorage();
     renderAll();
-    showToast("모든 데이터 삭제 + localStorage 초기화 완료.");
+    // 가입 팝업 다시 표시
+    const sp = document.getElementById("signupPanel");
+    if (sp && sp.tagName === "DIALOG") { try { sp.showModal(); } catch (_) {} }
+    showToast("탈퇴 처리가 완료됐습니다.");
   });
 
   $("#clearSelectionButton").addEventListener("click", () => {
@@ -2287,8 +2310,6 @@ function applyLang() {
   // 헤더 import/삭제 버튼
   const btnImport = document.getElementById("importScheduleButton");
   if (btnImport) btnImport.textContent = t["버튼.불러오기"];
-  const btnDel = document.getElementById("deleteScheduleButton");
-  if (btnDel) btnDel.textContent = t["버튼.삭제"];
   // view-toggle 월/주/리스트
   document.querySelectorAll("[data-view]").forEach(b => {
     if (b.dataset.view === "month") b.textContent = t["월"];
