@@ -1291,7 +1291,12 @@ function renderMyPosts() {
     el.innerHTML = "";
     return;
   }
-  el.innerHTML = state.myPosts.map(p => `
+  el.innerHTML = state.myPosts.map(p => {
+    const rd = p.registeredAt;
+    const rdDisplay = (rd && rd.includes('T'))
+      ? (() => { const d = new Date(rd); return `${d.getMonth()+1}/${d.getDate()} 등록`; })()
+      : (rd || '');
+    return `
     <div class="my-post-card">
       <div class="my-post-head">
         <strong>${p.offered.patternName}</strong>
@@ -1300,17 +1305,27 @@ function renderMyPosts() {
       <div class="my-post-meta">
         <span>${p.offered.type} · ${p.offered.summary || ""}</span>
         <span>희망: ${p.wanted.types.join(" / ")}</span>
-        <span class="my-post-time">${p.registeredAt}</span>
+        <span class="my-post-time">${rdDisplay}</span>
       </div>
       <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
     </div>
-  `).join("");
+  `;
+  }).join("");
   el.querySelectorAll(".cancel-post-button").forEach(b => {
-    b.onclick = () => {
+    b.onclick = async () => {
       const pid = b.dataset.myPostId;
       const post = state.myPosts.find(x => x.id === pid);
       if (!post) return;
       if (!confirm(`"${post.offered.patternName}" 등록을 취소하고 ${post.creditSpent}크레딧을 환급받겠습니까?`)) return;
+      if (post.deleteToken) {
+        try {
+          await fetch("/.netlify/functions/posts-delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
+          });
+        } catch (e) { console.warn("posts-delete failed:", e); }
+      }
       state.myPosts = state.myPosts.filter(x => x.id !== pid);
       state.credits += post.creditSpent;
       saveState();
@@ -1461,6 +1476,28 @@ function renderMatches() {
   });
 }
 
+/* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
+async function fetchPosts() {
+  try {
+    const res = await fetch("/.netlify/functions/posts-get");
+    if (!res.ok) return;
+    const data = await res.json();
+    const myIds = new Set(state.myPosts.map(p => p.id));
+    const now = Date.now();
+    state.posts = (data.posts || [])
+      .filter(p => !myIds.has(p.id))
+      .map(p => ({
+        ...p,
+        postedHoursAgo: p.registeredAt
+          ? Math.max(0, Math.round((now - new Date(p.registeredAt).getTime()) / 3600000))
+          : 0,
+      }));
+    renderMatches();
+  } catch (e) {
+    console.warn("fetchPosts error:", e);
+  }
+}
+
 function requestSwap(postId) {
   if (state.credits < 1) {
     showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다.");
@@ -1560,14 +1597,23 @@ function requestCard(r) {
 
 function renderAlerts() {
   const filter = state.alertFilter;
-  const items = filter === "all" ? state.alerts : state.alerts.filter(a => a.kind === filter);
-  $("#alertList").innerHTML = items.length ? items.map(a => `
+  const allIndexed = state.alerts.map((a, i) => ({ a, i }));
+  const items = filter === "all" ? allIndexed : allIndexed.filter(x => x.a.kind === filter);
+  $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => `
     <div class="alert-item ${a.kind}">
+      <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
       <strong>${a.title}</strong>
       <p>${a.body}</p>
       <span class="time">${a.time}</span>
     </div>
   `).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
+  $$("#alertList .alert-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.alerts.splice(parseInt(btn.dataset.alertIdx, 10), 1);
+      saveState();
+      renderAlerts();
+    });
+  });
   $("#bellBadge").textContent = state.alerts.length;
   $("#bellBadge").style.display = state.alerts.length ? "grid" : "none";
 }
@@ -1576,6 +1622,7 @@ function renderAlerts() {
 function switchTab(name) {
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === name));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
+  if (name === "find") fetchPosts();
 }
 
 function bindEvents() {
@@ -1876,7 +1923,7 @@ function bindEvents() {
   });
 
   // 실제 등록 실행 (WARN 확인 후 or 바로)
-  function doSubmitPost() {
+  async function doSubmitPost() {
     if (state.credits < 1) { showToast("크레딧 부족"); return; }
     const ss = selectedSchedules();
     if (ss.length === 0) return;
@@ -1884,9 +1931,28 @@ function bindEvents() {
     const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
     const firstCrew = ss.find(s => s.crewComposition && s.crewComposition !== "편조 없음");
     const m = parseInt(state.currentMonth.split("-")[1]);
+    // 권역 자동 추출
+    const region = (() => {
+      for (const s of ss) {
+        for (const ap of [s.arr, s.dep, s.layoverAirport].filter(Boolean)) {
+          const r = AIRPORT_REGION[ap];
+          if (r && r !== "DOMESTIC") return r;
+        }
+      }
+      return ss.some(s => s.type === "국내선") ? "DOMESTIC" : null;
+    })();
     const newPost = {
-      id: "MY-" + Date.now(),
-      registeredAt: `${m}/${ss[0].day} 등록`,
+      id: "POST-" + Date.now(),
+      deleteToken: crypto.randomUUID(),
+      registeredAt: new Date().toISOString(),
+      airline: state.user.airline,
+      crewType: state.user.crewType,
+      ownerRole: state.user.roleType,
+      ownerNick: state.user.nickname,
+      ownerRating: state.user.rating || 4.5,
+      ownerBase: state.user.base || "GMP",
+      deadlineDay: ss[0].day,
+      watchers: 0,
       offered: {
         patternName: `${m}/${ss[0].day}${ss.length > 1 ? `~${m}/${ss.at(-1).day}` : ""} · ${ss[0].type} 패턴`,
         days: [...state.selectedDays].sort((a,b)=>a-b),
@@ -1896,13 +1962,14 @@ function bindEvents() {
         edto: ss.some(s=>s.requiresEdto),
         cat3: ss.some(s=>s.requiresCat3),
         flightMinutes: ss.reduce((sum,s)=>sum+flightMinutesOf(s),0),
+        region,
         reportTime: firstFlight ? firstFlight.reportTime : null,
         releaseTime: lastFlight ? lastFlight.releaseTime : null,
         crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
       },
       wanted: {
         types: [...state.wantedTypes],
-        times: [...state.wantedTimes],
+        time: [...state.wantedTimes],
         dateFlex: $("#wantedDateFlex").value,
         includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
         excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
@@ -1911,6 +1978,17 @@ function bindEvents() {
       creditSpent: 1,
       status: "active",
     };
+    // Netlify Blobs에 저장 (실패해도 로컬 등록은 진행)
+    try {
+      const res = await fetch("/.netlify/functions/posts-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newPost),
+      });
+      if (!res.ok) console.warn("posts-create failed:", await res.json().catch(() => ({})));
+    } catch (e) {
+      console.warn("posts-create network error:", e);
+    }
     state.myPosts.unshift(newPost);
     state.postDraft = null;
     state.credits--;
@@ -2013,6 +2091,12 @@ function bindEvents() {
   $("#closeAlerts").addEventListener("click", () => {
     $("#alertPanel").hidden = true;
   });
+  document.getElementById("clearAllAlerts")?.addEventListener("click", () => {
+    if (!state.alerts.length) return;
+    state.alerts = [];
+    saveState();
+    renderAlerts();
+  });
   $$(".alert-filters button").forEach(b => b.onclick = () => {
     $$(".alert-filters button").forEach(x => x.classList.remove("is-active"));
     b.classList.add("is-active");
@@ -2081,6 +2165,7 @@ function saveState() {
       currentMonth: state.currentMonth,
       myPosts: state.myPosts,
       postDraft: state.postDraft,
+      alerts: state.alerts,
     }));
   } catch (e) { console.warn("저장 실패:", e); }
 }
@@ -2099,6 +2184,7 @@ function loadStateFromStorage() {
     if (d.currentMonth) state.currentMonth = d.currentMonth;
     if (Array.isArray(d.myPosts)) state.myPosts = d.myPosts;
     if (d.postDraft) state.postDraft = d.postDraft;
+    if (Array.isArray(d.alerts)) state.alerts = d.alerts;
 
     // 복원된 currentMonth에 데이터가 없으면, 데이터 있는 월 중
     // ① 오늘 날짜 월이 있으면 그쪽, ② 없으면 가장 가까운 미래 월, ③ 그것도 없으면 첫 월
@@ -2217,6 +2303,7 @@ function applyLang() {
 renderAll();
 bindEvents();
 applyLang();
+fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 
 document.getElementById("langToggle")?.addEventListener("click", () => {
   state.lang = state.lang === "KO" ? "EN" : "KO";
