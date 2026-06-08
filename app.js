@@ -812,20 +812,18 @@ function checkRulesForSelection() {
 
   // 특정 사유로 차단되는 패턴
   const blockedHoliday = ss.some(s => isHoliday(s.day));
-  const isRsvStbyPattern = ss.length > 0 && ss.every(s => s.type === "RSV" || s.type === "STBY");
   // 부분 RSV/STBY: 선택한 RSV/STBY 일자와 인접한 RSV/STBY가 미선택이면 partial
-  let partialRsvStby = ss.some(s => s.type === "RSV" || s.type === "STBY") && !isRsvStbyPattern;
-  if (!partialRsvStby) {
-    ss.forEach(s => {
-      if (s.type !== "RSV" && s.type !== "STBY") return;
-      [s.day - 1, s.day + 1].forEach(d => {
-        const adj = getSchedule(d);
-        if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(d)) {
-          partialRsvStby = true;
-        }
-      });
+  // (OFF+RSV처럼 RSV가 단독이면 불가 아님 — 인접 RSV/STBY 미선택일 때만 불가)
+  let partialRsvStby = false;
+  ss.forEach(s => {
+    if (s.type !== "RSV" && s.type !== "STBY") return;
+    [s.day - 1, s.day + 1].forEach(d => {
+      const adj = getSchedule(d);
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(d)) {
+        partialRsvStby = true;
+      }
     });
-  }
+  });
 
   return [
     { label:"동일 등급/직책 매칭", status:"PASS", detail: (() => {
@@ -1797,6 +1795,14 @@ function bindEvents() {
   $("#importScheduleButton").addEventListener("click", openImportDialog);
 
   // (import-tab 전환 핸들러 제거 — 단일 모드 사용)
+
+  // Enter 키로 로그인 트리거 (form method="dialog" 가 Enter 로 닫히는 문제 방지)
+  ["ccUsername", "ccPassword", "ccUserName"].forEach(id => {
+    const el = $("#" + id);
+    if (el) el.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); $("#ccLoginButton").click(); }
+    });
+  });
 
   // 🚀 자동 로그인 (Netlify Function)
   $("#ccLoginButton").addEventListener("click", async () => {
