@@ -27,7 +27,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const store = getStore({ name: 'posts', consistency: 'strong' });
+    const store = getStore({ name: 'posts', consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_TOKEN });
     const post = await store.get(`post:${id}`, { type: 'json' });
 
     if (!post) {

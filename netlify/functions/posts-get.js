@@ -17,7 +17,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: cors, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
   try {
-    const store = getStore({ name: 'posts', consistency: 'strong' });
+    const store = getStore({ name: 'posts', consistency: 'strong', siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_TOKEN });
     const { blobs } = await store.list({ prefix: 'post:' });
 
     const posts = await Promise.all(
