@@ -67,6 +67,20 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-08
+- 앱 리브랜딩: JJ Swap → **CrewSwap**
+  - 앱 이름·타이틀·헤더·가입 팝업 전체 교체
+  - 가입 팝업 설명 "제주항공 승무원 스케줄 매칭" → "승무원 스케줄 스왑 매칭" (범용)
+  - 주색상 `#e44832`(빨강) → `#2B9FD9`(하늘색), `--primary-dark` #1A7BAC
+  - PWA manifest `theme_color` + 아이콘(192/512) 하늘색으로 재생성
+  - SW 캐시명 `jjswap-v1` → `crewswap-v1`
+  - localStorage 키(`jjswap_v1`) 유지 — 기존 사용자 데이터 보존
+- 이메일 인증 Netlify 배포 환경 에러 수정
+  - 원인: `RESEND_API_KEY` 설정 시 미인증 도메인(`jjswap.app`)으로 발송 시도 → 403
+  - 수정: `RESEND_API_KEY` + `RESEND_FROM` **둘 다** 설정된 경우에만 실제 발송
+  - `RESEND_FROM` 없으면 테스트 모드 자동 폴백 (화면에 코드 표시)
+  - 이메일 템플릿 JJ Swap → CrewSwap, 색상 하늘색 적용
+
 ### 2026-06-07
 - Netlify Blobs 기반 공유 포스트 저장/조회/삭제 구현
   - `posts-get / posts-create / posts-delete` Functions 추가
@@ -93,6 +107,7 @@ netlify dev          # http://localhost:8889
 ---
 
 ## 남은 작업 (다음 세션)
-- 로컬 테스트 완료 후 Netlify 배포
+- Netlify 배포 후 CrewSwap 리브랜딩 + 이메일 인증 수정 확인
 - 테스터 모집 후 실사용 피드백 수집
-- 실제 이메일 발송을 위한 도메인 인증 (Resend)
+- 실제 이메일 발송을 위한 도메인 인증 (Resend — `RESEND_API_KEY` + `RESEND_FROM` 설정)
+- 타 항공사(대한항공·아시아나·티웨이 등) 이메일 인증 추가 (추후)
