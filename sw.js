@@ -1,5 +1,5 @@
-// JJ Swap Service Worker
-const CACHE = 'jjswap-v1';
+// CrewSwap Service Worker
+const CACHE = 'crewswap-v1';
 const SHELL = ['/index.html', '/styles.css', '/app.js', '/manifest.json'];
 
 // 설치 — 앱 쉘 캐시

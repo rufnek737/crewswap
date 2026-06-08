@@ -1,12 +1,12 @@
 {
-  "name": "JJ Swap — 제주항공 스케줄 스왑",
-  "short_name": "JJ Swap",
-  "description": "제주항공 승무원 스케줄 스왑 매칭",
+  "name": "CrewSwap — 승무원 스케줄 스왑 매칭",
+  "short_name": "CrewSwap",
+  "description": "항공사 승무원 스케줄 스왑 매칭 플랫폼",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f5f7fa",
-  "theme_color": "#e44832",
+  "theme_color": "#2B9FD9",
   "orientation": "portrait-primary",
   "icons": [
     {

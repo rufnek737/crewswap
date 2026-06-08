@@ -1,5 +1,5 @@
 ﻿/* ============================================================
-   JJ Swap · 기획 프로토타입 v2
+   CrewSwap · 기획 프로토타입 v2
    - 양방향 등록, 패턴 띠, 매칭 점수, 룰 자동 계산
    ============================================================ */
 
@@ -1781,7 +1781,7 @@ function bindEvents() {
     else if (sp) sp.hidden = true;
     saveState();
     renderAll();
-    showToast("가입 완료 · 무료 크레딧 5장 지급. Welcome to JJ Swap!");
+    showToast("가입 완료 · 무료 크레딧 5장 지급. Welcome to CrewSwap!");
   });
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
@@ -2398,7 +2398,7 @@ window.JJ = {
   showProfile: () => console.log(state.user),
 };
 
-console.log('%c🛠️ JJ Swap 콘솔 헬퍼 활성화', 'background:#e44832;color:#fff;padding:4px 8px;border-radius:4px;font-weight:700;');
+console.log('%c🛠️ CrewSwap 콘솔 헬퍼 활성화', 'background:#2B9FD9;color:#fff;padding:4px 8px;border-radius:4px;font-weight:700;');
 console.log('• loadRoster(json)  — JSON 문자열/배열로 스케줄 즉시 로드');
 console.log('• dumpRoster()      — 현재 스케줄 JSON 출력 + 클립보드 복사');
 console.log('• JJ.clear()        — 스케줄 전체 삭제');
