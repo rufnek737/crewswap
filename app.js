@@ -285,12 +285,9 @@ function createMockRequests() {
 
 function createMockAlerts() {
   return [
-    { kind:"match",    title:"🎯 매칭 후보 등장", body:"저장한 검색 \"6/13 7C1551 → OFF\" 조건의 글이 올라왔습니다.", time:"5분 전" },
-    { kind:"urgent",   title:"⏰ 마감 임박", body:"6/4 RSV 스왑 마감(D-2 17시)까지 약 1시간 남았습니다.", time:"1시간 전" },
-    { kind:"match",    title:"💌 내 글에 요청 도착", body:"6/25-28 CXR 패턴에 1건의 요청이 들어왔습니다.", time:"2시간 전" },
-    { kind:"announce", title:"📢 회사 공지", body:"운항편조팀에서 7월 SKD SWAP 공지가 등록되었습니다.", time:"3시간 전" },
-    { kind:"match",    title:"♻️ 매칭 성공", body:"6/18 OFF ↔ RSV 매칭이 성립되어 사용 크레딧 1장이 환급되었습니다.", time:"어제" },
-    { kind:"announce", title:"📘 룰 자동 업데이트", body:"월 SWAP 횟수 기준이 3회로 갱신되어 사전 체크에 반영되었습니다.", time:"2일 전" },
+    { kind:"announce", title:"📢 CrewSwap 사용 안내",
+      body:"① 내 스케줄 탭에서 스왑할 패턴 선택 → ② 스왑 등록 탭에서 희망 조건 입력 후 등록(1크레딧) → ③ 스왑 찾기 탭에서 상대방 글 확인 · 요청. 가입 시 5크레딧 지급. 비연속 패턴은 각각 1크레딧 차감됩니다.",
+      time:"공지" },
   ];
 }
 
@@ -1300,13 +1297,25 @@ function renderMyPosts() {
     <div class="my-post-card">
       <div class="my-post-head">
         <strong>${p.offered.patternName}</strong>
-        <span class="my-post-status">등록 중</span>
+        <span class="my-post-status done">등록 완료</span>
       </div>
       <div class="my-post-meta">
         <span>${p.offered.type} · ${p.offered.summary || ""}</span>
         <span>희망: ${p.wanted.types.join(" / ")}</span>
         <span class="my-post-time">${rdDisplay}</span>
       </div>
+      <details class="my-post-detail">
+        <summary>자세히 보기 ▾</summary>
+        <dl class="my-post-detail-dl">
+          ${p.offered.reportTime ? `<div><dt>Check-in</dt><dd>${p.offered.reportTime}</dd></div>` : ""}
+          ${p.offered.releaseTime ? `<div><dt>Check-out</dt><dd>${p.offered.releaseTime}</dd></div>` : ""}
+          ${p.offered.flightMinutes ? `<div><dt>비행시간</dt><dd>${(p.offered.flightMinutes/60).toFixed(1)}h</dd></div>` : ""}
+          ${p.offered.aircraft ? `<div><dt>기종</dt><dd>${p.offered.aircraft}${p.offered.edto?" · EDTO":""}${p.offered.cat3?" · CAT III":""}</dd></div>` : ""}
+          ${p.offered.crewPublic ? `<div><dt>편조</dt><dd>${p.offered.crewPublic}</dd></div>` : ""}
+          <div><dt>희망 조건</dt><dd>${p.wanted.types.join(" / ")}${p.wanted.time?.length ? ` · ${p.wanted.time.join(", ")}` : ""}${p.wanted.excludedAirports?.length ? ` · ${p.wanted.excludedAirports.join("/")} 제외` : ""}</dd></div>
+          ${p.wanted.memo ? `<div><dt>메모</dt><dd>${p.wanted.memo}</dd></div>` : ""}
+        </dl>
+      </details>
       <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
     </div>
   `;
@@ -1623,6 +1632,7 @@ function switchTab(name) {
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === name));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   if (name === "find") fetchPosts();
+  history.replaceState(null, "", "#" + name);
 }
 
 function bindEvents() {
@@ -1947,79 +1957,109 @@ function bindEvents() {
 
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
-    if (state.credits < 1) { showToast("크레딧 부족"); return; }
-    const ss = selectedSchedules();
-    if (ss.length === 0) return;
-    const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
-    const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
-    const firstCrew = ss.find(s => s.crewComposition && s.crewComposition !== "편조 없음");
-    const m = parseInt(state.currentMonth.split("-")[1]);
-    // 권역 자동 추출
-    const region = (() => {
-      for (const s of ss) {
-        for (const ap of [s.arr, s.dep, s.layoverAirport].filter(Boolean)) {
-          const r = AIRPORT_REGION[ap];
-          if (r && r !== "DOMESTIC") return r;
-        }
+    // 선택된 날짜를 연속 그룹으로 분리 (비연속 = 독립 패턴 = 각 1크레딧)
+    const allDays = [...state.selectedDays].sort((a, b) => a - b);
+    if (allDays.length === 0) return;
+
+    const groups = [];
+    let cur = [allDays[0]];
+    for (let i = 1; i < allDays.length; i++) {
+      if (allDays[i] === allDays[i - 1] + 1) {
+        cur.push(allDays[i]);
+      } else {
+        groups.push(cur);
+        cur = [allDays[i]];
       }
-      return ss.some(s => s.type === "국내선") ? "DOMESTIC" : null;
-    })();
-    const newPost = {
-      id: "POST-" + Date.now(),
-      deleteToken: crypto.randomUUID(),
-      registeredAt: new Date().toISOString(),
-      airline: state.user.airline,
-      crewType: state.user.crewType,
-      ownerRole: state.user.roleType,
-      ownerNick: state.user.nickname,
-      ownerRating: state.user.rating || 4.5,
-      ownerBase: state.user.base || "GMP",
-      deadlineDay: ss[0].day,
-      watchers: 0,
-      offered: {
-        patternName: `${m}/${ss[0].day}${ss.length > 1 ? `~${m}/${ss.at(-1).day}` : ""} · ${ss[0].type} 패턴`,
-        days: [...state.selectedDays].sort((a,b)=>a-b),
-        summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
-        type: ss[0].type,
-        aircraft: ss[0].aircraft || null,
-        edto: ss.some(s=>s.requiresEdto),
-        cat3: ss.some(s=>s.requiresCat3),
-        flightMinutes: ss.reduce((sum,s)=>sum+flightMinutesOf(s),0),
-        region,
-        reportTime: firstFlight ? firstFlight.reportTime : null,
-        releaseTime: lastFlight ? lastFlight.releaseTime : null,
-        crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
-      },
-      wanted: {
-        types: [...state.wantedTypes],
-        time: [...state.wantedTimes],
-        dateFlex: $("#wantedDateFlex").value,
-        includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
-        excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
-        memo: $("#postMemo").value || "",
-      },
-      creditSpent: 1,
-      status: "active",
-    };
-    // Netlify Blobs에 저장 (실패해도 로컬 등록은 진행)
-    try {
-      const res = await fetch("/.netlify/functions/posts-create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPost),
-      });
-      if (!res.ok) console.warn("posts-create failed:", await res.json().catch(() => ({})));
-    } catch (e) {
-      console.warn("posts-create network error:", e);
     }
-    state.myPosts.unshift(newPost);
+    groups.push(cur);
+
+    const needed = groups.length;
+    if (state.credits < needed) {
+      showToast(`크레딧 부족 (필요: ${needed}개, 보유: ${state.credits}개)`);
+      return;
+    }
+
+    const m = parseInt(state.currentMonth.split("-")[1]);
+    const wanted = {
+      types: [...state.wantedTypes],
+      time: [...state.wantedTimes],
+      dateFlex: $("#wantedDateFlex").value,
+      includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      memo: $("#postMemo").value || "",
+    };
+
+    for (const dayGroup of groups) {
+      const ss = dayGroup.map(day => getSchedule(day)).filter(Boolean);
+      if (ss.length === 0) continue;
+
+      const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
+      const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
+      const firstCrew = ss.find(s => s.crewComposition && s.crewComposition !== "편조 없음");
+      const region = (() => {
+        for (const s of ss) {
+          for (const ap of [s.arr, s.dep, s.layoverAirport].filter(Boolean)) {
+            const r = AIRPORT_REGION[ap];
+            if (r && r !== "DOMESTIC") return r;
+          }
+        }
+        return ss.some(s => s.type === "국내선") ? "DOMESTIC" : null;
+      })();
+
+      const newPost = {
+        id: "POST-" + Date.now() + "-" + dayGroup[0],
+        deleteToken: crypto.randomUUID(),
+        registeredAt: new Date().toISOString(),
+        airline: state.user.airline,
+        crewType: state.user.crewType,
+        ownerRole: state.user.roleType,
+        ownerNick: state.user.nickname,
+        ownerRating: state.user.rating || 4.5,
+        ownerBase: state.user.base || "GMP",
+        deadlineDay: ss[0].day,
+        watchers: 0,
+        offered: {
+          patternName: `${m}/${ss[0].day}${ss.length > 1 ? `~${m}/${ss.at(-1).day}` : ""} · ${ss[0].type} 패턴`,
+          days: dayGroup,
+          summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
+          type: ss[0].type,
+          aircraft: ss[0].aircraft || null,
+          edto: ss.some(s=>s.requiresEdto),
+          cat3: ss.some(s=>s.requiresCat3),
+          flightMinutes: ss.reduce((sum,s)=>sum+flightMinutesOf(s),0),
+          region,
+          reportTime: firstFlight ? firstFlight.reportTime : null,
+          releaseTime: lastFlight ? lastFlight.releaseTime : null,
+          crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
+        },
+        wanted,
+        creditSpent: 1,
+        status: "active",
+      };
+
+      try {
+        const res = await fetch("/.netlify/functions/posts-create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPost),
+        });
+        if (!res.ok) console.warn("posts-create failed:", await res.json().catch(() => ({})));
+      } catch (e) {
+        console.warn("posts-create network error:", e);
+      }
+
+      state.myPosts.unshift(newPost);
+      state.credits--;
+      state.user.monthlySwapUsed = Math.min(state.user.monthlySwapUsed + 1, state.user.monthlySwapLimit);
+    }
+
     state.postDraft = null;
-    state.credits--;
-    state.user.monthlySwapUsed = Math.min(state.user.monthlySwapUsed + 1, state.user.monthlySwapLimit);
     state.selectedDays.clear();
     saveState();
     renderAll();
-    showToast("스왑 글 등록 완료 — 스왑 등록 탭에서 확인하고 취소할 수 있습니다.");
+    showToast(needed > 1
+      ? `스왑 글 ${needed}건 등록 완료 — ${needed}크레딧 차감됨`
+      : "스왑 글 등록 완료 — 스왑 등록 탭에서 확인하고 취소할 수 있습니다.");
   }
 
   // 등록 버튼 — WARN 항목 있으면 확인 팝업, 없으면 바로 등록
@@ -2207,7 +2247,13 @@ function loadStateFromStorage() {
     if (d.currentMonth) state.currentMonth = d.currentMonth;
     if (Array.isArray(d.myPosts)) state.myPosts = d.myPosts;
     if (d.postDraft) state.postDraft = d.postDraft;
-    if (Array.isArray(d.alerts)) state.alerts = d.alerts;
+    if (Array.isArray(d.alerts)) {
+      state.alerts = d.alerts;
+      // 구버전 목업 알림이면 새 공지로 교체
+      if (state.alerts.some(a => a.title === "🎯 매칭 후보 등장" || a.title === "⏰ 마감 임박")) {
+        state.alerts = createMockAlerts();
+      }
+    }
 
     // 복원된 currentMonth에 데이터가 없으면, 데이터 있는 월 중
     // ① 오늘 날짜 월이 있으면 그쪽, ② 없으면 가장 가까운 미래 월, ③ 그것도 없으면 첫 월
@@ -2325,6 +2371,11 @@ renderAll();
 bindEvents();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
+
+// URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
+const _hashTab = location.hash.replace("#", "");
+const _validTabs = ["schedule", "find", "post", "requests", "profile"];
+if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
 
 document.getElementById("langToggle")?.addEventListener("click", () => {
   state.lang = state.lang === "KO" ? "EN" : "KO";

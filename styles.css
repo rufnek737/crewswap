@@ -627,6 +627,29 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   font-weight: 700;
   white-space: nowrap;
 }
+.my-post-status.done {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.my-post-detail summary {
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.my-post-detail-dl {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.my-post-detail-dl div { display: flex; gap: 8px; }
+.my-post-detail-dl dt { color: var(--muted); min-width: 60px; }
+.my-post-detail-dl dd { margin: 0; color: var(--text); font-weight: 600; }
 .my-post-meta {
   display: flex;
   flex-wrap: wrap;
