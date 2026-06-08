@@ -2398,7 +2398,7 @@ window.JJ = {
   showProfile: () => console.log(state.user),
 };
 
-console.log('%c🛠️ CrewSwap 콘솔 헬퍼 활성화', 'background:#2B9FD9;color:#fff;padding:4px 8px;border-radius:4px;font-weight:700;');
+console.log('%c🛠️ CrewSwap 콘솔 헬퍼 활성화', 'background:#F07820;color:#fff;padding:4px 8px;border-radius:4px;font-weight:700;');
 console.log('• loadRoster(json)  — JSON 문자열/배열로 스케줄 즉시 로드');
 console.log('• dumpRoster()      — 현재 스케줄 JSON 출력 + 클립보드 복사');
 console.log('• JJ.clear()        — 스케줄 전체 삭제');
