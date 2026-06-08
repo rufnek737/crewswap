@@ -50,14 +50,15 @@ exports.handler = async (event) => {
                    .digest('hex');
   const token  = Buffer.from(JSON.stringify({ t: ts, h: hmac })).toString('base64url');
 
-  // RESEND_API_KEY 없으면 테스트 모드 — 코드를 응답에 직접 포함
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  // RESEND_API_KEY + RESEND_FROM 둘 다 설정된 경우에만 실제 발송
+  // 둘 중 하나라도 없으면 테스트 모드 — 코드를 응답에 직접 포함
+  const apiKey  = process.env.RESEND_API_KEY;
+  const fromAddr = process.env.RESEND_FROM;
+  if (!apiKey || !fromAddr) {
     return ok({ token, code, expiresAt: Date.now() + EXPIRY_MS, testMode: true });
   }
 
-  // 실제 이메일 발송 (RESEND_API_KEY 설정된 경우)
-  const fromAddr = process.env.RESEND_FROM || 'JJ Swap <noreply@jjswap.app>';
+  // 실제 이메일 발송 (RESEND_API_KEY + RESEND_FROM 둘 다 설정된 경우)
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -68,12 +69,12 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         from: fromAddr,
         to: email,
-        subject: '[JJ Swap] 이메일 인증 코드',
+        subject: '[CrewSwap] 이메일 인증 코드',
         html: `
           <div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;">
-            <div style="background:#e44832;color:#fff;padding:14px 20px;border-radius:10px 10px 0 0;">
-              <strong style="font-size:18px;">JJ Swap</strong>
-              <span style="opacity:.8;font-size:12px;margin-left:8px;">제주항공 승무원 스케줄 매칭</span>
+            <div style="background:#2B9FD9;color:#fff;padding:14px 20px;border-radius:10px 10px 0 0;">
+              <strong style="font-size:18px;">CrewSwap</strong>
+              <span style="opacity:.8;font-size:12px;margin-left:8px;">승무원 스케줄 스왑 매칭</span>
             </div>
             <div style="border:1px solid #dce3ec;border-top:0;padding:28px;border-radius:0 0 10px 10px;background:#fff;">
               <p style="color:#637083;font-size:14px;margin:0 0 20px;">아래 인증 코드를 10분 이내에 입력해 주세요.</p>
