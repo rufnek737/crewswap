@@ -1751,23 +1751,27 @@ function switchTab(name) {
   history.replaceState(null, "", "#" + name);
 }
 
-// 직군 변경 시 직책 옵션 · 기종 선택 show/hide
-function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId) {
+// 직군 변경 시 직책 옵션 교체 · 기종 선택 show/hide
+const PILOT_ROLE_OPTIONS = [
+  ["CAPTAIN_C","C등급 기장"],["CAPTAIN_B","B등급 기장"],["CAPTAIN_A","A등급 기장"],
+  ["FO_C","C등급 부기장"],["FO_B","B등급 부기장"],["FO_A","A등급 부기장"],
+];
+const CABIN_ROLE_OPTIONS = [
+  ["CC","일반 승무원 (CC)"],["AP","부사무장 (AP)"],["PS","사무장 (PS)"],
+  ["SP","선임사무장 (SP)"],["CP","수석사무장 (CP)"],
+];
+function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId, currentRole) {
   const ct = document.getElementById(crewTypeId);
   const rs = document.getElementById(roleSelectId);
   const al = document.getElementById(aircraftLabelId);
   if (!ct || !rs) return;
   const isCabin = ct.value === "CABIN";
-  rs.querySelectorAll("option").forEach(opt => {
-    const isCabinOpt = opt.classList.contains("cabin-option");
-    opt.hidden = isCabin ? !isCabinOpt : isCabinOpt;
-    if (!opt.hidden && opt.value === rs.value) return;
-  });
-  // 현재 선택값이 hidden이면 첫 번째 보이는 옵션으로 초기화
-  const visible = [...rs.querySelectorAll("option")].filter(o => !o.hidden);
-  if (rs.selectedOptions[0] && rs.selectedOptions[0].hidden && visible.length) {
-    rs.value = visible[0].value;
-  }
+  const opts = isCabin ? CABIN_ROLE_OPTIONS : PILOT_ROLE_OPTIONS;
+  const defaultVal = isCabin ? "CC" : "FO_B";
+  rs.innerHTML = opts.map(([v, t]) =>
+    `<option value="${v}">${t}</option>`
+  ).join("");
+  rs.value = currentRole && opts.find(([v]) => v === currentRole) ? currentRole : defaultVal;
   if (al) al.hidden = isCabin;
 }
 
@@ -1783,7 +1787,7 @@ function bindEvents() {
   }
   const profileCT = $("#crewTypeInput");
   if (profileCT) {
-    updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel");
+    updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel", state.user.roleType);
     profileCT.addEventListener("change", () =>
       updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel"));
   }
@@ -2473,6 +2477,7 @@ function syncFormsFromState() {
   set("nicknameInput", u.nickname);
   set("airlineInput", u.airline);
   set("crewTypeInput", u.crewType);
+  updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel", u.roleType);
   set("roleTypeInput", u.roleType);
   set("aircraftInput", u.aircraft);
   set("baseInput", u.base);
