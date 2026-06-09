@@ -103,12 +103,31 @@
               <option value="PUS">PUS (부산)</option>
             </select>
           </label>
-          <div>
+          <!-- 조종사 전용 자격 -->
+          <div id="signupPilotQuals">
             <strong class="field-label">특수 자격</strong>
             <div class="check-row">
               <label><input id="signupEdto" type="checkbox" checked /> EDTO</label>
               <label><input id="signupCat2" type="checkbox" /> CAT II</label>
               <label><input id="signupCat3" type="checkbox" checked /> CAT III</label>
+            </div>
+          </div>
+          <!-- 객실 전용 성별 + 자격 -->
+          <div id="signupCabinQuals" hidden>
+            <label>
+              성별
+              <select id="signupGender">
+                <option value="F" selected>여성</option>
+                <option value="M">남성</option>
+              </select>
+            </label>
+            <strong class="field-label" style="margin-top:12px;display:block;">언어 · 방송 자격</strong>
+            <div class="check-row" style="flex-wrap:wrap;gap:8px;">
+              <label><input id="signupLangJP" type="checkbox" /> 일본어 전공 (Japanese)</label>
+              <label><input id="signupLangCN" type="checkbox" /> 중국어 전공 (Chinese)</label>
+              <label><input id="signupAnnB"   type="checkbox" /> 방송 등급 (Ann_B)</label>
+              <label><input id="signupAnnJA"  type="checkbox" /> 일본어 방송 (Ann_JA)</label>
+              <label><input id="signupAnnCA"  type="checkbox" /> 중국어 방송 (Ann_CA)</label>
             </div>
           </div>
           <div>
@@ -453,12 +472,31 @@
                 <option value="PUS">PUS</option>
               </select>
             </label>
-            <div>
+            <!-- 조종사 전용 자격 -->
+            <div id="profilePilotQuals">
               <strong class="field-label">특수 자격</strong>
               <div class="check-row">
                 <label><input id="edtoInput" type="checkbox" checked /> EDTO</label>
                 <label><input id="cat2Input" type="checkbox" /> CAT II</label>
                 <label><input id="cat3Input" type="checkbox" checked /> CAT III</label>
+              </div>
+            </div>
+            <!-- 객실 전용 성별 + 자격 -->
+            <div id="profileCabinQuals" hidden>
+              <label>
+                성별
+                <select id="genderInput">
+                  <option value="F" selected>여성</option>
+                  <option value="M">남성</option>
+                </select>
+              </label>
+              <strong class="field-label" style="margin-top:12px;display:block;">언어 · 방송 자격</strong>
+              <div class="check-row" style="flex-wrap:wrap;gap:8px;">
+                <label><input id="langJPInput" type="checkbox" /> 일본어 전공 (Japanese)</label>
+                <label><input id="langCNInput" type="checkbox" /> 중국어 전공 (Chinese)</label>
+                <label><input id="annBInput"   type="checkbox" /> 방송 등급 (Ann_B)</label>
+                <label><input id="annJAInput"  type="checkbox" /> 일본어 방송 (Ann_JA)</label>
+                <label><input id="annCAInput"  type="checkbox" /> 중국어 방송 (Ann_CA)</label>
               </div>
             </div>
             <button class="primary-button" type="submit">내 정보 저장</button>

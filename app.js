@@ -168,6 +168,9 @@ const state = {
     rating:4.8,
     monthlySwapUsed: 1,
     monthlySwapLimit: 3,
+    // 객실 전용
+    gender: "F",          // "M" | "F"
+    languages: [],        // ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
   },
 };
 
@@ -857,6 +860,13 @@ function checkRulesCabin(ss, rules) {
 
   const deadlineLabel = `신청 마감 (D-${rules.deadline.businessDays} 영업일)`;
 
+  // 노선 언어/성별 자격 안내
+  const langs = state.user.languages || [];
+  const gender = state.user.gender || "F";
+  const langLabels = { Japanese:"일본어 전공", Chinese:"중국어 전공", Ann_B:"방송등급", Ann_JA:"일본어 방송", Ann_CA:"중국어 방송" };
+  const langStr = langs.length ? langs.map(k => langLabels[k] || k).join(", ") : "없음";
+  const genderStr = gender === "M" ? "남성" : "여성";
+
   return [
     { label:"동일 직책 매칭",
       status:"PASS",
@@ -887,6 +897,15 @@ function checkRulesCabin(ss, rules) {
       detail: hasStby
         ? `STBY/RSV 변경 시 동일 or 상위 직급(${CABIN_ROLE_LABELS[myRankCode] || myRankCode} 이상)만 가능 — 상대방 확인 필요`
         : "해당 없음" },
+    { label:"6일 연속 근무 랜딩 시간",
+      status:"WARN",
+      detail:"6일 연속 근무 시 마지막 날 랜딩 20:00 이전 SKD인지 직접 확인 필요" },
+    { label:"Base별 신청 가능 시간",
+      status:"WARN",
+      detail:"전날 복귀(STA) 기준 신청 가능 시간 확인 (예: ICN-ICN STA 22:00 기준 당일 13:00 이후 STD)" },
+    { label:"노선 언어/성별 자격",
+      status:"WARN",
+      detail:`내 자격: ${genderStr} · ${langStr} — MNL(남성 필수), 일본/중국 노선 배정 자격 확인` },
   ];
 }
 
@@ -1774,6 +1793,13 @@ function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId, 
   const target = currentRole && opts.find(([v]) => v === currentRole) ? currentRole : defaultVal;
   rs.value = target;
   if (al) al.hidden = isCabin;
+
+  // 조종사/객실 전용 자격 섹션 show/hide
+  const isSignup = crewTypeId === "signupCrewType";
+  const pilotDiv = document.getElementById(isSignup ? "signupPilotQuals" : "profilePilotQuals");
+  const cabinDiv = document.getElementById(isSignup ? "signupCabinQuals" : "profileCabinQuals");
+  if (pilotDiv) pilotDiv.hidden = isCabin;
+  if (cabinDiv) cabinDiv.hidden = !isCabin;
 }
 
 function bindEvents() {
@@ -1931,6 +1957,12 @@ function bindEvents() {
     state.user.edto     = $("#signupEdto").checked;
     state.user.cat2     = $("#signupCat2").checked;
     state.user.cat3     = $("#signupCat3").checked;
+    // 객실 전용
+    if (state.user.crewType === "CABIN") {
+      state.user.gender = $("#signupGender").value;
+      state.user.languages = ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
+        .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_B" ? "AnnB" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
+    }
     state.user.email    = _verifyEmail;   // 인증된 이메일 저장
     state.user.hasSignedUp = true;
     // 프로필 폼 동기화
@@ -2296,6 +2328,11 @@ function bindEvents() {
     state.user.edto     = $("#edtoInput").checked;
     state.user.cat2     = $("#cat2Input").checked;
     state.user.cat3     = $("#cat3Input").checked;
+    if (state.user.crewType === "CABIN") {
+      state.user.gender = $("#genderInput").value;
+      state.user.languages = ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
+        .filter(k => document.getElementById(k === "Japanese" ? "langJPInput" : k === "Chinese" ? "langCNInput" : k === "Ann_B" ? "annBInput" : k === "Ann_JA" ? "annJAInput" : "annCAInput")?.checked);
+    }
     saveState();
     renderAll();
     showToast("내 정보 저장 — 검색 결과가 새 조건으로 갱신됩니다.");
@@ -2486,6 +2523,16 @@ function syncFormsFromState() {
   check("edtoInput", u.edto);
   check("cat2Input", u.cat2);
   check("cat3Input", u.cat3);
+  // 객실 전용 자격 복원
+  if (u.crewType === "CABIN") {
+    set("signupGender", u.gender || "F");
+    set("genderInput",  u.gender || "F");
+    const langMap = { Japanese:"signupLangJP", Chinese:"signupLangCN", Ann_B:"signupAnnB", Ann_JA:"signupAnnJA", Ann_CA:"signupAnnCA" };
+    const langMapP = { Japanese:"langJPInput", Chinese:"langCNInput", Ann_B:"annBInput", Ann_JA:"annJAInput", Ann_CA:"annCAInput" };
+    const langs = u.languages || [];
+    Object.entries(langMap).forEach(([k, id]) => check(id, langs.includes(k)));
+    Object.entries(langMapP).forEach(([k, id]) => check(id, langs.includes(k)));
+  }
 }
 
 /* ====== 언어 토글 (KO ↔ EN) — 핵심 라벨만 ====== */
