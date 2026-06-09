@@ -2352,6 +2352,13 @@ function bindEvents() {
   // 등록 버튼 — WARN 항목 있으면 확인 팝업, 없으면 바로 등록
   $("#submitPostButton").addEventListener("click", () => {
     if (state.credits < 1) { showToast("크레딧 부족"); return; }
+    // 중복 등록 방지: 선택한 날짜가 이미 내 게시글에 있는지 확인
+    const selectedArr = [...state.selectedDays];
+    const dupPost = state.myPosts.find(p => p.offered.days.some(d => selectedArr.includes(d)));
+    if (dupPost) {
+      showToast(`이미 같은 날짜로 등록된 글이 있습니다 (${dupPost.offered.patternName})`);
+      return;
+    }
     const checks = checkRulesForSelection();
     const warnItems = checks.filter(c => c.status === "WARN");
     if (warnItems.length > 0) {
