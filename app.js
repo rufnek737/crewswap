@@ -1768,10 +1768,11 @@ function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId, 
   const isCabin = ct.value === "CABIN";
   const opts = isCabin ? CABIN_ROLE_OPTIONS : PILOT_ROLE_OPTIONS;
   const defaultVal = isCabin ? "CC" : "FO_B";
-  rs.innerHTML = opts.map(([v, t]) =>
-    `<option value="${v}">${t}</option>`
-  ).join("");
-  rs.value = currentRole && opts.find(([v]) => v === currentRole) ? currentRole : defaultVal;
+  // new Option() 방식 — innerHTML보다 브라우저 호환성 높음
+  while (rs.options.length) rs.remove(0);
+  opts.forEach(([v, t]) => rs.add(new Option(t, v)));
+  const target = currentRole && opts.find(([v]) => v === currentRole) ? currentRole : defaultVal;
+  rs.value = target;
   if (al) al.hidden = isCabin;
 }
 
@@ -2467,6 +2468,7 @@ function syncFormsFromState() {
   set("signupNickname", u.nickname);
   set("signupAirline", u.airline);
   set("signupCrewType", u.crewType);
+  updateRoleSelectForCrewType("signupCrewType", "signupRole", "signupAircraftLabel", u.roleType);
   set("signupRole", u.roleType);
   set("signupAircraft", u.aircraft);
   set("signupBase", u.base);
