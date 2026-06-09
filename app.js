@@ -281,6 +281,32 @@ function createMockPosts() {
         reportTime:"12:00", releaseTime:"20:00", crewPublic:null },
       wanted:{ types:["OFF"], dateFlex:"sameDay", time:[], excludedAirports:[], memo:"" },
       deadlineDay:21, watchers:1, postedHoursAgo:6 },
+    // 객실 승무원 글
+    { id:"C-001", airline:"JEJU", crewType:"CABIN", ownerRole:"CC", ownerNick:"CabinStar*", ownerRating:4.7, ownerBase:"GMP",
+      offered:{ patternName:"6/25-27 NRT 패턴", days:[25,26,27], summary:"ICN-NRT · 1박 · NRT-ICN", type:"국제선", aircraft:null, edto:false, cat3:false, flightMinutes:280, region:"NE",
+        reportTime:"17:30", releaseTime:"11:10", crewPublic:null },
+      wanted:{ types:["OFF"], dateFlex:"sameMonth", time:[], excludedAirports:[], memo:"OFF 주시면 감사합니다" },
+      deadlineDay:25, watchers:4, postedHoursAgo:3 },
+    { id:"C-002", airline:"JEJU", crewType:"CABIN", ownerRole:"PS", ownerNick:"PurserMin*", ownerRating:4.9, ownerBase:"GMP",
+      offered:{ patternName:"6/18 OFF", days:[18], summary:"OFF 1일", type:"OFF", aircraft:null, edto:false, cat3:false, flightMinutes:0, region:null,
+        reportTime:null, releaseTime:null, crewPublic:null },
+      wanted:{ types:["국내선","국제선"], dateFlex:"sameDay", time:["AM"], excludedAirports:[], memo:"오전 비행 원합니다" },
+      deadlineDay:18, watchers:6, postedHoursAgo:8 },
+    { id:"C-003", airline:"JEJU", crewType:"CABIN", ownerRole:"CC", ownerNick:"JerrySky*", ownerRating:4.3, ownerBase:"GMP",
+      offered:{ patternName:"6/21 RSV", days:[21], summary:"RSV 1일", type:"RSV", aircraft:null, edto:false, cat3:false, flightMinutes:0, region:null,
+        reportTime:"09:00", releaseTime:"17:00", crewPublic:null },
+      wanted:{ types:["OFF"], dateFlex:"sameDay", time:[], excludedAirports:[], memo:"" },
+      deadlineDay:21, watchers:2, postedHoursAgo:14 },
+    { id:"C-004", airline:"JEJU", crewType:"CABIN", ownerRole:"AP", ownerNick:"SunnyAP*", ownerRating:4.6, ownerBase:"PUS",
+      offered:{ patternName:"6/13 GMP-CJU 국내선", days:[13], summary:"GMP-CJU · 오후", type:"국내선", aircraft:null, edto:false, cat3:false, flightMinutes:65, region:"DOMESTIC",
+        reportTime:"14:00", releaseTime:"16:00", crewPublic:null },
+      wanted:{ types:["OFF","RSV"], dateFlex:"any", time:[], excludedAirports:[], memo:"GMP 베이스 글 우선" },
+      deadlineDay:13, watchers:3, postedHoursAgo:20 },
+    { id:"C-005", airline:"JEJU", crewType:"CABIN", ownerRole:"CC", ownerNick:"MoonFlight*", ownerRating:4.5, ownerBase:"GMP",
+      offered:{ patternName:"6/10-12 BKI 패턴", days:[10,11,12], summary:"ICN-BKI · 1박 · BKI-ICN", type:"국제선", aircraft:null, edto:false, cat3:false, flightMinutes:570, region:"SEA",
+        reportTime:"19:00", releaseTime:"09:30", crewPublic:null },
+      wanted:{ types:["OFF","국내선"], dateFlex:"any", time:[], excludedAirports:[], memo:"국내선 또는 OFF 환영" },
+      deadlineDay:10, watchers:5, postedHoursAgo:36 },
   ];
 }
 
@@ -1097,7 +1123,12 @@ function visiblePosts() {
 }
 
 function exposureCount() {
-  return state.posts.filter(p => p.ownerRole === state.user.roleType).length;
+  const isCabin = state.user.crewType === "CABIN";
+  return state.posts.filter(p =>
+    isCabin
+      ? p.crewType === "CABIN" && p.airline === state.user.airline
+      : p.ownerRole === state.user.roleType
+  ).length;
 }
 
 function candidateCountForOffered() {
@@ -1106,10 +1137,13 @@ function candidateCountForOffered() {
   const ss = selectedSchedules();
   const myType = ss[0]?.type;
   if (!myType) return 0;
-  return state.posts.filter(p =>
-    p.ownerRole === state.user.roleType &&
-    (p.wanted.types.includes(myType) || p.wanted.types.includes("아무거나") || p.wanted.types.includes("비행(전체)"))
-  ).length;
+  const isCabin = state.user.crewType === "CABIN";
+  return state.posts.filter(p => {
+    const roleOK = isCabin
+      ? p.crewType === "CABIN" && p.airline === state.user.airline
+      : p.ownerRole === state.user.roleType;
+    return roleOK && (p.wanted.types.includes(myType) || p.wanted.types.includes("아무거나") || p.wanted.types.includes("비행(전체)"));
+  }).length;
 }
 
 /* ====== 8. 렌더링 ====== */
@@ -1604,7 +1638,7 @@ function renderMatches() {
       </details>
 
       <div class="meta-grid">
-        <div><span>상대 유형</span><strong>${ROLE_LABELS[post.ownerRole]}</strong></div>
+        <div><span>상대 유형</span><strong>${ROLE_LABELS[post.ownerRole] || CABIN_ROLE_LABELS[post.ownerRole] || post.ownerRole}</strong></div>
         <div><span>신청 마감</span><strong class="${dd.days<=1?"urgent":""}">${dd.expired?"지남":`D-${dd.days} ${dd.hours}h`}</strong></div>
         <div><span>신뢰도</span><strong>★ ${post.ownerRating.toFixed(1)}</strong></div>
         <div><span>관심</span><strong>👀 ${post.watchers}명</strong></div>
