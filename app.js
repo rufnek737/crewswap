@@ -170,7 +170,7 @@ const state = {
     monthlySwapLimit: 3,
     // 객실 전용
     gender: "F",          // "M" | "F"
-    languages: [],        // ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
+    languages: [],        // ["Japanese","Chinese","Ann_JA","Ann_CA"]
   },
 };
 
@@ -863,7 +863,7 @@ function checkRulesCabin(ss, rules) {
   // 노선 언어/성별 자격 안내
   const langs = state.user.languages || [];
   const gender = state.user.gender || "F";
-  const langLabels = { Japanese:"일본어 전공", Chinese:"중국어 전공", Ann_B:"방송등급", Ann_JA:"일본어 방송", Ann_CA:"중국어 방송" };
+  const langLabels = { Japanese:"일본어 전공", Chinese:"중국어 전공", Ann_JA:"일본어 방송", Ann_CA:"중국어 방송" };
   const langStr = langs.length ? langs.map(k => langLabels[k] || k).join(", ") : "없음";
   const genderStr = gender === "M" ? "남성" : "여성";
 
@@ -1960,8 +1960,8 @@ function bindEvents() {
     // 객실 전용
     if (state.user.crewType === "CABIN") {
       state.user.gender = $("#signupGender").value;
-      state.user.languages = ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
-        .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_B" ? "AnnB" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
+      state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
+        .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
     }
     state.user.email    = _verifyEmail;   // 인증된 이메일 저장
     state.user.hasSignedUp = true;
@@ -2330,8 +2330,8 @@ function bindEvents() {
     state.user.cat3     = $("#cat3Input").checked;
     if (state.user.crewType === "CABIN") {
       state.user.gender = $("#genderInput").value;
-      state.user.languages = ["Japanese","Chinese","Ann_B","Ann_JA","Ann_CA"]
-        .filter(k => document.getElementById(k === "Japanese" ? "langJPInput" : k === "Chinese" ? "langCNInput" : k === "Ann_B" ? "annBInput" : k === "Ann_JA" ? "annJAInput" : "annCAInput")?.checked);
+      state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
+        .filter(k => document.getElementById(k === "Japanese" ? "langJPInput" : k === "Chinese" ? "langCNInput" : k === "Ann_JA" ? "annJAInput" : "annCAInput")?.checked);
     }
     saveState();
     renderAll();
@@ -2527,8 +2527,8 @@ function syncFormsFromState() {
   if (u.crewType === "CABIN") {
     set("signupGender", u.gender || "F");
     set("genderInput",  u.gender || "F");
-    const langMap = { Japanese:"signupLangJP", Chinese:"signupLangCN", Ann_B:"signupAnnB", Ann_JA:"signupAnnJA", Ann_CA:"signupAnnCA" };
-    const langMapP = { Japanese:"langJPInput", Chinese:"langCNInput", Ann_B:"annBInput", Ann_JA:"annJAInput", Ann_CA:"annCAInput" };
+    const langMap = { Japanese:"signupLangJP", Chinese:"signupLangCN", Ann_JA:"signupAnnJA", Ann_CA:"signupAnnCA" };
+    const langMapP = { Japanese:"langJPInput", Chinese:"langCNInput", Ann_JA:"annJAInput", Ann_CA:"annCAInput" };
     const langs = u.languages || [];
     Object.entries(langMap).forEach(([k, id]) => check(id, langs.includes(k)));
     Object.entries(langMapP).forEach(([k, id]) => check(id, langs.includes(k)));
