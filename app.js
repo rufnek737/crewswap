@@ -1723,6 +1723,16 @@ async function fetchPosts() {
   }
 }
 
+// 매칭 성사(상호 수락) 시 호출 — 월/연 스왑 횟수 카운팅
+function recordSwapMatch() {
+  state.user.monthlySwapUsed = (state.user.monthlySwapUsed || 0) + 1;
+  if (state.user.crewType === "CABIN") {
+    state.user.yearlySwapUsed = (state.user.yearlySwapUsed || 0) + 1;
+  }
+  saveState();
+  renderMetrics();
+}
+
 function requestSwap(postId) {
   if (state.credits < 1) {
     showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다.");
@@ -2327,7 +2337,7 @@ function bindEvents() {
 
       state.myPosts.unshift(newPost);
       state.credits--;
-      state.user.monthlySwapUsed = Math.min(state.user.monthlySwapUsed + 1, state.user.monthlySwapLimit);
+      // 스왑 횟수(월/연)는 실제 매칭 성사(상호 수락) 시점에 카운팅 — 등록 시 증가 안 함
     }
 
     state.postDraft = null;
