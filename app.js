@@ -166,9 +166,9 @@ const state = {
     edto:true, cat2:false, cat3:true,
     base:"GMP",
     rating:4.8,
-    monthlySwapUsed: 1,
+    monthlySwapUsed: 0,
     monthlySwapLimit: 3,
-    yearlySwapUsed: 3,    // 연간 누적 (객실: 12회 한도)
+    yearlySwapUsed: 0,    // 연간 누적 (객실: 12회 한도)
     // 객실 전용
     gender: "F",          // "M" | "F"
     languages: [],        // ["Japanese","Chinese","Ann_JA","Ann_CA"]
@@ -2200,7 +2200,7 @@ function bindEvents() {
       hasSignedUp: false, airline: "JEJU", crewType: "PILOT",
       nickname: "OrangeFlight", roleType: "FO_B", aircraft: "NG_MAX",
       edto: true, cat2: false, cat3: true, base: "GMP", rating: 4.8,
-      monthlySwapUsed: 1, monthlySwapLimit: 3,
+      monthlySwapUsed: 0, monthlySwapLimit: 3, yearlySwapUsed: 0,
     };
     clearStorage();
     renderAll();
@@ -2518,7 +2518,7 @@ const STORAGE_KEY = "jjswap_v1";
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      v: 2,
+      v: 3,
       savedAt: new Date().toISOString(),
       schedules: state.schedules,
       user: state.user,
@@ -2538,7 +2538,7 @@ function loadStateFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    if (d.v !== 1 && d.v !== 2) return null;
+    if (d.v !== 3) return null;  // v1/v2는 스왑 카운트 오염 가능 — 무효화
     if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
     if (d.user) Object.assign(state.user, d.user);
     if (typeof d.credits === "number") state.credits = d.credits;
