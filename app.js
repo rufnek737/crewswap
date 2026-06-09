@@ -95,11 +95,17 @@ const RULES = {
   },
   JEJU_CABIN: {
     label: "제주항공 객실 승무원",
-    active: false, // TODO: 객실 룰 학습 후 활성화
-    grades: ["CC1","CC2","CC3"], // 추정
+    active: true,
+    deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
     positions: ["PUR","JCI","FA"],
-    languages: ["Ann_B","Ann_JA","Ann_C"],
+    swapLimitMonthly: 2,           // 한달 2회
+    swapLimitYearly: 12,           // 연 12회
+    dutyConsecLimit: 7,            // 7일 연속 근무 불가 (STBY 포함)
+    restHoursMin: 10,              // 항공안전법 객실승무원 휴식시간
+    changeableTypes: ["OFF","VAC"],// UV_ML 불가
     parser: "crewconnex_jejuair",
+    submitMenu: "J-ONE → 스케줄 변경 신청 → 신청",
+    submitContact: "객실편조팀 ☎ 070-7420-1756",
   },
   KOREAN_PILOT: { label: "대한항공 조종사", active: false /* 룰·파싱 미확보 */ },
   KOREAN_CABIN: { label: "대한항공 객실", active: false },
@@ -731,21 +737,25 @@ function calcCumulative() {
     if (s && s.type !== "OFF") { current++; maxConsec = Math.max(maxConsec, current); }
     else current = 0;
   }
+  const consecLimit = (currentRules().dutyConsecLimit || 5) - 1;
   const warnDays = new Set();
   let run = 0;
   for (let d = 1; d <= dayCount; d++) {
     const s = getSchedule(d);
-    if (s && s.type !== "OFF") { run++; if (run >= 5) warnDays.add(d); }
+    if (s && s.type !== "OFF") { run++; if (run >= consecLimit) warnDays.add(d); }
     else run = 0;
   }
   return { totalHours: totalMin / 60, maxConsec, warnDays };
 }
 
 function dDayInfo(day) {
-  // 마감: 패턴 시작 D-2의 17시 (영업일 보정)
+  // 마감: 패턴 시작일 기준 영업일 역산 (조종사 D-2 17시 / 객실 D-3)
+  const rules = currentRules();
+  const bDays = (rules.deadline && rules.deadline.businessDays) || 2;
+  const deadlineHour = (rules.deadline && rules.deadline.hour) || 17;
   const start = dayToDate(day);
-  const deadline = addBusinessDays(start, -2);
-  deadline.setHours(17, 0, 0, 0);
+  const deadline = addBusinessDays(start, -bDays);
+  deadline.setHours(deadlineHour, 0, 0, 0);
   const diffMs = deadline - today();
   if (diffMs < 0) return { expired: true, deadlineDate: deadline };
   const days = Math.floor(diffMs / 86400000);
@@ -792,9 +802,79 @@ function userQualOK(s) {
   return true;
 }
 
+function checkRulesCabin(ss, rules) {
+  const cum = calcCumulative();
+  const firstDay = ss[0].day;
+  const dd = dDayInfo(firstDay);
+  const hasLocked = ss.some(s => s.lockReason);
+  const blockedHoliday = ss.some(s => isHoliday(s.day));
+
+  // 연속 근무 7일 체크
+  const consecLimit = rules.dutyConsecLimit || 7;
+  const consecFail = cum.maxConsec >= consecLimit;
+  const consecWarn = !consecFail && cum.maxConsec >= consecLimit - 1;
+
+  // RSV 다음날 OFF 불가 체크 (RSV 선택 시 다음날이 OFF면 불가)
+  let rsvNextOff = false;
+  ss.forEach(s => {
+    if (s.type !== "RSV") return;
+    const next = getSchedule(s.day + 1);
+    if (next && next.type === "OFF") rsvNextOff = true;
+  });
+
+  // RSV/STBY 부분 선택 차단 (인접 RSV/STBY 미선택)
+  let partialRsvStby = false;
+  ss.forEach(s => {
+    if (s.type !== "RSV" && s.type !== "STBY") return;
+    [s.day - 1, s.day + 1].forEach(d => {
+      const adj = getSchedule(d);
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(d)) {
+        partialRsvStby = true;
+      }
+    });
+  });
+
+  // UV_ML 포함 여부 (변경 불가)
+  const hasUvml = ss.some(s => s.type === "UV_ML");
+
+  const deadlineLabel = `신청 마감 (D-${rules.deadline.businessDays} 영업일)`;
+
+  return [
+    { label:"동일 직책 매칭",
+      status:"PASS",
+      detail:`${state.user.roleType || "객실 승무원"} · 동일 직책 글 노출` },
+    { label: deadlineLabel,
+      status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
+      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()})` },
+    { label:`연속 근무일 (${consecLimit}일 미만)`,
+      status: consecFail ? "FAIL" : consecWarn ? "WARN" : "PASS",
+      detail:`최대 ${cum.maxConsec}일` },
+    { label:"RSV 다음날 OFF 불가",
+      status: rsvNextOff ? "FAIL" : "PASS",
+      detail: rsvNextOff ? "RSV 포함 최소 3일 SKD 필요" : "해당 없음" },
+    { label:"변경 불가 타입 (UV_ML)",
+      status: hasUvml ? "FAIL" : "PASS",
+      detail: hasUvml ? "UV_ML은 스왑 불가" : "해당 없음" },
+    { label:"잠금 비행",
+      status: hasLocked ? "FAIL" : "PASS",
+      detail: hasLocked ? "잠금된 비행 포함 — SWAP 불가" : "해당 없음" },
+    { label:"공휴일/연휴 SWAP 제한",
+      status: blockedHoliday ? "WARN" : "PASS",
+      detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음" },
+    { label:"RSV/STBY 부분 SWAP 차단",
+      status: partialRsvStby ? "FAIL" : "PASS",
+      detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음" },
+  ];
+}
+
 function checkRulesForSelection() {
   const ss = selectedSchedules();
   if (ss.length === 0) return [];
+  const rules = currentRules();
+
+  // 객실 승무원: 별도 룰 체크
+  if (state.user.crewType === "CABIN") return checkRulesCabin(ss, rules);
+
   const cum = calcCumulative();
   const firstDay = ss[0].day;
   const dd = dDayInfo(firstDay);
@@ -838,7 +918,7 @@ function checkRulesForSelection() {
       detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음" },
     { label:"CAT II/III 조건", status: needsCat3 && !state.user.cat3 ? "WARN" : "PASS",
       detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음" },
-    { label:"신청 마감 (D-2 17시)", status: dd.expired ? "FAIL" : dd.days < 0 ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
+    { label:"신청 마감 (D-2 17시)", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()} 17시)` },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h` },
@@ -855,10 +935,25 @@ function checkRulesForSelection() {
 
 /* ====== 7. 매칭 / 점수 ====== */
 function matchScore(post) {
-  // 필수 통과: 동일 회사 + 동일 직군 + 동일 포지션(기장↔기장, 부기장↔부기장)
-  // 등급은 필터 안 함 — 편조 기준은 룰 체크에서 별도 안내
+  // 필수 통과: 동일 회사 + 동일 직군
   if ((post.airline || "JEJU") !== state.user.airline) return null;
   if ((post.crewType || "PILOT") !== state.user.crewType) return null;
+
+  // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
+  if (state.user.crewType === "CABIN") {
+    const breakdown = {
+      roleMatch: 30,
+      aircraftMatch: 20,
+      qualMatch: 15,
+      baseBonus: post.ownerBase === state.user.base ? 10 : 0,
+      timeMatch: 0,
+      deadlineUrgency: 0,
+    };
+    const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+    return { score: Math.min(100, total), breakdown };
+  }
+
+  // 조종사: 동일 포지션(기장↔기장, 부기장↔부기장) 필수
   const myPos = state.user.roleType.startsWith("CAPTAIN") ? "CAPTAIN" : "FO";
   const postPos = (post.ownerRole || "").startsWith("CAPTAIN") ? "CAPTAIN" : "FO";
   if (myPos !== postPos) return null;
@@ -1633,8 +1728,42 @@ function switchTab(name) {
   history.replaceState(null, "", "#" + name);
 }
 
+// 직군 변경 시 직책 옵션 · 기종 선택 show/hide
+function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId) {
+  const ct = document.getElementById(crewTypeId);
+  const rs = document.getElementById(roleSelectId);
+  const al = document.getElementById(aircraftLabelId);
+  if (!ct || !rs) return;
+  const isCabin = ct.value === "CABIN";
+  rs.querySelectorAll("option").forEach(opt => {
+    const isCabinOpt = opt.classList.contains("cabin-option");
+    opt.hidden = isCabin ? !isCabinOpt : isCabinOpt;
+    if (!opt.hidden && opt.value === rs.value) return;
+  });
+  // 현재 선택값이 hidden이면 첫 번째 보이는 옵션으로 초기화
+  const visible = [...rs.querySelectorAll("option")].filter(o => !o.hidden);
+  if (rs.selectedOptions[0] && rs.selectedOptions[0].hidden && visible.length) {
+    rs.value = visible[0].value;
+  }
+  if (al) al.hidden = isCabin;
+}
+
 function bindEvents() {
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+  // 직군 변경 → 직책 옵션 동적 전환 (가입 팝업 + 프로필 탭)
+  const signupCT = $("#signupCrewType");
+  if (signupCT) {
+    updateRoleSelectForCrewType("signupCrewType", "signupRole", "signupAircraftLabel");
+    signupCT.addEventListener("change", () =>
+      updateRoleSelectForCrewType("signupCrewType", "signupRole", "signupAircraftLabel"));
+  }
+  const profileCT = $("#crewTypeInput");
+  if (profileCT) {
+    updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel");
+    profileCT.addEventListener("change", () =>
+      updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel"));
+  }
 
   // 월 전환
   const prevBtn = document.getElementById("prevMonthBtn");

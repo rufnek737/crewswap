@@ -63,7 +63,7 @@
             직군
             <select id="signupCrewType">
               <option value="PILOT" selected>조종사</option>
-              <option value="CABIN" disabled>객실 승무원 (베타 다음 단계)</option>
+              <option value="CABIN">객실 승무원</option>
             </select>
           </label>
           <div class="signup-verify-block">
@@ -87,9 +87,12 @@
               <option value="FO_C">C등급 부기장</option>
               <option value="FO_B" selected>B등급 부기장</option>
               <option value="FO_A">A등급 부기장</option>
+              <option value="PUR" class="cabin-option" hidden>사무장 (PUR)</option>
+              <option value="JCI" class="cabin-option" hidden>유닛장 (JCI)</option>
+              <option value="FA" class="cabin-option" hidden>일반 승무원 (FA)</option>
             </select>
           </label>
-          <label>
+          <label id="signupAircraftLabel">
             기종 자격
             <select id="signupAircraft">
               <option value="NG">NG</option>
@@ -425,7 +428,7 @@
               직군
               <select id="crewTypeInput">
                 <option value="PILOT" selected>조종사</option>
-                <option value="CABIN" disabled>객실 (다음 단계)</option>
+                <option value="CABIN">객실 승무원</option>
               </select>
             </label>
             <label>
@@ -437,9 +440,12 @@
                 <option value="FO_C">C등급 부기장</option>
                 <option value="FO_B" selected>B등급 부기장</option>
                 <option value="FO_A">A등급 부기장</option>
+                <option value="PUR" class="cabin-option" hidden>사무장 (PUR)</option>
+                <option value="JCI" class="cabin-option" hidden>유닛장 (JCI)</option>
+                <option value="FA" class="cabin-option" hidden>일반 승무원 (FA)</option>
               </select>
             </label>
-            <label>
+            <label id="aircraftInputLabel">
               기종 자격
               <select id="aircraftInput">
                 <option value="NG">NG</option>
