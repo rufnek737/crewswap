@@ -168,9 +168,11 @@ const state = {
     rating:4.8,
     monthlySwapUsed: 1,
     monthlySwapLimit: 3,
+    yearlySwapUsed: 3,    // 연간 누적 (객실: 12회 한도)
     // 객실 전용
     gender: "F",          // "M" | "F"
     languages: [],        // ["Japanese","Chinese","Ann_JA","Ann_CA"]
+    hasBroadcastRating: false, // 방송등급 보유 여부 (미보유 시 RSV/STBY 불가)
   },
 };
 
@@ -886,6 +888,19 @@ function checkRulesCabin(ss, rules) {
 
   const deadlineLabel = `신청 마감 (D-${rules.deadline.businessDays} 영업일)`;
 
+  // 방송등급 미보유 → RSV/STBY 불가
+  const noBroadcast = !state.user.hasBroadcastRating;
+  const rsvStbySelected = ss.some(s => s.type === "RSV" || s.type === "STBY");
+  const broadcastFail = noBroadcast && rsvStbySelected;
+
+  // 월/연 스왑 횟수
+  const monthlyLimit = rules.swapLimitMonthly || 2;
+  const yearlyLimit  = rules.swapLimitYearly  || 12;
+  const monthlyUsed  = state.user.monthlySwapUsed || 0;
+  const yearlyUsed   = state.user.yearlySwapUsed  || 0;
+  const monthlyFail  = monthlyUsed >= monthlyLimit;
+  const yearlyFail   = yearlyUsed  >= yearlyLimit;
+
   // 노선 언어/성별 자격 안내
   const langs = state.user.languages || [];
   const gender = state.user.gender || "F";
@@ -894,9 +909,6 @@ function checkRulesCabin(ss, rules) {
   const genderStr = gender === "M" ? "남성" : "여성";
 
   return [
-    { label:"동일 직책 매칭",
-      status:"PASS",
-      detail:`${state.user.roleType || "객실 승무원"} · 동일 직책 글 노출` },
     { label: deadlineLabel,
       status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()})` },
@@ -918,6 +930,15 @@ function checkRulesCabin(ss, rules) {
     { label:"RSV/STBY 부분 SWAP 차단",
       status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음" },
+    { label:"방송등급 미보유 RSV/STBY 불가",
+      status: broadcastFail ? "FAIL" : "PASS",
+      detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가 (규정 5.아)" : "해당 없음" },
+    { label:`월 스왑 횟수 (월 ${monthlyLimit}회)`,
+      status: monthlyFail ? "FAIL" : (monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
+      detail: `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용` },
+    { label:`연 스왑 횟수 (연 ${yearlyLimit}회)`,
+      status: yearlyFail ? "FAIL" : (yearlyUsed >= yearlyLimit - 2 ? "WARN" : "PASS"),
+      detail: `올해 ${yearlyUsed}/${yearlyLimit}회 사용` },
     { label:"STBY/RSV 직급 조건",
       status: hasStby ? "WARN" : "PASS",
       detail: hasStby
@@ -1196,15 +1217,31 @@ function renderMetrics() {
   $("#hoursBar").className = "metric-fill" + (hPct >= 95 ? " danger" : hPct >= 80 ? " warn" : "");
   $("#hoursText").textContent = `${formatHM(c.totalHours * 60)} / 90:00`;
 
-  const cPct = Math.min(100, (c.maxConsec / 5) * 100);
+  const isCabinUser = state.user.crewType === "CABIN";
+  const rules = currentRules();
+  const consecLimit = rules.dutyConsecLimit || (isCabinUser ? 7 : 5);
+  const cPct = Math.min(100, (c.maxConsec / consecLimit) * 100);
   $("#consecBar").style.width = cPct + "%";
-  $("#consecBar").className = "metric-fill" + (c.maxConsec >= 5 ? " danger" : c.maxConsec >= 4 ? " warn" : "");
-  $("#consecText").textContent = `${c.maxConsec} / 5일`;
+  $("#consecBar").className = "metric-fill" + (c.maxConsec >= consecLimit ? " danger" : c.maxConsec >= consecLimit - 1 ? " warn" : "");
+  $("#consecText").textContent = `${c.maxConsec} / ${consecLimit}일`;
 
-  const sPct = (state.user.monthlySwapUsed / state.user.monthlySwapLimit) * 100;
-  $("#swapBar").style.width = sPct + "%";
-  $("#swapBar").className = "metric-fill" + (sPct >= 100 ? " danger" : sPct >= 67 ? " warn" : "");
-  $("#swapText").textContent = `${state.user.monthlySwapUsed} / ${state.user.monthlySwapLimit}회`;
+  if (isCabinUser) {
+    const monthlyLimit = rules.swapLimitMonthly || 2;
+    const yearlyLimit  = rules.swapLimitYearly  || 12;
+    const monthlyUsed  = state.user.monthlySwapUsed || 0;
+    const yearlyUsed   = state.user.yearlySwapUsed  || 0;
+    const sPct = Math.min(100, (monthlyUsed / monthlyLimit) * 100);
+    $("#swapBar").style.width = sPct + "%";
+    $("#swapBar").className = "metric-fill" + (sPct >= 100 ? " danger" : sPct >= 50 ? " warn" : "");
+    const swapLabelEl = document.querySelector(".metric-label[data-swap]");
+    if (swapLabelEl) swapLabelEl.textContent = "월 SWAP 횟수";
+    $("#swapText").textContent = `${monthlyUsed}/${monthlyLimit}회 · 연 ${yearlyUsed}/${yearlyLimit}`;
+  } else {
+    const sPct = (state.user.monthlySwapUsed / state.user.monthlySwapLimit) * 100;
+    $("#swapBar").style.width = sPct + "%";
+    $("#swapBar").className = "metric-fill" + (sPct >= 100 ? " danger" : sPct >= 67 ? " warn" : "");
+    $("#swapText").textContent = `${state.user.monthlySwapUsed} / ${state.user.monthlySwapLimit}회`;
+  }
 
   // 다음 마감 (이번 주 내 가장 가까운 패턴 시작일)
   const upcoming = state.schedules.filter(s => s.type !== "OFF" && !s.lockReason)
@@ -2004,6 +2041,7 @@ function bindEvents() {
     // 객실 전용
     if (state.user.crewType === "CABIN") {
       state.user.gender = $("#signupGender").value;
+      state.user.hasBroadcastRating = $("#signupBroadcast")?.checked || false;
       state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
         .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
     }
@@ -2374,6 +2412,7 @@ function bindEvents() {
     state.user.cat3     = $("#cat3Input").checked;
     if (state.user.crewType === "CABIN") {
       state.user.gender = $("#genderInput").value;
+      state.user.hasBroadcastRating = $("#broadcastInput")?.checked || false;
       state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
         .filter(k => document.getElementById(k === "Japanese" ? "langJPInput" : k === "Chinese" ? "langCNInput" : k === "Ann_JA" ? "annJAInput" : "annCAInput")?.checked);
     }
@@ -2571,6 +2610,8 @@ function syncFormsFromState() {
   if (u.crewType === "CABIN") {
     set("signupGender", u.gender || "F");
     set("genderInput",  u.gender || "F");
+    check("signupBroadcast", !!u.hasBroadcastRating);
+    check("broadcastInput",  !!u.hasBroadcastRating);
     const langMap = { Japanese:"signupLangJP", Chinese:"signupLangCN", Ann_JA:"signupAnnJA", Ann_CA:"signupAnnCA" };
     const langMapP = { Japanese:"langJPInput", Chinese:"langCNInput", Ann_JA:"annJAInput", Ann_CA:"annCAInput" };
     const langs = u.languages || [];
