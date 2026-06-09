@@ -8,6 +8,17 @@ const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
   FO_C: "C등급 부기장",   FO_B: "B등급 부기장",   FO_A: "A등급 부기장",
 };
+// 객실 직급 레이블 (CrewConnex 코드 → 한국어)
+const CABIN_ROLE_LABELS = {
+  CC: "일반 승무원 (CC)",
+  AP: "부사무장 (AP)",
+  PS: "사무장 (PS)",
+  SP: "선임사무장 (SP)",
+  CP: "수석사무장 (CP)",
+};
+// 객실 직급 위계 (STBY 상향 체크용: 낮을수록 하위)
+const CABIN_RANK = { CC:1, AP:2, PS:3, SP:4, CP:5 };
+
 const FO_GRADES_BY_CAPTAIN_GRADE = { A: ["A","B","C"], B: ["A","B"], C: ["A"] };
 // 내 등급에서 스왑 가능한 상대 등급: A는 모두, B는 A/B, C는 C만
 const VIEWABLE_GRADES = { A: ["A","B","C"], B: ["A","B"], C: ["C"] };
@@ -68,9 +79,9 @@ function positionLabel(roleType) {
   if (!roleType) return "";
   if (roleType.startsWith("CAPTAIN")) return "Capt.";
   if (roleType.startsWith("FO")) return "FO";
-  // 객실 직책
-  const map = { PUR:"PUR", JCI:"JCI", FA:"FA", OBSP:"OBSP", SEN_FA:"Sen.FA" };
-  return map[roleType] || roleType;
+  // 객실 직급 (CrewConnex 코드)
+  const cabinMap = { CC:"CC", AP:"AP", PS:"PS", SP:"SP", CP:"CP" };
+  return cabinMap[roleType] || roleType;
 }
 
 const RULES = {
@@ -97,7 +108,7 @@ const RULES = {
     label: "제주항공 객실 승무원",
     active: true,
     deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
-    positions: ["PUR","JCI","FA"],
+    positions: ["CC","AP","PS","SP","CP"], // CrewConnex AABB 코드 앞 2자리
     swapLimitMonthly: 2,           // 한달 2회
     swapLimitYearly: 12,           // 연 12회
     dutyConsecLimit: 7,            // 7일 연속 근무 불가 (STBY 포함)
@@ -837,6 +848,13 @@ function checkRulesCabin(ss, rules) {
   // UV_ML 포함 여부 (변경 불가)
   const hasUvml = ss.some(s => s.type === "UV_ML");
 
+  // STBY/RSV 변경 시 동일 or 상위 직급만 가능
+  // (내 직급 코드: roleType이 CC/AP/PS/SP/CP)
+  const myRankCode = (state.user.roleType || "CC").toUpperCase();
+  const myRank = CABIN_RANK[myRankCode] || 1;
+  // 이 체크는 스왑 상대방 정보가 필요해서 여기선 Info 안내만 표시
+  const hasStby = ss.some(s => s.type === "STBY" || s.type === "RSV");
+
   const deadlineLabel = `신청 마감 (D-${rules.deadline.businessDays} 영업일)`;
 
   return [
@@ -864,6 +882,11 @@ function checkRulesCabin(ss, rules) {
     { label:"RSV/STBY 부분 SWAP 차단",
       status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음" },
+    { label:"STBY/RSV 직급 조건",
+      status: hasStby ? "WARN" : "PASS",
+      detail: hasStby
+        ? `STBY/RSV 변경 시 동일 or 상위 직급(${CABIN_ROLE_LABELS[myRankCode] || myRankCode} 이상)만 가능 — 상대방 확인 필요`
+        : "해당 없음" },
   ];
 }
 
