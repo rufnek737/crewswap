@@ -1134,10 +1134,17 @@ function updateBadges() {
   const crewLbl = CREWTYPE_LABELS[state.user.crewType] || state.user.crewType;
   const ab = $("#airlineBadge");
   if (ab) ab.textContent = `${airlineLbl}·${crewLbl}`;
-  $("#roleBadge").textContent = ROLE_LABELS[state.user.roleType];
-  $("#aircraftBadge").textContent = state.user.aircraft === "NG_MAX" ? "NG + MAX" : "NG";
-  const q = [state.user.edto?"EDTO":null, state.user.cat2?"CAT II":null, state.user.cat3?"CAT III":null].filter(Boolean).join(" / ");
-  $("#qualBadge").textContent = q || "추가 자격 없음";
+  $("#roleBadge").textContent = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
+  const isCabin = state.user.crewType === "CABIN";
+  const abEl = $("#aircraftBadge");
+  const qEl  = $("#qualBadge");
+  if (abEl) abEl.hidden = isCabin;
+  if (qEl)  qEl.hidden  = isCabin;
+  if (!isCabin) {
+    if (abEl) abEl.textContent = state.user.aircraft === "NG_MAX" ? "NG + MAX" : "NG";
+    const q = [state.user.edto?"EDTO":null, state.user.cat2?"CAT II":null, state.user.cat3?"CAT III":null].filter(Boolean).join(" / ");
+    if (qEl) qEl.textContent = q || "추가 자격 없음";
+  }
   $("#baseBadge").textContent = state.user.base;
   $("#ratingBadge").textContent = `★ ${state.user.rating.toFixed(1)}`;
 }
@@ -1525,8 +1532,11 @@ function renderMatches() {
   const items = visiblePosts();
   const airlineLbl = AIRLINE_LABELS[state.user.airline] || state.user.airline;
   const crewLbl = CREWTYPE_LABELS[state.user.crewType] || state.user.crewType;
+  const roleLabel = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
+  const pilotQualStr = state.user.crewType !== "CABIN"
+    ? ` · ${state.user.aircraft==="NG_MAX"?"NG+MAX":"NG"}${state.user.edto?" · EDTO":""}${state.user.cat3?" · CAT III":""}` : "";
   $("#matchSummary").textContent = items.length
-    ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${ROLE_LABELS[state.user.roleType]} · ${state.user.aircraft==="NG_MAX"?"NG+MAX":"NG"}${state.user.edto?" · EDTO":""}${state.user.cat3?" · CAT III":""}`
+    ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleLabel}${pilotQualStr}`
     : `현재 조건으로 매칭 가능한 글이 없습니다. (다른 회사·직군·등급/직책 글은 자동 제외)`;
   if (items.length === 0) {
     list.innerHTML = `<div class="empty-state">조건을 완화하거나 저장 검색에 등록하면 새 글이 올라올 때 알림을 받을 수 있습니다.</div>`;
