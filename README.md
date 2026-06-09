@@ -1,4 +1,4 @@
-# JJ Swap — 제주항공 승무원 스케줄 스왑 앱
+# CrewSwap — 제주항공 승무원 스케줄 스왑 앱
 
 제주항공 승무원 전용 스케줄 스왑 매칭 앱 (베타)  
 Netlify 서버리스 + Netlify Blobs 기반 풀스택 웹앱
@@ -32,7 +32,7 @@ Netlify 서버리스 + Netlify Blobs 기반 풀스택 웹앱
 | 서버리스 함수 | Node.js (Netlify Functions v1) |
 | 공유 데이터 저장소 | Netlify Blobs (`posts` store) |
 | 이메일 발송 | Resend API (선택, 없으면 테스트 모드) |
-| 로컬 데이터 | localStorage (`jjswap_v1` v2 스키마) |
+| 로컬 데이터 | localStorage (`jjswap_v1` v3 스키마) |
 
 ---
 
@@ -66,6 +66,48 @@ netlify dev          # http://localhost:8889
 ---
 
 ## Work Log
+
+### 2026-06-09
+
+#### 제주항공 객실 승무원 지원 (JEJU_CABIN)
+- `RULES.JEJU_CABIN` 활성화 — Swap Guide PDF 기반 규정 전체 반영
+  - D-3 영업일 마감, 연속 7일 제한, RSV 다음날 OFF 불가, UV_ML 불가
+  - 월 2회 / 연 12회 스왑 한도
+- 객실 직급 체계 추가: CC / AP / PS / SP / CP (AABB 형식, 연차 분리)
+- `checkRulesCabin()` 신설 — 조종사 룰과 분리된 객실 전용 사전 체크
+  - 방송등급 미보유 시 RSV·STBY 변경 FAIL (규정 5.아)
+  - 월/연 스왑 횟수 한도 FAIL/WARN
+  - STBY/RSV 직급 조건 WARN (동일 or 상위)
+  - 6일 연속 근무 랜딩 20:00 / Base별 휴식시간 / 노선 언어·성별 자격 항상 WARN
+- 스왑 횟수 카운팅 로직 수정: 게시글 등록 시 → **상호 수락(매칭 성사) 시**로 변경
+  - `recordSwapMatch()` 함수 추가 (수락 버튼 구현 시 연결)
+
+#### 객실 승무원 회원 가입 / 프로필
+- 직군 선택 시 역할 선택지 조종사 ↔ 객실 동적 전환 (`updateRoleSelectForCrewType`)
+  - `new Option()` 생성자 방식으로 브라우저 호환성 문제 해결
+- 객실 전용 자격 필드 추가 (가입 + 내 정보)
+  - 성별 (여성/남성) — MNL 노선 남성 필수 안내에 활용
+  - 언어 자격: 일본어 전공 / 중국어 전공 / 일본어 방송(Ann_JA) / 중국어 방송(Ann_CA)
+  - 방송등급 보유 여부 (체크 시 RSV·STBY 제한 해제)
+- `syncFormsFromState()` — 복원 시 성별·방송등급·언어 자격 폼 자동 복원
+
+#### 상단 네비게이션 / 매칭 UI
+- 객실 승무원 로그인 시 NG/MAX · EDTO/CAT III 뱃지 숨김
+- 스왑 찾기: 객실은 직책 무관하게 동일 항공사 객실 게시글 전체 노출
+- 객실 목 게시글 5건 추가 (C-001~C-005 / CC·AP·PS 혼합)
+- 카드 "상대 유형" — 객실 직책 레이블 정상 표시 (`CABIN_ROLE_LABELS` fallback)
+- `exposureCount()` / `candidateCountForOffered()` 객실 기준 집계
+
+#### 내 정보 메트릭
+- 연속 근무 바: 객실은 7일 기준으로 표시
+- 스왑 횟수 바: 객실은 `월 X/2회 · 연 X/12` 형태로 표시
+
+#### 기타 버그 수정
+- CrewConnex 로그인 팝업 Enter 키 → 팝업 닫힘 현상 수정
+- RSV/STBY 부분 선택 FAIL 오탐 수정 (인접 미선택 패턴만 체크)
+- 동일 스케줄 중복 등록 방지 (등록 버튼 클릭 시 기존 글 날짜 중복 체크)
+- localStorage v3 업그레이드 — v1/v2 스왑 카운트 오염 데이터 자동 무효화
+- 기본 스왑 카운트 초기값 0으로 수정 (기존 mock 1/3 제거)
 
 ### 2026-06-08
 - 앱 리브랜딩: JJ Swap → **CrewSwap**
@@ -107,7 +149,18 @@ netlify dev          # http://localhost:8889
 ---
 
 ## 남은 작업 (다음 세션)
-- Netlify 배포 후 CrewSwap 리브랜딩 + 이메일 인증 수정 확인
+
+### 배포
+- Netlify 크레딧 17일 리셋 후 재배포 (netlify.toml 수정 이미 완료 — blobs fix)
+- 배포 후 Netlify Blobs 실환경 동작 확인
+
+### 객실 승무원 기능
+- CrewConnex 파서 객실 대응: AABB 직급 형식 + Qualification 필드(Japanese/Chinese/Ann_JA/Ann_CA) 파싱
+- 상호 수락 버튼 구현 → `recordSwapMatch()` 연결
+- SCHLD 스케줄 타입 스왑 차단 처리
+- VAC_A / VAC_P 스왑 가능 여부 확인 (VAC와 동일 취급 여부)
+
+### 공통
+- 실제 이메일 발송 도메인 인증 (Resend — `RESEND_API_KEY` + `RESEND_FROM`)
 - 테스터 모집 후 실사용 피드백 수집
-- 실제 이메일 발송을 위한 도메인 인증 (Resend — `RESEND_API_KEY` + `RESEND_FROM` 설정)
 - 타 항공사(대한항공·아시아나·티웨이 등) 이메일 인증 추가 (추후)
