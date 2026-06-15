@@ -159,7 +159,7 @@
               <button data-view="week">주</button>
               <button data-view="list">리스트</button>
             </div>
-            <button id="importScheduleButton" class="primary-button">📥 CrewConnex 불러오기</button>
+            <button id="importScheduleButton" class="primary-button">📥 CrewConnex 자동로그인</button>
           </div>
         </div>
 
@@ -240,10 +240,10 @@
           </select>
         </div>
 
-        <!-- 방향 변환 chips -->
+        <!-- 스왑 방향 chips -->
         <div class="filter-panel">
           <div>
-            <strong>방향 변환</strong>
+            <strong>스왑 방향 <small style="font-weight:normal;color:var(--text-muted);">(내가 내놓는 것 → 원하는 것)</small></strong>
             <div class="chip-row" id="directionChips">
               <button class="filter-chip is-active" data-dir="all">전체</button>
               <button class="filter-chip" data-dir="AM_TO_PM">오전→오후</button>
@@ -278,13 +278,20 @@
                 <option value="d7">D-7 이내</option>
               </select>
             </label>
-            <label>시간대
+            <label>출근 시간대
               <select id="timeFilter">
                 <option value="all">전체</option>
                 <option value="AM">오전 출근 (~10시)</option>
                 <option value="PM">오후 출근</option>
                 <option value="NIGHT">야간 출근</option>
-                <option value="noEarlyArr">새벽 도착 제외</option>
+              </select>
+            </label>
+            <label>퇴근 시간대
+              <select id="arrTimeFilter">
+                <option value="all">전체</option>
+                <option value="noEarlyArr">새벽 도착 제외 (~06시)</option>
+                <option value="beforeNoon">정오 전 복귀</option>
+                <option value="beforeEvening">18시 전 복귀</option>
               </select>
             </label>
             <label>권역
@@ -322,7 +329,6 @@
             <h2>스왑 등록</h2>
             <p>왼쪽 = 내가 내놓을 패턴 (달력에서 자동 입력) · 오른쪽 = 내가 원하는 조건</p>
           </div>
-          <button id="watchAdButton" class="secondary-button">📺 광고 보고 등록권 받기</button>
         </div>
 
         <!-- 내가 등록한 글 -->
@@ -355,8 +361,7 @@
             <label>날짜 유연성
               <select id="wantedDateFlex">
                 <option value="sameDay">선택 날짜와 동일</option>
-                <option value="sameMonth" selected>이번 달 내</option>
-                <option value="any">날짜 무관</option>
+                <option value="any" selected>날짜 무관</option>
                 <option value="weekend">주말 우선</option>
               </select>
             </label>
@@ -368,7 +373,7 @@
                 <button data-time="noEarlyArr">새벽 도착 제외</button>
               </div>
             </label>
-            <label>포함 공항 <input id="includedAirports" placeholder="예: CJU, KIX (쉼표 구분)" /></label>
+            <label>선호 공항 <input id="includedAirports" placeholder="예: CJU, KIX (쉼표 구분)" /></label>
             <label>제외 공항 <input id="excludedAirports" placeholder="예: CXR, BKI, TAG" /></label>
             <label>공개 메모 <textarea id="postMemo" rows="3" placeholder="상대에게 보일 추가 희망 조건"></textarea></label>
           </div>
@@ -385,6 +390,7 @@
           <div class="post-footer-btns">
             <button id="saveDraftButton" class="secondary-button" disabled>임시 저장</button>
             <button id="submitPostButton" class="primary-button" disabled>등록하기 · 1크레딧</button>
+            <button id="watchAdButton" class="secondary-button" style="width:100%;margin-top:8px;">📺 광고 보고 등록권 받기</button>
           </div>
         </div>
       </section>
@@ -512,6 +518,7 @@
             <h3>크레딧</h3>
             <div class="credit-balance"><strong id="profileCredits">5</strong> 크레딧</div>
             <div class="beta-credit-notice">🎁 베타 기간 동안 무료 제공</div>
+            <button id="watchAdButtonProfile" class="secondary-button" style="width:100%;margin:10px 0 6px;">📺 광고 보고 등록권 받기</button>
             <p class="hint">매칭 실패 시 사용한 크레딧 50% 환급. 광고 시청 등록권은 24시간 만료.</p>
           </div>
         </div>

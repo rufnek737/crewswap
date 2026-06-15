@@ -63,6 +63,8 @@ const PILL_CLASS = {
 const BAND_CLASS = { "국내선":"dom", "국제선":"", "LAYOV":"lay", "ARRIVAL":"lay" };
 
 const WANTED_TYPE_OPTIONS = ["OFF","국내선","국제선","LAYOV","RSV","STBY","비행(전체)","아무거나"];
+// 연속근무 계산 제외 유형 (휴무/휴가)
+const NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P"]);
 
 /* ====== 회사·직군별 룰 (확장 대비) ======
    사용자는 가입 시 airline + crewType 1회 선택 → 본인 룰 자동 적용.
@@ -152,7 +154,7 @@ const state = {
   alerts: [],
   alertFilter: "all",
   savedSearches: [],
-  filters: { direction:"all", type:"all", date:"all", time:"all", region:"all", layover:"all" },
+  filters: { direction:"all", types:[], date:"all", time:"all", arrTime:"all", region:"all", layover:"all" },
   sortBy: "score",
   wantedTypes: new Set(["OFF"]),
   wantedTimes: new Set(),
@@ -776,7 +778,7 @@ function calcCumulative() {
   let maxConsec = 0, current = 0;
   for (let d = 1; d <= dayCount; d++) {
     const s = getSchedule(d);
-    if (s && s.type !== "OFF") { current++; maxConsec = Math.max(maxConsec, current); }
+    if (s && !NON_DUTY_TYPES.has(s.type)) { current++; maxConsec = Math.max(maxConsec, current); }
     else current = 0;
   }
   const consecLimit = (currentRules().dutyConsecLimit || 5) - 1;
@@ -784,7 +786,7 @@ function calcCumulative() {
   let run = 0;
   for (let d = 1; d <= dayCount; d++) {
     const s = getSchedule(d);
-    if (s && s.type !== "OFF") { run++; if (run >= consecLimit) warnDays.add(d); }
+    if (s && !NON_DUTY_TYPES.has(s.type)) { run++; if (run >= consecLimit) warnDays.add(d); }
     else run = 0;
   }
   return { totalHours: totalMin / 60, maxConsec, warnDays };
@@ -911,48 +913,62 @@ function checkRulesCabin(ss, rules) {
   return [
     { label: deadlineLabel,
       status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
-      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()})` },
+      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()})`,
+      ref: "Swap Guide p.47 — 스왑 신청은 변경 시작일 기준 D-3 영업일 이내에 신청해야 합니다. (예: 수요일 변경일 → 전전주 금요일까지)" },
     { label:`연속 근무일 (${consecLimit}일 미만)`,
       status: consecFail ? "FAIL" : consecWarn ? "WARN" : "PASS",
-      detail:`최대 ${cum.maxConsec}일` },
+      detail:`최대 ${cum.maxConsec}일`,
+      ref: "Swap Guide p.48 — 스왑 후 7일 이상 연속 근무가 발생하면 신청 불가. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },
     { label:"RSV 다음날 OFF 불가",
       status: rsvNextOff ? "FAIL" : "PASS",
-      detail: rsvNextOff ? "RSV 포함 최소 3일 SKD 필요" : "해당 없음" },
+      detail: rsvNextOff ? "RSV 포함 최소 3일 SKD 필요" : "해당 없음",
+      ref: "Swap Guide p.48 — RSV를 포함한 스왑 시 패턴 전체(최소 3일)를 함께 변경해야 합니다. RSV 다음날 OFF 단독 스왑 불가." },
     { label:"변경 불가 타입 (UV_ML)",
       status: hasUvml ? "FAIL" : "PASS",
-      detail: hasUvml ? "UV_ML은 스왑 불가" : "해당 없음" },
+      detail: hasUvml ? "UV_ML은 스왑 불가" : "해당 없음",
+      ref: "Swap Guide p.48 — UV_ML 코드가 포함된 스케줄은 변경 불가 대상입니다." },
     { label:"잠금 비행",
       status: hasLocked ? "FAIL" : "PASS",
-      detail: hasLocked ? "잠금된 비행 포함 — SWAP 불가" : "해당 없음" },
+      detail: hasLocked ? "잠금된 비행 포함 — SWAP 불가" : "해당 없음",
+      ref: "회사 편조팀 지정 잠금 비행(예: 특별편, 의전, 훈련 비행 등)은 스왑 대상에서 제외됩니다." },
     { label:"공휴일/연휴 SWAP 제한",
       status: blockedHoliday ? "WARN" : "PASS",
-      detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음" },
+      detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
+      ref: "Swap Guide p.49 — 공휴일·연휴 기간 스왑은 별도 회사 정책 적용. 편조팀 사전 문의 권장 (070-7420-1756)." },
     { label:"RSV/STBY 부분 SWAP 차단",
       status: partialRsvStby ? "FAIL" : "PASS",
-      detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음" },
+      detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
+      ref: "Swap Guide p.48 — RSV·STBY는 연속된 패턴 전체를 단위로만 변경 가능. 인접 RSV/STBY 중 일부만 선택하는 것은 불가." },
     { label:"방송등급 미보유 RSV/STBY 불가",
       status: broadcastFail ? "FAIL" : "PASS",
-      detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가 (규정 5.아)" : "해당 없음" },
+      detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가 (규정 5.아)" : "해당 없음",
+      ref: "객실 생활 백과사전 5.아 — 방송등급 미보유 승무원은 RSV(대기) 및 공항대기(STBY) 근무에 배정될 수 없으므로 해당 유형의 스왑 불가." },
     { label:`월 스왑 횟수 (월 ${monthlyLimit}회)`,
       status: monthlyFail ? "FAIL" : (monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
-      detail: `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용` },
+      detail: `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용`,
+      ref: "Swap Guide p.47 — 스왑은 월 2회, 연 12회를 초과할 수 없습니다. 카운트는 스왑이 실제 성사(상호 수락)된 경우에만 증가합니다." },
     { label:`연 스왑 횟수 (연 ${yearlyLimit}회)`,
       status: yearlyFail ? "FAIL" : (yearlyUsed >= yearlyLimit - 2 ? "WARN" : "PASS"),
-      detail: `올해 ${yearlyUsed}/${yearlyLimit}회 사용` },
+      detail: `올해 ${yearlyUsed}/${yearlyLimit}회 사용`,
+      ref: "Swap Guide p.47 — 연간 스왑 총 횟수는 12회 한도. 월 한도(2회)와 별도로 적용됩니다." },
     { label:"STBY/RSV 직급 조건",
       status: hasStby ? "WARN" : "PASS",
       detail: hasStby
         ? `STBY/RSV 변경 시 동일 or 상위 직급(${CABIN_ROLE_LABELS[myRankCode] || myRankCode} 이상)만 가능 — 상대방 확인 필요`
-        : "해당 없음" },
+        : "해당 없음",
+      ref: "Swap Guide p.49 — STBY·RSV 스왑의 경우 본인보다 동일 직급 또는 상위 직급 승무원과만 교환 가능합니다." },
     { label:"6일 연속 근무 랜딩 시간",
       status:"WARN",
-      detail:"6일 연속 근무 시 마지막 날 랜딩 20:00 이전 SKD인지 직접 확인 필요" },
+      detail:"6일 연속 근무 시 마지막 날 랜딩 20:00 이전 SKD인지 직접 확인 필요",
+      ref: "Swap Guide p.48 — 연속 6일 근무가 되는 경우, 6일차 비행의 착륙 시각(STA)이 20:00 이전인 스케줄만 배정 가능. 앱에서 자동 확인 불가 — 직접 CrewConnex에서 확인 필요." },
     { label:"Base별 신청 가능 시간",
       status:"WARN",
-      detail:"전날 복귀(STA) 기준 신청 가능 시간 확인 (예: ICN-ICN STA 22:00 기준 당일 13:00 이후 STD)" },
+      detail:"전날 복귀(STA) 기준 신청 가능 시간 확인 (예: ICN-ICN STA 22:00 기준 당일 13:00 이후 STD)",
+      ref: "Swap Guide p.47 Base별 휴식시간 기준표 — 전날 도착(STA) 이후 충분한 휴식 후 신청 가능. ICN-ICN: STA 22:00 기준 다음날 13:00 이후 / GMP-GMP: 12:10 이후 / PUS-PUS: 11:30 이후 등. 앱에서 자동 확인 불가 — 직접 확인 필요." },
     { label:"노선 언어/성별 자격",
       status:"WARN",
-      detail:`내 자격: ${genderStr} · ${langStr} — MNL(남성 필수), 일본/중국 노선 배정 자격 확인` },
+      detail:`내 자격: ${genderStr} · ${langStr} — MNL(남성 필수), 일본/중국 노선 배정 자격 확인`,
+      ref: "객실 편조 기준 — MNL(마닐라) 노선은 남성 승무원 1인 이상 필수 탑승. 일본 노선은 일본어 전공 또는 일본어 방송 자격 보유자 배정 우선. 중국 노선도 동일 기준 적용." },
   ];
 }
 
@@ -998,27 +1014,38 @@ function checkRulesForSelection() {
     { label:"동일 등급/직책 매칭", status:"PASS", detail: (() => {
         const pos = state.user.roleType.startsWith("CAPTAIN") ? "기장" : "부기장";
         return `${ROLE_LABELS[state.user.roleType]} · 동일 포지션(${pos}) 글만 노출`;
-      })() },
+      })(),
+      ref: "편조 기준 — 기장↔기장, 부기장↔부기장 간 스왑만 가능. 기장 A/B등급 간 교환은 가능하나 부기장↔기장 교환 불가." },
     { label:"비행 편조 기준", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
-      detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족" },
+      detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족",
+      ref: "편조 기준표 — 기장 등급(A/B), 부기장 등급(A/B) 별 운항 가능 노선 제한. B등급 기장+A등급 FO 조합, A등급 기장+B등급 FO 조합 가능 여부 편조팀 확인 필요." },
     { label:"기종 조건", status: ss.every(userAircraftOK) ? "PASS" : "FAIL",
-      detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성" },
+      detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성",
+      ref: "기종 자격 — NG(B737-800)/MAX(B737-8/10) 자격은 별도 취득. NG 자격만 있으면 MAX 비행 불가. 기종이 다른 패턴과 스왑 시 자동 FAIL 처리됩니다." },
     { label:"EDTO 조건", status: needsEdto && !state.user.edto ? "FAIL" : "PASS",
-      detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음" },
+      detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음",
+      ref: "EDTO (Extended-range Twin-engine Operations) — 쌍발 항공기 장거리 운항 자격. 제주항공의 경우 BKI·CXR·MNL 등 일부 국제노선 비행에 필요. EDTO 미보유 시 해당 비행 스왑 불가." },
     { label:"CAT II/III 조건", status: needsCat3 && !state.user.cat3 ? "WARN" : "PASS",
-      detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음" },
+      detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음",
+      ref: "CAT II/III — 저시정(안개 등) 착륙 자격. 특정 기상 조건이 예상되는 비행 편에 지정. 미보유 시 해당 비행 스왑 가능하나 기상 악화 시 운항 제한될 수 있어 편조팀 확인 권장." },
     { label:"신청 마감 (D-2 17시)", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
-      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()} 17시)` },
+      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()} 17시)`,
+      ref: "조종사 스왑 신청 마감 — 변경 시작일 기준 2영업일 전(D-2) 17:00까지. 예: 수요일 비행 → 전주 월요일 17시까지. 마감 이후 접수 불가." },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
-      detail:`현재 ${monthAfter.toFixed(1)}h / 90h` },
+      detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
+      ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
     { label:"연속 근무일 (5일 미만)", status: cum.maxConsec >= 6 ? "FAIL" : cum.maxConsec >= 5 ? "WARN" : "PASS",
-      detail:`최대 ${cum.maxConsec}일` },
+      detail:`최대 ${cum.maxConsec}일`,
+      ref: "항공법 승무기준 — 조종사 연속 근무 한도 5일(OFF 제외). 5일째 WARN, 6일 이상 FAIL. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },
     { label:"특수공항 자격 갱신 비행", status: hasLocked ? "FAIL" : "PASS",
-      detail: hasLocked ? "잠금된 비행 포함 — SWAP 불가" : "해당 없음" },
+      detail: hasLocked ? "잠금된 비행 포함 — SWAP 불가" : "해당 없음",
+      ref: "특수공항 자격 갱신 비행 — TAG(삼성 비공개 공항), HKG(홍콩) 등 특수공항 자격 유지를 위한 정기 비행은 편조팀이 잠금 설정. 잠금된 비행은 스왑 불가." },
     { label:"공휴일/연휴 SWAP 제한", status: blockedHoliday ? "WARN" : "PASS",
-      detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음" },
+      detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
+      ref: "공휴일·연휴 편조 정책 — 설날·추석 연휴 등 특별 기간은 회사 별도 편조 정책 적용. 스왑 가능 여부를 편조팀에 사전 문의 필요 (070-7420-1756)." },
     { label:"RSV/STBY 부분 SWAP 차단", status: partialRsvStby ? "FAIL" : "PASS",
-      detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음" },
+      detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
+      ref: "RSV·STBY 연속 패턴 단위 스왑 — 연속된 RSV/STBY는 개별 분리 스왑 불가. 인접 RSV/STBY가 있으면 모두 함께 선택해야 합니다." },
   ];
 }
 
@@ -1099,11 +1126,35 @@ function matchesDirection(post, dir) {
 function visiblePosts() {
   const scored = state.posts.map(p => ({ post:p, score: matchScore(p) })).filter(x => x.score !== null);
 
-  // 유형 필터
+  // 유형 필터 (복수선택)
   let list = scored;
-  if (state.filters.type !== "all") list = list.filter(x => x.post.offered.type === state.filters.type);
+  if (state.filters.types.length > 0) list = list.filter(x => state.filters.types.includes(x.post.offered.type));
   // 방향 변환 필터 (선택 시)
   if (state.filters.direction !== "all") list = list.filter(x => matchesDirection(x.post, state.filters.direction));
+  // 출근 시간대 필터
+  if (state.filters.time !== "all") {
+    list = list.filter(x => {
+      const rt = x.post.offered.reportTime;
+      if (!rt) return state.filters.time !== "AM" && state.filters.time !== "NIGHT"; // OFF/VAC: 제외
+      if (state.filters.time === "AM") return rt < "10:00";
+      if (state.filters.time === "PM") return rt >= "10:00" && rt < "20:00";
+      if (state.filters.time === "NIGHT") return rt >= "20:00" || rt < "06:00";
+      return true;
+    });
+  }
+  // 퇴근 시간대 필터
+  if (state.filters.arrTime !== "all") {
+    list = list.filter(x => {
+      const rt = x.post.offered.releaseTime;
+      if (!rt) return false; // OFF 등 퇴근시간 없음 → 제외
+      const isNextDay = rt.includes("+");
+      const timeStr = isNextDay ? rt.replace(/\+\d+/, "").trim() : rt;
+      if (state.filters.arrTime === "noEarlyArr") return isNextDay || timeStr >= "06:00"; // 새벽 도착 제외
+      if (state.filters.arrTime === "beforeNoon") return !isNextDay && timeStr < "12:00";
+      if (state.filters.arrTime === "beforeEvening") return !isNextDay && timeStr < "18:00";
+      return true;
+    });
+  }
   // 권역
   if (state.filters.region !== "all") {
     const r = state.filters.region;
@@ -1339,7 +1390,7 @@ function renderCalendar() {
         ? `← ${s.arrivalAirport} 도착${s.arrivalTime ? ` ${s.arrivalTime}` : ""}`
         : s.routeSummary
         ? s.routeSummary
-        : (s.dep && s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `${s.layoverAirport} 체류` : "");
+        : (s.dep && s.arr && s.dep !== s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `${s.layoverAirport} 체류` : "");
       pill.className = `schedule-pill ${PILL_CLASS[s.type] || ""} ${s.lockReason?"pill-locked":""}`;
       pill.innerHTML = `
         ${tod ? `<span class="pill-time-position">${tod}</span>` : ""}
@@ -1428,14 +1479,27 @@ function renderRuleCheck() {
       </div>
       ${statusSummary}
     </div>
-    ${checks.map(c => `
-      <div class="rule-row ${c.status.toLowerCase()}">
-        <div><strong style="display:block;font-size:12px;">${c.label}</strong><span style="font-size:11px;color:var(--muted);">${c.detail}</span></div>
+    ${checks.map((c, i) => `
+      <div class="rule-row ${c.status.toLowerCase()}" data-rule-idx="${i}" style="cursor:${c.ref ? "pointer" : "default"}">
+        <div style="flex:1;">
+          <strong style="display:block;font-size:12px;">${c.label}${c.ref ? ' <span style="font-size:10px;opacity:.6;">▼ 규정 보기</span>' : ""}</strong>
+          <span style="font-size:11px;color:var(--muted);">${c.detail}</span>
+          ${c.ref ? `<div class="rule-ref-text" id="ruleRef${i}" style="display:none;margin-top:6px;padding:6px 8px;background:var(--bg-card);border-left:3px solid var(--border);font-size:11px;line-height:1.5;border-radius:4px;">${c.ref}</div>` : ""}
+        </div>
         <span class="verdict">${c.status === "PASS" ? "통과" : c.status === "WARN" ? "확인" : c.status === "FAIL" ? "불가" : "-"}</span>
       </div>
     `).join("")}
     <p class="disclaimer">⚠️ 본 결과는 회사 최종 승인 전 사전 검토용입니다. 실제 가능 여부는 회사 시스템 및 규정에 따라 달라질 수 있습니다.</p>
   `;
+  // 규정 원본 토글
+  checks.forEach((c, i) => {
+    if (!c.ref) return;
+    const row = document.querySelector(`[data-rule-idx="${i}"]`);
+    if (row) row.addEventListener("click", () => {
+      const ref = $(`#ruleRef${i}`);
+      if (ref) ref.style.display = ref.style.display === "none" ? "block" : "none";
+    });
+  });
 }
 
 function renderWantedChips() {
@@ -2223,15 +2287,32 @@ function bindEvents() {
     state.filters.direction = c.dataset.dir;
     renderMatches();
   });
-  // 유형 칩
+  // 유형 칩 (복수선택)
   $$("#typeFilters .filter-chip").forEach(c => c.onclick = () => {
-    $$("#typeFilters .filter-chip").forEach(x => x.classList.remove("is-active"));
-    c.classList.add("is-active");
-    state.filters.type = c.dataset.filter;
+    const val = c.dataset.filter;
+    if (val === "all") {
+      state.filters.types = [];
+      $$("#typeFilters .filter-chip").forEach(x => x.classList.remove("is-active"));
+      c.classList.add("is-active");
+    } else {
+      const idx = state.filters.types.indexOf(val);
+      if (idx === -1) state.filters.types.push(val);
+      else state.filters.types.splice(idx, 1);
+      const allChip = document.querySelector("#typeFilters [data-filter='all']");
+      if (state.filters.types.length === 0) {
+        $$("#typeFilters .filter-chip").forEach(x => x.classList.remove("is-active"));
+        if (allChip) allChip.classList.add("is-active");
+      } else {
+        if (allChip) allChip.classList.remove("is-active");
+        $$("#typeFilters .filter-chip").forEach(x => {
+          x.classList.toggle("is-active", state.filters.types.includes(x.dataset.filter));
+        });
+      }
+    }
     renderMatches();
   });
   // select 필터
-  ["dateFilter","timeFilter","regionFilter","layoverFilter","sortSelect"].forEach(id => {
+  ["dateFilter","timeFilter","arrTimeFilter","regionFilter","layoverFilter","sortSelect"].forEach(id => {
     const el = $("#"+id);
     if (!el) return;
     el.addEventListener("change", () => {
@@ -2401,10 +2482,14 @@ function bindEvents() {
     saveState();
     showToast("임시 저장 완료 — 나중에 이어서 등록할 수 있습니다.");
   });
-  $("#watchAdButton").addEventListener("click", () => {
-    state.credits++;
-    renderCredits();
-    showToast("📺 광고 시청 완료 — 등록권 1장 지급 (24시간 내 사용)");
+  ["watchAdButton","watchAdButtonProfile"].forEach(id => {
+    const el = $("#"+id);
+    if (!el) return;
+    el.addEventListener("click", () => {
+      state.credits++;
+      renderCredits();
+      showToast("📺 광고 시청 완료 — 등록권 1장 지급 (24시간 내 사용)");
+    });
   });
 
   // 요청함 토글
