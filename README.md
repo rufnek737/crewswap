@@ -67,6 +67,32 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-15
+
+#### 회사 룰 원본 규정 텍스트 (▼ 규정 보기)
+- `checkRulesCabin()` 전 항목에 `ref` 필드 추가 (Swap Guide p.47-49 및 객실 백과사전 기준)
+- `checkRulesForSelection()` (조종사) 전 항목에 `ref` 필드 추가 (항공법·편조기준·EDTO)
+- `renderRuleCheck()` 에서 ref 있는 항목 클릭 시 원문 펼치기/접기 (▼ 규정 보기 토글)
+
+#### 연속근무 / 달력 버그 수정
+- `calcCumulative()`: OFF만 제외하던 로직 → `NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P"])` 도입, VAC도 연속근무 초기화
+- `renderCalendar()` routeText: `dep === arr` 시 "GMP-GMP" 미표시 (OFF/VAC 잔존 오류 수정)
+
+#### 스왑 찾기 필터 개선
+- **유형 복수선택**: `state.filters.type(string)` → `state.filters.types(array)` 변경
+  - "전체" 클릭 시 초기화, 개별 유형 클릭 시 토글, 복수 선택 가능
+- **퇴근 시간대 필터** 추가 (`arrTimeFilter` select):
+  - 새벽 도착 제외 (~06시) / 정오 전 복귀 / 18시 전 복귀
+- **출근 시간대 필터** 구현 (`timeFilter`): 오전(~10시) / 오후 / 야간
+
+#### UI / 등록 폼
+- 스왑 등록 폼 광고 버튼 하단(post-footer-btns)으로 이동
+- 내 정보 크레딧 섹션에 광고 버튼 추가 (`watchAdButtonProfile`) 및 이벤트 연결
+- "CrewConnex 불러오기" → "CrewConnex 자동로그인"
+- "방향 변환" → "스왑 방향 (내가 내놓는 것 → 원하는 것)" 설명 추가
+- "포함 공항" → "선호 공항"
+- "이번 달 내" 날짜 옵션 제거, 기본값 "날짜 무관"
+
 ### 2026-06-09
 
 #### 제주항공 객실 승무원 지원 (JEJU_CABIN)
