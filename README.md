@@ -67,6 +67,21 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-17
+
+#### Capacitor 기반 Android 네이티브 앱 전환
+- `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` 설치, `cap init` (appId: `com.crewswap.app`)
+- 웹 자산 전용 `www/` 폴더 분리 (`webDir: '.'`은 `android/`·`node_modules/` 등을 끌고 들어가 불가 → `www`로 변경), `.gitignore`에 추가
+- `npx cap add android` + `npx cap sync android` → Android Studio에서 `android/` 프로젝트 오픈 확인
+- `app.js`: `API_BASE` 상수 추가 — 네이티브 앱(`Capacitor.isNativePlatform()`)에서는 Netlify Functions 호출을 `https://crewswap.netlify.app`로 절대경로 처리 (웹 배포본은 기존 상대경로 유지), `posts-get/posts-create/posts-delete/send-verify/check-verify/crewconnex` 7개 fetch 호출 수정
+
+### 2026-06-16
+
+#### 아이콘 / 스플래시 / 로그인-회원가입 활성화
+- 신규 브랜드 아이콘 적용 (`icon-192.png`/`icon-512.png`, 텍스트 없는 심볼 버전으로 최종 교체)
+- 8초 영상 스플래시 화면 추가 (`splash.mp4` + 포스터 프레임), `#splashScreen` 오버레이 + `initSplash()`
+- 스플래시 내 로그인/회원가입 버튼을 기존 가입 모달(`signupPanel`)에 연결 — 신규/기존 사용자 분기 처리
+
 ### 2026-06-15
 
 #### 회사 룰 원본 규정 텍스트 (▼ 규정 보기)
