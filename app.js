@@ -2674,12 +2674,56 @@ if (restoredAt) {
   setTimeout(() => { syncFormsFromState(); }, 0);
 }
 // 가입 안 됐으면 모달 자동 표시
-setTimeout(() => {
+function maybeAutoShowSignup() {
   const sp = document.getElementById("signupPanel");
   if (sp && sp.tagName === "DIALOG" && !state.user.hasSignedUp) {
     try { sp.showModal(); } catch (_) {}
   }
-}, 150);
+}
+// 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
+if (!document.getElementById("splashScreen")) {
+  setTimeout(maybeAutoShowSignup, 150);
+}
+
+/* ====== 스플래시 화면 (영상 + 로그인/회원가입) ====== */
+(function initSplash() {
+  const splash = document.getElementById("splashScreen");
+  if (!splash) return;
+  const video = splash.querySelector(".splash-video");
+
+  function hideSplash(afterAction) {
+    if (splash.dataset.dismissed === "1") { if (afterAction) afterAction(); return; }
+    splash.dataset.dismissed = "1";
+    splash.classList.add("is-hiding");
+    setTimeout(() => {
+      splash.remove();
+      if (afterAction) afterAction();
+    }, 400);
+  }
+
+  if (video) video.addEventListener("ended", () => hideSplash(maybeAutoShowSignup));
+
+  const loginBtn = document.getElementById("splashLoginBtn");
+  if (loginBtn) loginBtn.addEventListener("click", () => {
+    hideSplash(() => {
+      if (!state.user.hasSignedUp) {
+        showToast("가입 기록이 없습니다 — 회원가입을 진행해주세요.");
+        maybeAutoShowSignup();
+      }
+    });
+  });
+
+  const signupBtn = document.getElementById("splashSignupBtn");
+  if (signupBtn) signupBtn.addEventListener("click", () => {
+    hideSplash(() => {
+      if (state.user.hasSignedUp) {
+        showToast("이미 가입된 회원입니다 — 자동으로 로그인됩니다.");
+      } else {
+        maybeAutoShowSignup();
+      }
+    });
+  });
+})();
 
 // state.user → DOM 폼 동기화 (새로고침 후에도 본인 정보가 폼에 표시되도록)
 function syncFormsFromState() {

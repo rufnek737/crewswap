@@ -705,3 +705,35 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   .filter-grid { grid-template-columns: 1fr; }
   .privacy-stepper { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ===================== 스플래시 화면 ===================== */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: #000;
+  overflow: hidden;
+  transition: opacity 0.4s ease;
+}
+.splash-screen.is-hiding { opacity: 0; pointer-events: none; }
+.splash-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.splash-buttons {
+  position: absolute;
+  left: 0; right: 0; bottom: 10%;
+  padding: 0 7%;
+  display: flex;
+  flex-direction: column;
+  gap: 3%;
+  z-index: 1;
+}
+.splash-login-btn, .splash-signup-btn {
+  width: 100%;
+  padding: 14px 0;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.splash-login-btn { background: #FDBF03; border: none; color: #021D45; }
+.splash-signup-btn { background: rgba(2, 29, 69, 0.55); border: 1.5px solid #fff; color: #fff; }
