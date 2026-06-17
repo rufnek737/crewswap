@@ -2706,8 +2706,6 @@ if (!document.getElementById("splashScreen")) {
     }, 400);
   }
 
-  if (video) video.addEventListener("ended", () => hideSplash());
-
   const loginBtn = document.getElementById("splashLoginBtn");
   if (loginBtn) loginBtn.addEventListener("click", () => {
     hideSplash(() => {
