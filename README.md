@@ -38,35 +38,49 @@ Netlify 서버리스 + Netlify Blobs 기반 풀스택 웹앱
 
 ## 개발 환경 셋업 (신규 머신)
 
-### macOS (첫 클론 시)
+### 공통 (첫 클론 시)
 ```bash
-# 1. 필수 도구 (없으면)
-brew install node
-# Android Studio: https://developer.android.com/studio
-
-# 2. 클론 + 의존성
 git clone https://github.com/rufnek737/crewswap.git
 cd crewswap
 npm install
 
-# 3. www/ 폴더 생성 (gitignore라 클론 시 없음)
+# www/ 폴더 생성 (gitignore라 클론 시 없음)
 mkdir www
 cp index.html styles.css app.js sw.js manifest.json \
    icon-192.png icon-512.png splash.mp4 splash-poster.jpg www/
+```
 
-# 4. Android 에셋 동기화
+### Android (Windows / macOS)
+```bash
+# 필수: Android Studio 설치
 npx cap sync android
-
-# 5. Android Studio로 열기
 npx cap open android
 # → Android Studio에서 ▶ Run
+```
+
+### iOS (macOS 전용)
+```bash
+# 필수: Xcode 설치
+npm install @capacitor/ios
+npx cap add ios
+npx cap sync ios
+npx cap open ios
+# → Xcode에서 Signing & Capabilities > Team 설정 후 ▶ Run
+
+# 아이콘 교체 (최초 1회)
+sips -z 1024 1024 icon-512.png \
+  --out ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
 ```
 
 ### 코드 수정 후 매번
 ```bash
 cp index.html styles.css app.js www/   # 수정한 파일만
-npx cap sync android
-# Android Studio ▶ Run
+
+# Android
+npx cap sync android   # Android Studio ▶ Run
+
+# iOS
+npx cap sync ios       # Xcode ▶ Run
 ```
 
 ### Cloudflare Workers (백엔드 수정 시)
@@ -100,6 +114,46 @@ netlify dev          # http://localhost:8889
 ---
 
 ## Work Log
+
+### 2026-06-18 — iOS 셋업 및 UI 버그 수정
+
+#### macOS iOS 개발 환경 셋업
+- `/Users/kaymac/crewswap` 경로에 클론 (작업 기준 경로)
+- `@capacitor/ios` 설치 + `npx cap add ios` → Xcode 워크스페이스 생성
+- Signing & Capabilities: Bundle ID `com.rufnek.crewswap.app`, Personal Team 설정
+- 앱 아이콘: `icon-512.png` → 1024×1024 업스케일 후 `AppIcon.appiconset` 교체
+- iOS 빌드 및 iPhone 실기기 설치 완료
+
+#### iOS 동기화 워크플로 확정
+```bash
+# 코드 수정 후 매번
+cp index.html styles.css app.js www/
+npx cap sync ios
+# Xcode ▶ Run
+```
+
+#### 스플래시 버튼 겹침 수정
+- 원인: `splash.mp4` 영상 자체에 로그인/회원가입 버튼이 포함되어 HTML 버튼과 이중 렌더링
+- `splash-screen::after` 그라디언트 오버레이(하단 40%)로 영상 속 버튼 가림
+- `gap: 3%` → `gap: 12px` 고정값으로 변경 (% gap이 column 방향에서 의도치 않게 동작)
+- `poster` 속성 제거 (이전 포스터 이미지에도 버튼 포함)
+- 근본 해결: 버튼 없는 새 `splash.mp4`로 교체 (Windows에서 제작 후 git push)
+
+#### 화면 레이아웃 모바일 최적화
+- `viewport-fit=cover` 추가 → iPhone 노치/Dynamic Island 안전 영역 처리
+- `.app`: `padding-top/left/right`에 `env(safe-area-inset-*)` 적용
+- `.bottom-tabs`: `bottom`에 `max(18px, env(safe-area-inset-bottom))` 적용
+- `@media (max-width: 720px)`: `body/app overflow-x: hidden`, 달력 `min-width: 0` 해제
+
+#### 회원가입 모달 iOS 전체 수정
+- `<dialog>` → `<div>` 기반 커스텀 모달로 교체
+  - iOS WKWebView top layer에서 `<dialog>`는 CSS/JS width 제어 불가 확인
+  - `#signupOverlay` (dim 배경) + `#signupPanel` (모달 본체) 분리
+- `.signup-dialog`: `position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%)` + `width: calc(100vw - 32px); max-width: 480px; background: #fff`
+- `openSignupModal()` / `closeSignupModal()` 헬퍼 함수로 열기/닫기 통일
+- iOS 배경 스크롤 잠금: `body.no-scroll { position: fixed; width: 100%; }` + 모달 열릴 때 클래스 추가/제거
+
+---
 
 ### 2026-06-17 (3차)
 
