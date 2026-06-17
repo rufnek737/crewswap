@@ -41,6 +41,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -53,6 +54,9 @@ button { cursor: pointer; }
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 24px 24px 110px;
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
 }
 
 /* ===== 헤더 ===== */
@@ -94,15 +98,13 @@ p { color: var(--muted); }
 
 /* ===== 회원가입 (모달) ===== */
 .signup-dialog {
-  width: min(480px, 100vw);
-  max-height: 100dvh;
-  max-height: 100vh;
+  width: min(480px, calc(100vw - 32px));
+  max-height: 92vh;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--shadow);
-  margin: 0 auto;
 }
 .signup-dialog::backdrop { background: rgba(15,22,32,0.6); }
 body:has(dialog[open]) { overflow: hidden; }
@@ -460,7 +462,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 
 /* ===== 하단 탭 ===== */
 .bottom-tabs {
-  position: fixed; right: 18px; bottom: 18px; left: 18px; z-index: 10;
+  position: fixed; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); left: 18px; z-index: 10;
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
   max-width: 760px; margin: 0 auto; padding: 8px;
   border: 1px solid var(--line); border-radius: 12px;
