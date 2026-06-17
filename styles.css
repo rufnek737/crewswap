@@ -676,10 +676,13 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 /* ===== 등록 버튼 행 ===== */
 .post-footer-btns {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .post-footer-btns .secondary-button { flex: 0 0 auto; min-width: 100px; }
-.post-footer-btns .primary-button { flex: 1; }
+.post-footer-btns .primary-button { flex: 1; min-width: 140px; }
+.post-footer-btns #watchAdButton,
+.post-footer-btns #watchAdButtonProfile { flex: 0 0 100%; margin-top: 0; }
 
 /* ===== 반응형 ===== */
 @media (max-width: 1280px) {
