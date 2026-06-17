@@ -119,6 +119,9 @@ p { color: var(--muted); }
   box-sizing: border-box;
   box-shadow: var(--shadow);
   z-index: 201;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
 }
 body.no-scroll { position: fixed; width: 100%; overflow-y: scroll; }
 .signup-head {
