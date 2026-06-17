@@ -5,7 +5,7 @@ compatibility_date = "2025-06-17"
 # KV 네임스페이스: 아래 id는 `npx wrangler kv namespace create POSTS` 실행 후 교체
 [[kv_namespaces]]
 binding = "POSTS"
-id = "PLACEHOLDER_REPLACE_WITH_KV_ID"
+id = "7da2a6e5ee7143fcab6834bf9ba92a17"
 
 # 환경변수는 평문 vars 대신 secret으로 설정 (wrangler secret put VERIFY_SECRET 등)
 # 로컬 개발용 .dev.vars 파일에 아래 형식으로 작성:

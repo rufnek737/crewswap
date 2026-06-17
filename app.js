@@ -7,7 +7,7 @@
 // 네이티브 앱(Capacitor)에서는 capacitor://localhost 등에서 로드되므로
 // Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
 // Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
-const API_BASE = "https://crewswap-api.REPLACE_WITH_YOUR_CF_SUBDOMAIN.workers.dev";
+const API_BASE = "https://crewswap-api.tae26001.workers.dev";
 const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
   FO_C: "C등급 부기장",   FO_B: "B등급 부기장",   FO_A: "A등급 부기장",
