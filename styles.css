@@ -98,12 +98,15 @@ p { color: var(--muted); }
 
 /* ===== 회원가입 (모달) ===== */
 .signup-dialog {
-  width: min(480px, calc(100vw - 32px));
+  width: calc(100vw - 32px);
+  max-width: 480px;
+  max-height: 92dvh;
   max-height: 92vh;
   padding: 0;
   border: 0;
   border-radius: 12px;
   overflow: hidden;
+  box-sizing: border-box;
   box-shadow: var(--shadow);
 }
 .signup-dialog::backdrop { background: rgba(15,22,32,0.6); }
