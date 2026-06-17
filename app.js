@@ -2275,7 +2275,7 @@ function bindEvents() {
     renderAll();
     // 가입 팝업 다시 표시
     const sp = document.getElementById("signupPanel");
-    if (sp && sp.tagName === "DIALOG") { try { sp.showModal(); } catch (_) {} }
+    if (sp && sp.tagName === "DIALOG") { try { sp.showModal(); fitSignupDialog(); document.body.classList.add("no-scroll"); } catch (_) {} }
     showToast("탈퇴 처리가 완료됐습니다.");
   });
 
@@ -2679,10 +2679,20 @@ if (restoredAt) {
   setTimeout(() => { syncFormsFromState(); }, 0);
 }
 // 가입 안 됐으면 모달 자동 표시
+function fitSignupDialog() {
+  const sp = document.getElementById("signupPanel");
+  if (!sp) return;
+  const w = Math.min(480, window.innerWidth - 32);
+  sp.style.width = w + "px";
+  sp.style.left = ((window.innerWidth - w) / 2) + "px";
+  sp.style.marginLeft = "0";
+  sp.style.marginRight = "0";
+}
+
 function maybeAutoShowSignup() {
   const sp = document.getElementById("signupPanel");
   if (sp && sp.tagName === "DIALOG" && !state.user.hasSignedUp) {
-    try { sp.showModal(); document.body.classList.add("no-scroll"); } catch (_) {}
+    try { sp.showModal(); fitSignupDialog(); document.body.classList.add("no-scroll"); } catch (_) {}
   }
 }
 
