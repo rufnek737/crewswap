@@ -67,7 +67,22 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
-### 2026-06-17
+### 2026-06-17 (2차)
+
+#### 안드로이드 앱 버그 수정
+- **앱 아이콘** — Python PIL로 전 mipmap 밀도(mdpi~xxxhdpi) 아이콘 생성 및 교체
+- **하단 탭 텍스트 줄바꿈** — 이모지가 10px 폰트에서도 16~20px로 렌더링되어 텍스트 밀어냄 → 이모지 제거, `white-space: nowrap` 추가
+- **스왑 등록 버튼 레이아웃** — `post-footer-btns`에 `flex-wrap: wrap` 적용, 광고 버튼 `flex: 0 0 100%`로 단독 행 배치
+- **서비스 워커 캐시 문제** — `sw.js`의 cache-first 전략이 APK 업데이트 후에도 구버전 `app.js` 서빙 → Capacitor 네이티브 환경(`window.Capacitor.isNativePlatform()`)에서 SW 등록 비활성화, 캐시 버전 `v1→v2` 강제 무효화
+- **스플래시 자동 회원가입 화면 전환** — 위 SW 캐시 문제와 앱 미삭제로 인해 구버전 코드가 실행된 것이 원인; SW 비활성화로 해결
+
+#### Cloudflare Workers 백엔드 이전
+- Netlify 크레딧 초과(06-08 이후 배포 불가, 18일 리셋 예정) → 백엔드 전체를 Cloudflare Workers로 이전
+- `worker/index.js` 신규 작성 — 6개 엔드포인트(`send-verify/check-verify/posts-get/posts-create/posts-delete/crewconnex`) Node.js 없이 Web Crypto API + KV 기반으로 구현
+- `worker/wrangler.toml` 설정, KV 네임스페이스 `POSTS` 생성 (id: `7da2a6e5ee7143fcab6834bf9ba92a17`)
+- `npx wrangler deploy` → `https://crewswap-api.tae26001.workers.dev` 배포 완료
+- `app.js` `API_BASE` 단일 Workers URL로 통일 (네이티브/웹 분기 제거)
+- 이메일 미설정 시 테스트 모드: 서버 응답 코드를 입력란에 자동 입력
 
 #### Capacitor 기반 Android 네이티브 앱 전환
 - `@capacitor/core`, `@capacitor/cli`, `@capacitor/android` 설치, `cap init` (appId: `com.crewswap.app`)

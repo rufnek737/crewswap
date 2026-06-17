@@ -464,7 +464,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
   background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
 }
-.tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; }
+.tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; }
 .tab.is-active { background: #243449; color: #fff; }
 
 /* ===== 알림 패널 ===== */
