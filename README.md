@@ -36,19 +36,53 @@ Netlify 서버리스 + Netlify Blobs 기반 풀스택 웹앱
 
 ---
 
-## 로컬 개발
+## 개발 환경 셋업 (신규 머신)
 
+### macOS (첫 클론 시)
 ```bash
-npm install          # @netlify/blobs 설치 (최초 1회)
-netlify dev          # http://localhost:8889
+# 1. 필수 도구 (없으면)
+brew install node
+# Android Studio: https://developer.android.com/studio
+
+# 2. 클론 + 의존성
+git clone https://github.com/rufnek737/crewswap.git
+cd crewswap
+npm install
+
+# 3. www/ 폴더 생성 (gitignore라 클론 시 없음)
+mkdir www
+cp index.html styles.css app.js sw.js manifest.json \
+   icon-192.png icon-512.png splash.mp4 splash-poster.jpg www/
+
+# 4. Android 에셋 동기화
+npx cap sync android
+
+# 5. Android Studio로 열기
+npx cap open android
+# → Android Studio에서 ▶ Run
 ```
 
-환경변수 설정 (Netlify 대시보드 → Site configuration → Environment variables):
-| 변수 | 설명 |
-|---|---|
-| `VERIFY_SECRET` | HMAC 서명용 비밀 문자열 (필수) |
-| `RESEND_API_KEY` | 실제 이메일 발송 키 (없으면 테스트 모드) |
-| `RESEND_FROM` | 발신 주소 (RESEND 사용 시) |
+### 코드 수정 후 매번
+```bash
+cp index.html styles.css app.js www/   # 수정한 파일만
+npx cap sync android
+# Android Studio ▶ Run
+```
+
+### Cloudflare Workers (백엔드 수정 시)
+```bash
+cd worker
+npx wrangler deploy   # https://crewswap-api.tae26001.workers.dev
+```
+
+---
+
+## 로컬 개발 (웹 버전)
+
+```bash
+npm install
+netlify dev          # http://localhost:8889
+```
 
 ---
 
@@ -67,14 +101,19 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-17 (3차)
+
+#### 스플래시 자동 종료 버그 근본 수정
+- 화면 녹화로 확인: 비디오 재생 완료 시 `video.ended` → `hideSplash()` 자동 호출되어 스플래시 사라지고 메인 앱 진입
+- `<video loop>` 속성 추가 + `ended` 이벤트 핸들러 완전 제거 → 비디오 루프 재생, 로그인/회원가입 버튼 클릭 시에만 진입
+
 ### 2026-06-17 (2차)
 
 #### 안드로이드 앱 버그 수정
 - **앱 아이콘** — Python PIL로 전 mipmap 밀도(mdpi~xxxhdpi) 아이콘 생성 및 교체
 - **하단 탭 텍스트 줄바꿈** — 이모지가 10px 폰트에서도 16~20px로 렌더링되어 텍스트 밀어냄 → 이모지 제거, `white-space: nowrap` 추가
 - **스왑 등록 버튼 레이아웃** — `post-footer-btns`에 `flex-wrap: wrap` 적용, 광고 버튼 `flex: 0 0 100%`로 단독 행 배치
-- **서비스 워커 캐시 문제** — `sw.js`의 cache-first 전략이 APK 업데이트 후에도 구버전 `app.js` 서빙 → Capacitor 네이티브 환경(`window.Capacitor.isNativePlatform()`)에서 SW 등록 비활성화, 캐시 버전 `v1→v2` 강제 무효화
-- **스플래시 자동 회원가입 화면 전환** — 위 SW 캐시 문제와 앱 미삭제로 인해 구버전 코드가 실행된 것이 원인; SW 비활성화로 해결
+- **서비스 워커 캐시 문제** — `sw.js`의 cache-first 전략이 APK 업데이트 후에도 구버전 `app.js` 서빙 → Capacitor 네이티브 환경에서 SW 등록 비활성화 및 기존 SW `getRegistrations().unregister()` 강제 해제, 캐시 버전 `v1→v2`
 
 #### Cloudflare Workers 백엔드 이전
 - Netlify 크레딧 초과(06-08 이후 배포 불가, 18일 리셋 예정) → 백엔드 전체를 Cloudflare Workers로 이전
