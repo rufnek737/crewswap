@@ -643,8 +643,15 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
     <script>
-      if ('serviceWorker' in navigator && !(window.Capacitor && window.Capacitor.isNativePlatform())) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      if ('serviceWorker' in navigator) {
+        if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+          // 네이티브 앱: 기존에 등록된 SW가 있으면 강제 해제 (구버전 캐시 제거)
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(r => r.unregister());
+          });
+        } else {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
       }
     </script>
   </body>
