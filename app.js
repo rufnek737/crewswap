@@ -2682,9 +2682,18 @@ if (restoredAt) {
 function maybeAutoShowSignup() {
   const sp = document.getElementById("signupPanel");
   if (sp && sp.tagName === "DIALOG" && !state.user.hasSignedUp) {
-    try { sp.showModal(); } catch (_) {}
+    try { sp.showModal(); document.body.classList.add("no-scroll"); } catch (_) {}
   }
 }
+
+// 모든 dialog 닫힐 때 스크롤 잠금 해제
+document.addEventListener("close", e => {
+  if (e.target && e.target.tagName === "DIALOG") {
+    if (!document.querySelector("dialog[open]")) {
+      document.body.classList.remove("no-scroll");
+    }
+  }
+}, true);
 // 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
 if (!document.getElementById("splashScreen")) {
   setTimeout(maybeAutoShowSignup, 150);
