@@ -6,9 +6,8 @@
 /* ====== 1. 상수 ====== */
 // 네이티브 앱(Capacitor)에서는 capacitor://localhost 등에서 로드되므로
 // Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
-const API_BASE = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
-  ? "https://crewswap.netlify.app"
-  : "";
+// Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
+const API_BASE = "https://crewswap-api.REPLACE_WITH_YOUR_CF_SUBDOMAIN.workers.dev";
 const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
   FO_C: "C등급 부기장",   FO_B: "B등급 부기장",   FO_A: "A등급 부기장",
@@ -1610,7 +1609,7 @@ function renderMyPosts() {
       if (!confirm(`"${post.offered.patternName}" 등록을 취소하고 ${post.creditSpent}크레딧을 환급받겠습니까?`)) return;
       if (post.deleteToken) {
         try {
-          await fetch(`${API_BASE}/.netlify/functions/posts-delete`, {
+          await fetch(`${API_BASE}/api/posts-delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
@@ -1773,7 +1772,7 @@ function renderMatches() {
 /* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
 async function fetchPosts() {
   try {
-    const res = await fetch(`${API_BASE}/.netlify/functions/posts-get`);
+    const res = await fetch(`${API_BASE}/api/posts-get`);
     if (!res.ok) return;
     const data = await res.json();
     const myIds = new Set(state.myPosts.map(p => p.id));
@@ -2027,7 +2026,7 @@ function bindEvents() {
     btn.textContent = "발송 중…";
     setVerifyStatus("인증 코드를 발송하고 있습니다…", "hint");
     try {
-      const res = await fetch(`${API_BASE}/.netlify/functions/send-verify`, {
+      const res = await fetch(`${API_BASE}/api/send-verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -2074,7 +2073,7 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = "확인 중…";
     try {
-      const res = await fetch(`${API_BASE}/.netlify/functions/check-verify`, {
+      const res = await fetch(`${API_BASE}/api/check-verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code, token: _verifyToken }),
@@ -2170,7 +2169,7 @@ function bindEvents() {
     status.textContent = "⏳ CrewConnex 로그인 중... (10~20초)";
     $("#ccLoginButton").disabled = true;
     try {
-      const resp = await fetch(`${API_BASE}/.netlify/functions/crewconnex`, {
+      const resp = await fetch(`${API_BASE}/api/crewconnex`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, userName }),
@@ -2253,7 +2252,7 @@ function bindEvents() {
     // 서버에 올린 내 포스트 모두 삭제
     const toDelete = state.myPosts.filter(p => p.deleteToken);
     await Promise.allSettled(
-      toDelete.map(p => fetch(`${API_BASE}/.netlify/functions/posts-delete`, {
+      toDelete.map(p => fetch(`${API_BASE}/api/posts-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
@@ -2412,7 +2411,7 @@ function bindEvents() {
       };
 
       try {
-        const res = await fetch(`${API_BASE}/.netlify/functions/posts-create`, {
+        const res = await fetch(`${API_BASE}/api/posts-create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newPost),
