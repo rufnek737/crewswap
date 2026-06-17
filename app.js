@@ -2044,9 +2044,10 @@ function bindEvents() {
       $("#verifyCodeRow").hidden = false;
       $("#verifyCodeInput").value = "";
       $("#verifyCodeInput").focus();
-      // 테스트 모드: 이메일 발송 없이 코드를 화면에 직접 표시
       if (data.testMode && data.code) {
-        setVerifyStatus(`🧪 테스트 모드 — 인증 코드: ${data.code}`, "hint");
+        // 테스트 모드: 코드를 입력란에 자동 입력 (이메일 미발송)
+        $("#verifyCodeInput").value = data.code;
+        setVerifyStatus("이메일 발송 미설정 — 인증 코드가 자동 입력됐습니다. 아래 '인증 확인'을 눌러주세요.", "hint");
       } else {
         setVerifyStatus(`${email} 으로 코드를 발송했습니다. 10분 이내 입력해주세요.`, "hint");
       }
@@ -2706,7 +2707,7 @@ if (!document.getElementById("splashScreen")) {
     }, 400);
   }
 
-  if (video) video.addEventListener("ended", () => hideSplash(maybeAutoShowSignup));
+  if (video) video.addEventListener("ended", () => hideSplash());
 
   const loginBtn = document.getElementById("splashLoginBtn");
   if (loginBtn) loginBtn.addEventListener("click", () => {
