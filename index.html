@@ -48,7 +48,8 @@
       </header>
 
       <!-- ===================== 회원가입 (모달) ===================== -->
-      <dialog id="signupPanel" class="signup-dialog">
+      <div id="signupOverlay" class="signup-overlay" hidden></div>
+      <div id="signupPanel" class="signup-dialog" hidden>
         <div class="signup-head">
           <p class="eyebrow">회원가입 / Sign up</p>
           <h2>CrewSwap</h2>
@@ -152,7 +153,7 @@
           </div>
           <button class="primary-button" type="submit">가입 완료 / Sign up</button>
         </form>
-      </dialog>
+      </div>
 
       <!-- ===================== 내 스케줄 ===================== -->
       <section id="schedule" class="view is-active">

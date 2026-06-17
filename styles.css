@@ -97,26 +97,29 @@ p { color: var(--muted); }
 }
 
 /* ===== 회원가입 (모달) ===== */
+.signup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,22,32,0.6);
+  z-index: 200;
+}
 .signup-dialog {
-  position: fixed !important;
-  left: 16px !important;
-  right: 16px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  width: auto !important;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100vw - 32px);
   max-width: 480px;
   max-height: 92dvh;
   max-height: 92vh;
-  margin: 0 auto;
   padding: 0;
   border: 0;
   border-radius: 12px;
   overflow: hidden;
   box-sizing: border-box;
   box-shadow: var(--shadow);
+  z-index: 201;
 }
-.signup-dialog::backdrop { background: rgba(15,22,32,0.6); }
-body:has(dialog[open]) { overflow: hidden; }
 body.no-scroll { position: fixed; width: 100%; overflow-y: scroll; }
 .signup-head {
   padding: 24px;

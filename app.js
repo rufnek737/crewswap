@@ -2135,8 +2135,7 @@ function bindEvents() {
     $("#cat2Input").checked   = state.user.cat2;
     $("#cat3Input").checked   = state.user.cat3;
     const sp = document.getElementById("signupPanel");
-    if (sp && sp.tagName === "DIALOG") { try { sp.close(); } catch(_){} }
-    else if (sp) sp.hidden = true;
+    closeSignupModal();
     saveState();
     renderAll();
     showToast("가입 완료 · 무료 크레딧 5장 지급. Welcome to CrewSwap!");
@@ -2275,7 +2274,7 @@ function bindEvents() {
     renderAll();
     // 가입 팝업 다시 표시
     const sp = document.getElementById("signupPanel");
-    if (sp && sp.tagName === "DIALOG") { try { sp.showModal(); fitSignupDialog(); document.body.classList.add("no-scroll"); } catch (_) {} }
+    openSignupModal();
     showToast("탈퇴 처리가 완료됐습니다.");
   });
 
@@ -2679,31 +2678,29 @@ if (restoredAt) {
   setTimeout(() => { syncFormsFromState(); }, 0);
 }
 // 가입 안 됐으면 모달 자동 표시
-function fitSignupDialog() {
+function openSignupModal() {
   const sp = document.getElementById("signupPanel");
-  if (!sp) return;
-  const w = Math.min(480, window.innerWidth - 32);
-  sp.style.width = w + "px";
-  sp.style.left = ((window.innerWidth - w) / 2) + "px";
-  sp.style.marginLeft = "0";
-  sp.style.marginRight = "0";
+  const ov = document.getElementById("signupOverlay");
+  if (!sp || state.user.hasSignedUp) return;
+  sp.hidden = false;
+  if (ov) ov.hidden = false;
+  document.body.classList.add("no-scroll");
+}
+
+function closeSignupModal() {
+  const sp = document.getElementById("signupPanel");
+  const ov = document.getElementById("signupOverlay");
+  if (sp) sp.hidden = true;
+  if (ov) ov.hidden = true;
+  document.body.classList.remove("no-scroll");
 }
 
 function maybeAutoShowSignup() {
-  const sp = document.getElementById("signupPanel");
-  if (sp && sp.tagName === "DIALOG" && !state.user.hasSignedUp) {
-    try { sp.showModal(); fitSignupDialog(); document.body.classList.add("no-scroll"); } catch (_) {}
-  }
+  if (!state.user.hasSignedUp) openSignupModal();
 }
 
 // 모든 dialog 닫힐 때 스크롤 잠금 해제
-document.addEventListener("close", e => {
-  if (e.target && e.target.tagName === "DIALOG") {
-    if (!document.querySelector("dialog[open]")) {
-      document.body.classList.remove("no-scroll");
-    }
-  }
-}, true);
+
 // 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
 if (!document.getElementById("splashScreen")) {
   setTimeout(maybeAutoShowSignup, 150);
