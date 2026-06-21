@@ -46,7 +46,6 @@ function changeMonth(delta) {
   const [y, m] = state.currentMonth.split("-").map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   state.currentMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  state.selectedDays.clear();
   saveState();
   renderAll();
 }
@@ -473,6 +472,47 @@ function connectedPatternDays(pid, anchorDay) {
   return allDays.slice(start, end + 1);
 }
 
+// selectedDays 키 형식: "YYYY-MM-DD"
+function dayKey(day, month) {
+  return `${month || state.currentMonth}-${String(day).padStart(2, '0')}`;
+}
+function parseDayKey(key) {
+  return { month: key.slice(0, 7), day: parseInt(key.slice(8), 10) };
+}
+function areConsecCalendarDays(k1, k2) {
+  return (new Date(k2) - new Date(k1)) === 86400000;
+}
+
+// 월 경계를 넘는 패턴도 포함한 연결 일자 — {day, month}[] 반환
+function connectedPatternDaysAllMonths(pid, anchorDay, anchorMonth) {
+  const am = anchorMonth || state.currentMonth;
+  const anchorSched = state.schedules.find(s => s.day === anchorDay && s.patternId === pid && (s.month || state.currentMonth) === am);
+  if (!anchorSched || anchorSched.type === "OFF") return [{ day: anchorDay, month: am }];
+
+  const pidSched = state.schedules
+    .filter(s => s.patternId === pid)
+    .map(s => ({ ...s, effectiveMonth: s.month || state.currentMonth }))
+    .sort((a, b) => a.effectiveMonth < b.effectiveMonth ? -1 : a.effectiveMonth > b.effectiveMonth ? 1 : a.day - b.day);
+
+  const anchorIdx = pidSched.findIndex(s => s.day === anchorDay && s.effectiveMonth === am);
+  if (anchorIdx < 0) return [{ day: anchorDay, month: am }];
+
+  let start = anchorIdx, end = anchorIdx;
+  while (end < pidSched.length - 1) {
+    if (pidSched[end].type === "ARRIVAL") break;
+    if (pidSched[end + 1].type === "OFF") break;
+    if (!areConsecCalendarDays(dayKey(pidSched[end].day, pidSched[end].effectiveMonth), dayKey(pidSched[end + 1].day, pidSched[end + 1].effectiveMonth))) break;
+    end++;
+  }
+  while (start > 0) {
+    if (pidSched[start - 1].type === "ARRIVAL") break;
+    if (pidSched[start - 1].type === "OFF") break;
+    if (!areConsecCalendarDays(dayKey(pidSched[start - 1].day, pidSched[start - 1].effectiveMonth), dayKey(pidSched[start].day, pidSched[start].effectiveMonth))) break;
+    start--;
+  }
+  return pidSched.slice(start, end + 1).map(s => ({ day: s.day, month: s.effectiveMonth }));
+}
+
 function selectPattern(day) {
   const s = getSchedule(day);
   if (!s) return;
@@ -481,10 +521,22 @@ function selectPattern(day) {
     return;
   }
 
-  if (state.selectedDays.has(day)) {
-    state.selectedDays.delete(day);
+  if (s.patternId) {
+    const patternKeys = connectedPatternDaysAllMonths(s.patternId, day, state.currentMonth)
+      .map(({ day: d, month: m }) => dayKey(d, m));
+    const allSelected = patternKeys.every(k => state.selectedDays.has(k));
+    if (allSelected) {
+      patternKeys.forEach(k => state.selectedDays.delete(k));
+    } else {
+      patternKeys.forEach(k => state.selectedDays.add(k));
+    }
   } else {
-    state.selectedDays.add(day);
+    const key = dayKey(day);
+    if (state.selectedDays.has(key)) {
+      state.selectedDays.delete(key);
+    } else {
+      state.selectedDays.add(key);
+    }
   }
 
   renderCalendar();
@@ -494,7 +546,10 @@ function selectPattern(day) {
 }
 
 function selectedSchedules() {
-  return [...state.selectedDays].sort((a,b)=>a-b).map(getSchedule).filter(Boolean);
+  return [...state.selectedDays].sort().map(key => {
+    const { month, day } = parseDayKey(key);
+    return state.schedules.find(s => s.day === day && (s.month || state.currentMonth) === month);
+  }).filter(Boolean);
 }
 
 /* ====== 5b. CrewConnex 텍스트 파서 ====== */
@@ -876,7 +931,7 @@ function checkRulesCabin(ss, rules) {
     if (s.type !== "RSV" && s.type !== "STBY") return;
     [s.day - 1, s.day + 1].forEach(d => {
       const adj = getSchedule(d);
-      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(d)) {
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(dayKey(d))) {
         partialRsvStby = true;
       }
     });
@@ -1008,7 +1063,7 @@ function checkRulesForSelection() {
     if (s.type !== "RSV" && s.type !== "STBY") return;
     [s.day - 1, s.day + 1].forEach(d => {
       const adj = getSchedule(d);
-      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(d)) {
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(dayKey(d))) {
         partialRsvStby = true;
       }
     });
@@ -1330,7 +1385,6 @@ function renderAvailableMonths() {
     b.onclick = () => {
       if (state.currentMonth === b.dataset.month) return;
       state.currentMonth = b.dataset.month;
-      state.selectedDays.clear();
       saveState();
       renderAll();
     };
@@ -1360,7 +1414,7 @@ function renderCalendar() {
     cell.type = "button";
     cell.className = "calendar-day";
     cell.dataset.day = String(day);
-    if (state.selectedDays.has(day)) cell.classList.add("is-selected");
+    if (state.selectedDays.has(dayKey(day))) cell.classList.add("is-selected");
     if (isWeekend(day)) cell.classList.add("is-weekend");
     if (isHoliday(day)) cell.classList.add("is-holiday");
     if (cum.warnDays.has(day)) cell.classList.add("is-warn-consec");
@@ -2126,8 +2180,13 @@ function bindEvents() {
     }
     state.user.email    = _verifyEmail;   // 인증된 이메일 저장
     state.user.hasSignedUp = true;
-    // 프로필 폼 동기화
+    // 프로필 폼 동기화 (crewType 포함)
     $("#nicknameInput").value = state.user.nickname;
+    const crewTypeInputEl = document.getElementById("crewTypeInput");
+    if (crewTypeInputEl) {
+      crewTypeInputEl.value = state.user.crewType;
+      updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel", state.user.roleType);
+    }
     $("#roleTypeInput").value = state.user.roleType;
     $("#aircraftInput").value = state.user.aircraft;
     $("#baseInput").value     = state.user.base;
@@ -2330,17 +2389,17 @@ function bindEvents() {
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
     // 선택된 날짜를 연속 그룹으로 분리 (비연속 = 독립 패턴 = 각 1크레딧)
-    const allDays = [...state.selectedDays].sort((a, b) => a - b);
-    if (allDays.length === 0) return;
+    const allDayKeys = [...state.selectedDays].sort();
+    if (allDayKeys.length === 0) return;
 
     const groups = [];
-    let cur = [allDays[0]];
-    for (let i = 1; i < allDays.length; i++) {
-      if (allDays[i] === allDays[i - 1] + 1) {
-        cur.push(allDays[i]);
+    let cur = [allDayKeys[0]];
+    for (let i = 1; i < allDayKeys.length; i++) {
+      if (areConsecCalendarDays(allDayKeys[i - 1], allDayKeys[i])) {
+        cur.push(allDayKeys[i]);
       } else {
         groups.push(cur);
-        cur = [allDays[i]];
+        cur = [allDayKeys[i]];
       }
     }
     groups.push(cur);
@@ -2351,7 +2410,6 @@ function bindEvents() {
       return;
     }
 
-    const m = parseInt(state.currentMonth.split("-")[1]);
     const wanted = {
       types: [...state.wantedTypes],
       time: [...state.wantedTimes],
@@ -2361,9 +2419,16 @@ function bindEvents() {
       memo: $("#postMemo").value || "",
     };
 
-    for (const dayGroup of groups) {
-      const ss = dayGroup.map(day => getSchedule(day)).filter(Boolean);
+    for (const keyGroup of groups) {
+      const ss = keyGroup.map(key => {
+        const { day, month } = parseDayKey(key);
+        return state.schedules.find(s => s.day === day && (s.month || state.currentMonth) === month);
+      }).filter(Boolean);
       if (ss.length === 0) continue;
+      const firstParsed = parseDayKey(keyGroup[0]);
+      const lastParsed = parseDayKey(keyGroup[keyGroup.length - 1]);
+      const fm = parseInt(firstParsed.month.split('-')[1]);
+      const lm = parseInt(lastParsed.month.split('-')[1]);
 
       const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
       const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
@@ -2379,7 +2444,7 @@ function bindEvents() {
       })();
 
       const newPost = {
-        id: "POST-" + Date.now() + "-" + dayGroup[0],
+        id: "POST-" + Date.now() + "-" + firstParsed.day,
         deleteToken: crypto.randomUUID(),
         registeredAt: new Date().toISOString(),
         airline: state.user.airline,
@@ -2391,8 +2456,8 @@ function bindEvents() {
         deadlineDay: ss[0].day,
         watchers: 0,
         offered: {
-          patternName: `${m}/${ss[0].day}${ss.length > 1 ? `~${m}/${ss.at(-1).day}` : ""} · ${ss[0].type} 패턴`,
-          days: dayGroup,
+          patternName: `${fm}/${firstParsed.day}${keyGroup.length > 1 ? `~${fm !== lm ? lm + "/" : ""}${lastParsed.day}` : ""} · ${ss[0].type} 패턴`,
+          days: keyGroup.map(k => parseDayKey(k).day),
           summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
           type: ss[0].type,
           aircraft: ss[0].aircraft || null,
@@ -2438,8 +2503,8 @@ function bindEvents() {
   $("#submitPostButton").addEventListener("click", () => {
     if (state.credits < 1) { showToast("크레딧 부족"); return; }
     // 중복 등록 방지: 선택한 날짜가 이미 내 게시글에 있는지 확인
-    const selectedArr = [...state.selectedDays];
-    const dupPost = state.myPosts.find(p => p.offered.days.some(d => selectedArr.includes(d)));
+    const selectedDayNums = [...state.selectedDays].map(k => parseDayKey(k).day);
+    const dupPost = state.myPosts.find(p => p.offered.days.some(d => selectedDayNums.includes(d)));
     if (dupPost) {
       showToast(`이미 같은 날짜로 등록된 글이 있습니다 (${dupPost.offered.patternName})`);
       return;
