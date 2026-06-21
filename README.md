@@ -115,7 +115,7 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
-### 2026-06-21 — 안드로이드 4가지 버그 수정
+### 2026-06-21 — 안드로이드 버그 수정 + 스왑 찾기 카드 렌더링 버그 수정
 
 #### 월 경계 스케줄 선택 버그
 - `selectedDays`를 `Set<number>`에서 `Set<"YYYY-MM-DD">` 형식으로 변경 → 월 정보 포함
@@ -127,8 +127,16 @@ netlify dev          # http://localhost:8889
 - `@media (max-width: 720px)` 내 `.bottom-tabs`에서 `bottom: 8px` → `bottom: max(8px, env(safe-area-inset-bottom))`
 - `.app` padding-bottom을 `max(110px, calc(80px + env(safe-area-inset-bottom)))` 으로 변경 → 내비바 높이만큼 자동 확장
 
-#### 스왑 찾기 매칭 글 클릭 문제
-- 상기 내비바 수정으로 매칭 카드 영역 접근 가능해짐
+#### 스왑 찾기 매칭 카드 미표시 버그 (근본 원인 수정)
+- **증상**: `#matchSummary`는 "4건의 매칭 가능 글" 표시, `#matchList`는 empty-state 문구 표시 (모순)
+- **원인**: `matchScore()` 객실 경로가 `{ score, breakdown }` 반환 (PILOT 경로는 `{ total, breakdown, dDay }`)
+  - 카드 템플릿이 `score.dDay` 접근 시 `undefined` → `dd.days` 에서 TypeError 발생
+  - `#matchSummary`는 throw 전에 이미 업데이트됨 → 두 요소가 모순된 상태로 표시
+- **수정**: 객실 경로를 PILOT 경로와 동일한 반환 형식으로 통일 (`total`, `dDay` 추가, 마감 임박 가중치·신뢰도 보너스·방향 변환 점수 적용)
+
+#### 스왑 찾기 필터 접기/펼치기 기능 추가
+- 필터 패널 상단에 "필터 접기 ▲ / 필터 펼치기 ▼" 토글 버튼 추가
+- 필터 접으면 매칭 카드 목록이 화면 상단에 바로 노출됨 (모바일 UX 개선)
 
 #### 가입 시 직군 (조종사/객실 승무원) 저장 안 되는 버그
 - 가입 폼 submit 핸들러가 `#crewTypeInput` 프로필 폼 동기화 누락

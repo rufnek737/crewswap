@@ -341,8 +341,11 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .saved-item .saved-del { position: absolute; top: 4px; right: 6px; background: transparent; border: 0; color: var(--muted); font-size: 14px; }
 
 /* ===== 필터 ===== */
-.filter-panel { display: grid; gap: 14px; margin-bottom: 14px; }
+.filter-panel { display: grid; gap: 0; margin-bottom: 14px; }
 .filter-panel > div > strong { display: block; margin-bottom: 8px; font-size: 13px; }
+.filter-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; background: transparent; border: 0; padding: 4px 0 10px; font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; }
+#filterBody { display: grid; gap: 14px; }
+#filterBody.is-collapsed { display: none; }
 .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .filter-chip, .chip-multi button {
   padding: 7px 12px;

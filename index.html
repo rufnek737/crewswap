@@ -251,7 +251,12 @@
         </div>
 
         <!-- 스왑 방향 chips -->
-        <div class="filter-panel">
+        <div class="filter-panel" id="filterPanel">
+          <button class="filter-toggle" id="filterToggle" aria-expanded="true">
+            <span id="filterToggleLabel">필터 접기</span>
+            <span id="filterToggleArrow">▲</span>
+          </button>
+          <div id="filterBody">
           <div>
             <strong>스왑 방향 <small style="font-weight:normal;color:var(--text-muted);">(내가 내놓는 것 → 원하는 것)</small></strong>
             <div class="chip-row" id="directionChips">
@@ -325,6 +330,7 @@
               </select>
             </label>
           </div>
+          </div><!-- /filterBody -->
         </div>
 
         <div class="match-summary" id="matchSummary"></div>

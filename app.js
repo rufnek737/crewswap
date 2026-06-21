@@ -1116,16 +1116,18 @@ function matchScore(post) {
 
   // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
   if (state.user.crewType === "CABIN") {
+    const dd = dDayInfo(post.deadlineDay);
     const breakdown = {
       roleMatch: 30,
       aircraftMatch: 20,
       qualMatch: 15,
       baseBonus: post.ownerBase === state.user.base ? 10 : 0,
-      timeMatch: 0,
-      deadlineUrgency: 0,
+      timeMatch: state.filters.direction === "all" ? 5 : (matchesDirection(post, state.filters.direction) ? 10 : 0),
+      deadlineUrgency: !dd.expired ? (dd.days <= 1 ? 10 : dd.days <= 3 ? 6 : 3) : 0,
+      ratingBonus: post.ownerRating >= 4.5 ? 5 : 0,
     };
     const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
-    return { score: Math.min(100, total), breakdown };
+    return { total: Math.min(100, total), breakdown, dDay: dd };
   }
 
   // 조종사: 동일 포지션(기장↔기장, 부기장↔부기장) 필수
@@ -2342,6 +2344,14 @@ function bindEvents() {
     renderCalendar(); renderSelection(); renderRuleCheck(); syncOfferedSlot();
   });
   $("#registerSelectionButton").addEventListener("click", () => switchTab("post"));
+
+  // 필터 접기/펼치기
+  $("#filterToggle").addEventListener("click", () => {
+    const body = $("#filterBody");
+    const collapsed = body.classList.toggle("is-collapsed");
+    $("#filterToggleLabel").textContent = collapsed ? "필터 펼치기" : "필터 접기";
+    $("#filterToggleArrow").textContent = collapsed ? "▼" : "▲";
+  });
 
   // 방향 변환 칩
   $$("#directionChips .filter-chip").forEach(c => c.onclick = () => {
