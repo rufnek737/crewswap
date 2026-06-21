@@ -115,6 +115,27 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-21 — 안드로이드 4가지 버그 수정
+
+#### 월 경계 스케줄 선택 버그
+- `selectedDays`를 `Set<number>`에서 `Set<"YYYY-MM-DD">` 형식으로 변경 → 월 정보 포함
+- `connectedPatternDaysAllMonths()` 신설 — 6월말→7월초 연결 패턴을 단일 클릭으로 전체 선택
+- 월 전환 시 `selectedDays.clear()` 제거 → 월 경계 패턴 선택 유지
+- `selectPattern()`, `selectedSchedules()`, `doSubmitPost()` 등 관련 함수 전면 업데이트
+
+#### 안드로이드 하단 시스템 내비바 가림 문제
+- `@media (max-width: 720px)` 내 `.bottom-tabs`에서 `bottom: 8px` → `bottom: max(8px, env(safe-area-inset-bottom))`
+- `.app` padding-bottom을 `max(110px, calc(80px + env(safe-area-inset-bottom)))` 으로 변경 → 내비바 높이만큼 자동 확장
+
+#### 스왑 찾기 매칭 글 클릭 문제
+- 상기 내비바 수정으로 매칭 카드 영역 접근 가능해짐
+
+#### 가입 시 직군 (조종사/객실 승무원) 저장 안 되는 버그
+- 가입 폼 submit 핸들러가 `#crewTypeInput` 프로필 폼 동기화 누락
+- 가입 완료 후 `crewTypeInput.value = state.user.crewType` + `updateRoleSelectForCrewType(...)` 호출 추가
+
+---
+
 ### 2026-06-18 — iOS 셋업 및 UI 버그 수정
 
 #### macOS iOS 개발 환경 셋업
