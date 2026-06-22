@@ -717,16 +717,14 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 @media (max-width: 1040px) {
   .signup-panel, .schedule-layout, .bidirectional-form { grid-template-columns: 1fr; }
   .swap-arrow { transform: rotate(90deg); }
-  .calendar-panel { overflow-x: auto; }
-  .calendar-weekdays, .calendar-grid { min-width: 760px; }
+  .calendar-weekdays, .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .meta-grid { grid-template-columns: repeat(2, 1fr); }
   .preview-stats { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   body { overflow-x: hidden; }
   .app { padding: 16px 16px max(116px, calc(80px + env(safe-area-inset-bottom))); overflow-x: hidden; }
-  .calendar-panel { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .calendar-weekdays, .calendar-grid { min-width: 760px; }
+  .calendar-weekdays, .calendar-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
   .bottom-tabs { left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); gap: 4px; padding: 6px; }
