@@ -2797,6 +2797,12 @@ if (!document.getElementById("splashScreen")) {
     }, 400);
   }
 
+  // 이미 가입된 사용자 — 새로고침/재방문 시 스플래시 없이 바로 현재 화면 유지
+  if (state.user.hasSignedUp) {
+    hideSplash();
+    return;
+  }
+
   const loginBtn = document.getElementById("splashLoginBtn");
   if (loginBtn) loginBtn.addEventListener("click", () => {
     hideSplash(() => {
