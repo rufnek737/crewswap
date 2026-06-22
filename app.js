@@ -1913,23 +1913,59 @@ function recordSwapMatch() {
   renderMetrics();
 }
 
-function requestSwap(postId) {
+async function requestSwap(postId) {
   if (state.credits < 1) {
     showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다.");
     return;
   }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  if (!state.user.email) {
+    showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요.");
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        postId, type: "request",
+        fromEmail: state.user.email, fromNick: state.user.nickname,
+        fromBase: state.user.base, fromRole: state.user.roleType,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(data.error || "요청 전송 실패 — 다시 시도해주세요.");
+      return;
+    }
+  } catch (e) {
+    showToast("요청 전송 실패 — 네트워크 오류");
+    return;
+  }
   state.credits--;
-  state.requests.sent.unshift({
-    id:"R-"+Date.now(), postTitle:p.offered.patternName, postOwnerRole:p.ownerRole,
-    aircraft:p.offered.aircraft || "-", quals: [p.offered.edto?"EDTO":null, p.offered.cat3?"CAT III":null].filter(Boolean).join(" / ") || "일반",
-    status:"요청 대기", stage:1, sentAgo:"방금", base:p.ownerBase, nickname:p.ownerNick,
-  });
   saveState();
   renderCredits();
-  renderRequests();
+  fetchRequests();
   showToast("요청을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
+}
+
+async function fetchRequests() {
+  if (!state.user.email) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-get?email=${encodeURIComponent(state.user.email)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const ago = (iso) => {
+      const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+      if (mins < 1) return "방금";
+      if (mins < 60) return `${mins}분 전`;
+      return `${Math.round(mins / 60)}시간 전`;
+    };
+    state.requests.sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
+    state.requests.received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
+    renderRequests();
+  } catch (e) { console.warn("fetchRequests error:", e); }
 }
 
 function renderSavedSearches() {
@@ -1978,7 +2014,8 @@ function requestCard(r) {
         </div>
         <span class="badge ${badgeCls}">${r.status}</span>
       </div>
-      <div class="privacy-stepper">${stagesHtml}</div>
+      ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${r.message}</div>` : ""}
+      ${r.type === "ask" ? "" : `<div class="privacy-stepper">${stagesHtml}</div>`}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
         <div class="info-row"><span>직책/등급</span><strong>${ROLE_LABELS[r.postOwnerRole || r.requesterRole]}</strong></div>
@@ -2038,6 +2075,7 @@ function switchTab(name) {
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === name));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   if (name === "find") fetchPosts();
+  if (name === "requests") fetchRequests();
   history.replaceState(null, "", "#" + name);
 }
 
@@ -2517,6 +2555,7 @@ function bindEvents() {
         crewType: state.user.crewType,
         ownerRole: state.user.roleType,
         ownerNick: state.user.nickname,
+        ownerEmail: state.user.email,
         ownerRating: state.user.rating || 4.5,
         ownerBase: state.user.base || "GMP",
         deadlineDay: ss[0].day,
@@ -2689,10 +2728,26 @@ function bindEvents() {
   // 알림
   // 양도 의향 묻기 dialog
   $("#askCancelButton").addEventListener("click", () => $("#askDialog").close());
-  $("#askSendButton").addEventListener("click", () => {
+  $("#askSendButton").addEventListener("click", async () => {
     const msg = $("#askMessage").value.trim();
     if (!msg) { showToast("메시지를 입력해주세요."); return; }
+    if (!state.user.email) { showToast("이메일 인증 정보가 없어 보낼 수 없습니다."); return; }
+    const postId = $("#askDialog")._pendingPostId;
+    try {
+      const res = await fetch(`${API_BASE}/api/requests-create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postId, type: "ask", message: msg,
+          fromEmail: state.user.email, fromNick: state.user.nickname,
+          fromBase: state.user.base, fromRole: state.user.roleType,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return; }
+    } catch (e) { showToast("전송 실패 — 네트워크 오류"); return; }
     $("#askDialog").close();
+    fetchRequests();
     showToast("💬 의향 문의 발송 완료 — 상대가 확인하면 알림이 옵니다.");
   });
 

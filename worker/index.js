@@ -127,7 +127,7 @@ async function handlePostsGet(env) {
     const posts = await Promise.all(keys.map(async ({ name }) => {
       const data = await env.POSTS.get(name, { type: 'json' });
       if (!data || data.status !== 'active') return null;
-      const { deleteToken, ...pub } = data;
+      const { deleteToken, ownerEmail, ...pub } = data;
       return pub;
     }));
     return json({ posts: posts.filter(Boolean) });
@@ -138,7 +138,7 @@ async function handlePostsGet(env) {
 
 const POST_FIELDS = [
   'id', 'deleteToken', 'registeredAt',
-  'airline', 'crewType', 'ownerRole', 'ownerNick', 'ownerRating', 'ownerBase',
+  'airline', 'crewType', 'ownerRole', 'ownerNick', 'ownerRating', 'ownerBase', 'ownerEmail',
   'offered', 'wanted',
   'deadlineDay', 'watchers', 'status', 'creditSpent',
 ];
@@ -174,6 +174,61 @@ async function handlePostsUpdate(request, env) {
     post.wanted = wanted;
     await env.POSTS.put(`post:${id}`, JSON.stringify(post));
     return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-create (요청하기 / 양도 의향 묻기 — 서버 경유 전달) ── */
+
+function randId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+async function handleRequestsCreate(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const { postId, fromEmail, fromNick, fromBase, fromRole, type, message } = body || {};
+  if (!postId || !fromEmail || !fromNick || !type)
+    return json({ error: '필수 필드 누락' }, 400);
+
+  try {
+    const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
+    if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
+    if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
+
+    const id = 'REQ-' + Date.now() + '-' + randId();
+    const rec = {
+      id, postId, type,
+      postTitle: post.offered?.patternName || '',
+      postOwnerRole: post.ownerRole || null,
+      aircraft: post.offered?.aircraft || '-',
+      quals: [post.offered?.edto ? 'EDTO' : null, post.offered?.cat3 ? 'CAT III' : null].filter(Boolean).join(' / ') || '일반',
+      base: post.ownerBase || null,
+      message: message || '',
+      fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
+      toEmail: post.ownerEmail, toNick: post.ownerNick || null,
+      status: type === 'ask' ? '의향 문의' : '요청 대기',
+      stage: 1,
+      createdAt: new Date().toISOString(),
+    };
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    return json({ id });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-get (보낸/받은 요청 조회) ───────────────────────── */
+
+async function handleRequestsGet(request, env) {
+  const url = new URL(request.url);
+  const email = url.searchParams.get('email');
+  if (!email) return json({ error: 'email 필요' }, 400);
+
+  try {
+    const { keys } = await env.POSTS.list({ prefix: 'req:' });
+    const all = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
+    const valid = all.filter(Boolean);
+    const sent = valid.filter(r => r.fromEmail === email);
+    const received = valid.filter(r => r.toEmail === email);
+    return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
@@ -612,6 +667,8 @@ export default {
     if (path === '/api/posts-create') return handlePostsCreate(request, env);
     if (path === '/api/posts-delete') return handlePostsDelete(request, env);
     if (path === '/api/posts-update') return handlePostsUpdate(request, env);
+    if (path === '/api/requests-create') return handleRequestsCreate(request, env);
+    if (path === '/api/requests-get')    return handleRequestsGet(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });
   },
