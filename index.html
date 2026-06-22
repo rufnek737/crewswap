@@ -634,8 +634,9 @@
       </div>
     </dialog>
 
-    <!-- 양도 의향 묻기 dialog -->
-    <dialog id="askDialog">
+    <!-- 양도 의향 묻기 (div 모달 — iOS dialog top-layer 버그 회피) -->
+    <div id="askOverlay" class="generic-modal-overlay" hidden></div>
+    <div id="askDialog" class="generic-modal" hidden>
       <div class="dialog-body">
         <h3 id="askDialogTitle">💬 양도 의향 묻기</h3>
         <p class="hint" style="margin-bottom:10px;">크레딧 없이 관심을 먼저 전달합니다. 상대방이 수락하면 정식 요청으로 전환됩니다.</p>
@@ -645,7 +646,7 @@
           <button class="primary-button" id="askSendButton">보내기</button>
         </div>
       </div>
-    </dialog>
+    </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>

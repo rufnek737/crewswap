@@ -1877,7 +1877,7 @@ function renderMatches() {
       : "💬 양도 의향 묻기";
     $("#askMessage").value = "";
     dialog._pendingPostId = b.dataset.post;
-    dialog.showModal();
+    openGenericModal("askDialog", "askOverlay");
   });
 }
 
@@ -2727,7 +2727,7 @@ function bindEvents() {
 
   // 알림
   // 양도 의향 묻기 dialog
-  $("#askCancelButton").addEventListener("click", () => $("#askDialog").close());
+  $("#askCancelButton").addEventListener("click", () => closeGenericModal("askDialog", "askOverlay"));
   $("#askSendButton").addEventListener("click", async () => {
     const msg = $("#askMessage").value.trim();
     if (!msg) { showToast("메시지를 입력해주세요."); return; }
@@ -2746,7 +2746,7 @@ function bindEvents() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return; }
     } catch (e) { showToast("전송 실패 — 네트워크 오류"); return; }
-    $("#askDialog").close();
+    closeGenericModal("askDialog", "askOverlay");
     fetchRequests();
     showToast("💬 의향 문의 발송 완료 — 상대가 확인하면 알림이 옵니다.");
   });
@@ -2892,6 +2892,23 @@ if (restoredAt) {
   setTimeout(() => { syncFormsFromState(); }, 0);
 }
 // 가입 안 됐으면 모달 자동 표시
+function openGenericModal(dialogId, overlayId) {
+  const d = document.getElementById(dialogId);
+  const ov = document.getElementById(overlayId);
+  if (!d) return;
+  d.hidden = false;
+  if (ov) ov.hidden = false;
+  document.body.classList.add("no-scroll");
+}
+
+function closeGenericModal(dialogId, overlayId) {
+  const d = document.getElementById(dialogId);
+  const ov = document.getElementById(overlayId);
+  if (d) d.hidden = true;
+  if (ov) ov.hidden = true;
+  document.body.classList.remove("no-scroll");
+}
+
 function openSignupModal() {
   const sp = document.getElementById("signupPanel");
   const ov = document.getElementById("signupOverlay");
