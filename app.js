@@ -158,7 +158,7 @@ const state = {
   alerts: [],
   alertFilter: "all",
   savedSearches: [],
-  filters: { direction:"all", types:[], date:"all", time:"all", arrTime:"all", region:"all", layover:"all" },
+  filters: { direction:"all", types:[], date:"all", time:"all", arrTime:"all", region:"all", layover:"all", airports:[] },
   sortBy: "score",
   wantedTypes: new Set(["OFF"]),
   wantedTimes: new Set(),
@@ -356,6 +356,11 @@ function createMockSavedSearches() {
 /* ====== 4. 유틸 ====== */
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+// 공항 코드 입력 — 쉼표/공백 어느 쪽으로 구분해도 인식 (예: "CXR BKI" 또는 "CXR, BKI")
+function parseAirportList(str) {
+  return (str || "").split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+}
 
 function showToast(msg) {
   const t = $("#toast");
@@ -1232,6 +1237,13 @@ function visiblePosts() {
   // 날짜
   if (state.filters.date === "weekend") list = list.filter(x => x.post.offered.days.some(isWeekend));
   if (state.filters.date === "weekday") list = list.filter(x => x.post.offered.days.some(d => !isWeekend(d)));
+  // 공항 검색 (포함된 글만)
+  if (state.filters.airports.length > 0) {
+    list = list.filter(x => {
+      const summary = (x.post.offered.summary || "").toUpperCase();
+      return state.filters.airports.some(ap => summary.includes(ap));
+    });
+  }
   // LAYOV 박수
   if (state.filters.layover !== "all") {
     const need = state.filters.layover === "3" ? 3 : parseInt(state.filters.layover, 10);
@@ -1590,6 +1602,20 @@ function renderWantedChips() {
 
 function syncOfferedSlot() {
   const slot = $("#offeredSlot");
+  if (state.editingPostId) {
+    const post = state.myPosts.find(p => p.id === state.editingPostId);
+    if (post) {
+      slot.className = "slot-card filled is-editing";
+      slot.innerHTML = `
+        <strong>✏️ 수정 중인 글: ${post.offered.patternName}</strong>
+        <div>${post.offered.summary || ""}</div>
+        <div class="slot-meta">
+          <span>오퍼/크레딧은 변경 불가 — 희망 조건만 아래에서 수정</span>
+        </div>
+      `;
+      return;
+    }
+  }
   const ss = selectedSchedules();
   if (ss.length === 0) {
     slot.className = "slot-card empty";
@@ -1697,6 +1723,7 @@ function enterEditPostMode(postId) {
   state.wantedTimes = new Set(post.wanted.time || []);
   switchTab("post");
   renderWantedChips();
+  syncOfferedSlot();
   const dateFlexEl = document.getElementById("wantedDateFlex");
   if (dateFlexEl) dateFlexEl.value = post.wanted.dateFlex || "any";
   const inc = document.getElementById("includedAirports");
@@ -1706,10 +1733,12 @@ function enterEditPostMode(postId) {
   const memo = document.getElementById("postMemo");
   if (memo) memo.value = post.wanted.memo || "";
   renderPostFooter();
+  document.querySelector(".app")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function exitEditPostMode() {
   state.editingPostId = null;
+  syncOfferedSlot();
   renderPostFooter();
 }
 
@@ -2490,6 +2519,15 @@ function bindEvents() {
     });
   });
 
+  // 공항 검색 필터 (입력하는 즉시 반영)
+  const airportSearchEl = $("#airportSearchFilter");
+  if (airportSearchEl) {
+    airportSearchEl.addEventListener("input", () => {
+      state.filters.airports = parseAirportList(airportSearchEl.value);
+      renderMatches();
+    });
+  }
+
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
     // 선택된 날짜를 연속 그룹으로 분리 (비연속 = 독립 패턴 = 각 1크레딧)
@@ -2518,8 +2556,8 @@ function bindEvents() {
       types: [...state.wantedTypes],
       time: [...state.wantedTimes],
       dateFlex: $("#wantedDateFlex").value,
-      includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
-      excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      includedAirports: parseAirportList($("#includedAirports").value),
+      excludedAirports: parseAirportList($("#excludedAirports").value),
       memo: $("#postMemo").value || "",
     };
 
@@ -2612,8 +2650,8 @@ function bindEvents() {
       types: [...state.wantedTypes],
       time: [...state.wantedTimes],
       dateFlex: $("#wantedDateFlex").value,
-      includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
-      excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      includedAirports: parseAirportList($("#includedAirports").value),
+      excludedAirports: parseAirportList($("#excludedAirports").value),
       memo: $("#postMemo").value || "",
     };
     try {
