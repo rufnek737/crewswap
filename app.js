@@ -152,6 +152,7 @@ const state = {
   posts: [],
   myPosts: [],      // 내가 등록한 글
   postDraft: null,  // 임시 저장된 등록 폼
+  editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
   alerts: [],
@@ -1653,10 +1654,16 @@ function renderMyPosts() {
           ${p.wanted.memo ? `<div><dt>메모</dt><dd>${p.wanted.memo}</dd></div>` : ""}
         </dl>
       </details>
-      <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
+      <div class="my-post-btn-row">
+        <button class="secondary-button edit-post-button" data-my-post-id="${p.id}">희망 조건 수정</button>
+        <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
+      </div>
     </div>
   `;
   }).join("");
+  el.querySelectorAll(".edit-post-button").forEach(b => {
+    b.onclick = () => enterEditPostMode(b.dataset.myPostId);
+  });
   el.querySelectorAll(".cancel-post-button").forEach(b => {
     b.onclick = async () => {
       const pid = b.dataset.myPostId;
@@ -1682,24 +1689,73 @@ function renderMyPosts() {
   });
 }
 
+function enterEditPostMode(postId) {
+  const post = state.myPosts.find(p => p.id === postId);
+  if (!post) return;
+  state.editingPostId = postId;
+  state.wantedTypes = new Set(post.wanted.types || []);
+  state.wantedTimes = new Set(post.wanted.time || []);
+  switchTab("post");
+  renderWantedChips();
+  const dateFlexEl = document.getElementById("wantedDateFlex");
+  if (dateFlexEl) dateFlexEl.value = post.wanted.dateFlex || "any";
+  const inc = document.getElementById("includedAirports");
+  if (inc) inc.value = (post.wanted.includedAirports || []).join(", ");
+  const exc = document.getElementById("excludedAirports");
+  if (exc) exc.value = (post.wanted.excludedAirports || []).join(", ");
+  const memo = document.getElementById("postMemo");
+  if (memo) memo.value = post.wanted.memo || "";
+  renderPostFooter();
+}
+
+function exitEditPostMode() {
+  state.editingPostId = null;
+  renderPostFooter();
+}
+
 function renderPostFooter() {
+  const editing = !!state.editingPostId;
   const ss = selectedSchedules();
-  const hasOffered = ss.length > 0;
+  const hasOffered = editing || ss.length > 0;
   const wantedTypeCount = state.wantedTypes.size;
   $("#exposureCount").textContent = exposureCount();
   $("#candidateCount").textContent = candidateCountForOffered();
 
+  const submitBtn = $("#submitPostButton");
+  const existingBanner = document.getElementById("editPostBanner");
+  if (editing) {
+    submitBtn.textContent = "희망 조건 수정 완료";
+    if (!existingBanner) {
+      const banner = document.createElement("div");
+      banner.id = "editPostBanner";
+      banner.className = "notice";
+      banner.style.marginBottom = "10px";
+      banner.innerHTML = `✏️ 기존 글의 희망 조건을 수정 중입니다 (오퍼/크레딧 변경 없음). <button type="button" id="cancelEditPostButton" class="secondary-button" style="margin-left:8px;">취소</button>`;
+      submitBtn.parentElement.insertBefore(banner, submitBtn);
+      document.getElementById("cancelEditPostButton").onclick = exitEditPostMode;
+    }
+  } else {
+    submitBtn.textContent = "등록하기 · 1크레딧";
+    if (existingBanner) existingBanner.remove();
+  }
+
   if (!hasOffered) {
     $("#postRuleCheck").innerHTML = `<h4>회사 룰 사전 체크</h4><p class="hint">달력에서 패턴을 선택하면 룰 체크가 표시됩니다.</p>`;
-    $("#submitPostButton").disabled = true;
+    submitBtn.disabled = true;
     $("#saveDraftButton").disabled = !hasOffered;
+    return;
+  }
+  if (editing) {
+    submitBtn.disabled = wantedTypeCount === 0;
+    $("#saveDraftButton").disabled = true;
+    $("#postRuleCheck").innerHTML = `<p class="hint">희망 조건 수정 중에는 회사 룰 재검사를 하지 않습니다.</p>`;
     return;
   }
   const checks = checkRulesForSelection();
   const hasFail = checks.some(c => c.status === "FAIL");
   const hasWarn = checks.some(c => c.status === "WARN");
   const canSubmit = hasOffered && wantedTypeCount > 0 && !hasFail;
-  $("#submitPostButton").disabled = !canSubmit || state.credits < 1;
+  submitBtn.disabled = !canSubmit || state.credits < 1;
   $("#saveDraftButton").disabled = !hasOffered;
 
   const headerNote = hasFail
@@ -2509,8 +2565,36 @@ function bindEvents() {
       : "스왑 글 등록 완료 — 스왑 등록 탭에서 확인하고 취소할 수 있습니다.");
   }
 
+  // 기존 글의 희망 조건만 수정 (오퍼/크레딧 변경 없음)
+  async function doUpdatePost() {
+    const post = state.myPosts.find(p => p.id === state.editingPostId);
+    if (!post) { exitEditPostMode(); return; }
+    const wanted = {
+      types: [...state.wantedTypes],
+      time: [...state.wantedTimes],
+      dateFlex: $("#wantedDateFlex").value,
+      includedAirports: ($("#includedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      excludedAirports: ($("#excludedAirports").value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      memo: $("#postMemo").value || "",
+    };
+    try {
+      const res = await fetch(`${API_BASE}/api/posts-update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: post.id, deleteToken: post.deleteToken, wanted }),
+      });
+      if (!res.ok) { showToast("수정 실패 — 다시 시도해주세요."); return; }
+    } catch (e) { showToast("수정 실패 — 네트워크 오류"); return; }
+    post.wanted = wanted;
+    saveState();
+    exitEditPostMode();
+    renderAll();
+    showToast("희망 조건 수정 완료");
+  }
+
   // 등록 버튼 — WARN 항목 있으면 확인 팝업, 없으면 바로 등록
   $("#submitPostButton").addEventListener("click", () => {
+    if (state.editingPostId) { doUpdatePost(); return; }
     if (state.credits < 1) { showToast("크레딧 부족"); return; }
     // 중복 등록 방지: 선택한 날짜가 이미 내 게시글에 있는지 확인
     const selectedDayNums = [...state.selectedDays].map(k => parseDayKey(k).day);

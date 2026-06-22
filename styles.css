@@ -682,9 +682,11 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   color: var(--muted);
 }
 .my-post-time { color: #9ba6b7; font-size: 11px; }
+.my-post-btn-row { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.edit-post-button { align-self: flex-start; padding: 6px 12px; font-size: 12px; }
 .cancel-post-button {
   align-self: flex-start;
-  margin-top: 4px;
+  margin-top: 0;
   padding: 6px 12px;
   border: 1px solid #f0b8b2;
   border-radius: 6px;

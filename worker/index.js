@@ -160,6 +160,23 @@ async function handlePostsCreate(request, env) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* ── posts-update (희망 조건만 수정, 오퍼/크레딧 변경 없음) ──── */
+
+async function handlePostsUpdate(request, env) {
+  let id, deleteToken, wanted;
+  try { ({ id, deleteToken, wanted } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !deleteToken || !wanted) return json({ error: '필수 필드 누락' }, 400);
+
+  try {
+    const post = await env.POSTS.get(`post:${id}`, { type: 'json' });
+    if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
+    if (post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
+    post.wanted = wanted;
+    await env.POSTS.put(`post:${id}`, JSON.stringify(post));
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
 /* ── posts-delete ───────────────────────────────────────────── */
 
 async function handlePostsDelete(request, env) {
@@ -594,6 +611,7 @@ export default {
     if (path === '/api/posts-get')    return handlePostsGet(env);
     if (path === '/api/posts-create') return handlePostsCreate(request, env);
     if (path === '/api/posts-delete') return handlePostsDelete(request, env);
+    if (path === '/api/posts-update') return handlePostsUpdate(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });
   },
