@@ -53,7 +53,7 @@ button { cursor: pointer; }
 .app {
   width: min(1440px, 100%);
   margin: 0 auto;
-  padding: 24px 24px max(110px, calc(80px + env(safe-area-inset-bottom)));
+  padding: 24px 24px 0;
   padding-top: max(24px, env(safe-area-inset-top));
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
@@ -482,12 +482,11 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 
 /* ===== 하단 탭 ===== */
 .bottom-tabs {
-  position: fixed; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); left: 18px; z-index: 10;
+  position: static;
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
-  max-width: 760px; margin: 0 auto; padding: 8px;
+  max-width: 760px; margin: 18px auto max(18px, env(safe-area-inset-bottom)); padding: 8px;
   border: 1px solid var(--line); border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
+  background: var(--panel); box-shadow: var(--shadow);
 }
 .tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; }
 .tab.is-active { background: #243449; color: #fff; }
@@ -747,10 +746,10 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 }
 @media (max-width: 720px) {
   body { overflow-x: hidden; }
-  .app { padding: 16px 16px max(116px, calc(80px + env(safe-area-inset-bottom))); overflow-x: hidden; }
+  .app { padding: 16px 16px 0; overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
-  .bottom-tabs { left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); gap: 4px; padding: 6px; }
+  .bottom-tabs { margin: 8px 8px max(8px, env(safe-area-inset-bottom)); gap: 4px; padding: 6px; }
   .tab { font-size: 10px; padding: 0 4px; }
   .metrics-strip { grid-template-columns: 1fr; }
   .filter-grid { grid-template-columns: 1fr; }
