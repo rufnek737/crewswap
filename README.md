@@ -138,8 +138,38 @@ netlify dev          # http://localhost:8889
 - 프론트: "스왑 등록" 탭 내 글 카드에 "희망 조건 수정" 버튼 → 수정 모드 진입 시 기존 오퍼 선택 없이도 제출 가능하도록 `renderPostFooter()` 분기, 제출 버튼 라벨/배너로 수정 중 상태 표시
 - 오퍼(스케줄)와 크레딧은 수정 불가 — 변경 필요 시 취소 후 재등록 안내
 
+#### 요청하기 / 양도 의향 묻기 — 서버 연동 (실제 전달 안 되던 문제 해결)
+- 원인: `requestSwap()`과 "양도 의향 묻기"가 로컬 상태에만 저장되고 서버 호출이 전혀 없어 다른 기기로 전달 불가
+- Cloudflare Worker: `POST /api/requests-create`, `GET /api/requests-get` 신설 (KV `req:` prefix)
+- `posts-create`에 `ownerEmail` 저장 (가입 시 인증된 이메일을 사용자 식별자로 사용), `posts-get` 응답에서는 비공개 처리(strip)
+- 글 주인의 이메일로 요청을 라우팅 → 요청함 탭 진입 시 본인 이메일로 보낸/받은 요청을 서버에서 조회 (`fetchRequests()`)
+- 요청 카드에 의향 묻기 메시지 본문 표시 추가
+- 기존(이번 업데이트 전) 등록 글은 `ownerEmail`이 없어 요청 불가 — 새로 등록한 글부터 정상 동작
+
+#### 양도 의향 묻기 팝업 버튼 무반응 버그
+- 회원가입 모달과 동일한 원인 — iOS WKWebView `<dialog>` top-layer에서 버튼 클릭/스크립트 제어가 먹지 않음
+- `askDialog`를 `<dialog>`→`<div>` 기반 커스텀 모달로 전환 (`openGenericModal`/`closeGenericModal` 공용 헬퍼 추가)
+
+#### 권한 프롬프트 축소 (개발 편의)
+- `.claude/settings.local.json` 신설 (gitignore 처리) — 일상 작업(파일 편집, npm/npx cap, git add/commit/push/pull 등, grep/cat/sed/cp 등)은 자동 허용
+- 배포·삭제·파괴적 명령(`netlify deploy`, `netlify sites:delete`, `wrangler deploy`, `git push --force`, `git reset --hard` 등)은 `cd` 결합 형태까지 포함해 항상 확인받도록 ask 목록에 등록
+
+#### 희망 조건 수정 UX 개선
+- 수정 모드 진입 시 오퍼 슬롯에 "✏️ 수정 중인 글: [패턴명]"을 노란 테두리로 표시 — 어떤 스케줄을 수정하는지 명확화 (이전엔 스크롤해서 폼만 봐야 해서 직관성 낮음)
+
+#### 공항 입력/검색 개선
+- 선호/제외 공항 입력 시 쉼표·공백 모두 구분자로 인식 (`parseAirportList()` 헬퍼)
+- 스왑 찾기 탭에 공항 코드 검색 필터 추가 — 입력 즉시 해당 공항 포함 글만 노출
+
+#### 하단 네비게이션 — 고정 → 일반 흐름으로 변경
+- `.bottom-tabs`를 `position: fixed`에서 `static`으로 변경, `.app` 하단 패딩도 함께 정리 → 스크롤 끝까지 내려야 보이는 구조로 전환
+
+#### 스왑찾기/요청함 카드 가로 잘림 버그 (안드로이드)
+- 원인: `.card-head` flex 자식에 `min-width: 0`이 없어 텍스트가 길면 줄어들지 않고 우측(매칭 점수, 상대가 원함 박스)을 밀어내며 화면 밖으로 잘림
+- `.match-card`, `.request-card`, `.bidirectional-display`에 `min-width: 0` / `minmax(0,1fr)` / `overflow-wrap` 적용
+
 #### 발견된 미해결 이슈 (다음 작업)
-- **요청하기/양도 의향 묻기 — 서버 미연동**: `requestSwap()`과 "양도 의향 묻기"가 로컬 상태에만 저장되고 실제로 상대방에게 전달되지 않음. Cloudflare Workers에 요청 관련 엔드포인트 자체가 없음 — 별도 설계 필요 (큰 작업)
+- **매칭 실패 시 크레딧 50% 환급 — 미구현**: 내 정보 탭의 안내 문구일 뿐, 마감일 지난 글을 감지하거나 크레딧을 환급하는 로직이 전혀 없음. 마감 경과 감지 + 50% 자동 환급 + 글 비활성화 로직 구현 필요
 - **묶음 패턴 자동 선택 회귀**: 2026-06-21 윈도우 커밋(`7b71958`)이 연결 패턴 전체 자동 선택 기능을 추가하면서, 이전에 적용했던 "묶음도 개별 선택 가능" 동작이 덮어써짐 (CrewConnex 인식 오류 대응 목적) — 되돌리기 작업 예정
 - 위 회귀와 연동된 크레딧 계산 재확인 필요 (비연속 선택 시 그룹당 1크레딧 분리 로직이 패턴 자동선택과 상호작용하는지)
 
