@@ -2387,7 +2387,11 @@ function bindEvents() {
       showPreview(schedules);
     } catch (err) {
       status.style.color = "var(--c-fail)";
-      status.textContent = "❌ 연결 오류: " + err.message + " (Netlify로 배포한 환경에서만 작동)";
+      if (!navigator.onLine || /load failed|network|fetch/i.test(err.message || "")) {
+        status.textContent = "📶 인터넷 연결을 확인하고 다시 시도해주세요.";
+      } else {
+        status.textContent = "❌ 연결 오류: " + err.message;
+      }
     } finally {
       $("#ccLoginButton").disabled = false;
     }

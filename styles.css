@@ -53,7 +53,7 @@ button { cursor: pointer; }
 .app {
   width: min(1440px, 100%);
   margin: 0 auto;
-  padding: 24px 24px 0;
+  padding: 24px 24px max(76px, calc(56px + env(safe-area-inset-bottom)));
   padding-top: max(24px, env(safe-area-inset-top));
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
@@ -485,13 +485,13 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .credit-balance strong { color: var(--primary); font-size: 32px; }
 .beta-credit-notice { display: inline-block; padding: 6px 14px; border-radius: 20px; background: #fff5f4; border: 1px solid var(--primary); color: var(--primary); font-size: 12px; font-weight: 700; margin-bottom: 10px; }
 
-/* ===== 하단 탭 ===== */
+/* ===== 하단 탭 — 화면 전체 폭 고정 바 ===== */
 .bottom-tabs {
-  position: static;
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
-  max-width: 760px; margin: 18px auto max(18px, env(safe-area-inset-bottom)); padding: 8px;
-  border: 1px solid var(--line); border-radius: 12px;
-  background: var(--panel); box-shadow: var(--shadow);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  width: 100%; margin: 0; padding: 6px 4px max(6px, env(safe-area-inset-bottom));
+  border: 0; border-top: 1px solid var(--line); border-radius: 0;
+  background: var(--panel); box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
 }
 .tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; }
 .tab.is-active { background: #243449; color: #fff; }
@@ -751,10 +751,10 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 }
 @media (max-width: 720px) {
   body { overflow-x: hidden; }
-  .app { padding: 16px 16px 0; overflow-x: hidden; }
+  .app { padding: 16px 16px max(70px, calc(54px + env(safe-area-inset-bottom))); overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
-  .bottom-tabs { margin: 8px 8px max(8px, env(safe-area-inset-bottom)); gap: 4px; padding: 6px; }
+  .bottom-tabs { gap: 4px; padding: 6px 4px max(6px, env(safe-area-inset-bottom)); }
   .tab { font-size: 10px; padding: 0 4px; }
   .metrics-strip { grid-template-columns: 1fr; }
   .filter-grid { grid-template-columns: 1fr; }
