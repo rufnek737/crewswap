@@ -66,6 +66,9 @@ const PILL_CLASS = {
 const BAND_CLASS = { "국내선":"dom", "국제선":"", "LAYOV":"lay", "ARRIVAL":"lay" };
 
 const WANTED_TYPE_OPTIONS = ["OFF","국내선","국제선","LAYOV","RSV","STBY","비행(전체)","아무거나"];
+// 표시용 라벨 (내부 값은 유지, 화면 텍스트만 명확하게)
+const WANTED_TYPE_LABELS = { "비행(전체)": "모든 비행", "아무거나": "전부 (휴무 포함)" };
+const wantedTypeLabel = t => WANTED_TYPE_LABELS[t] || t;
 // 연속근무 계산 제외 유형 (휴무/휴가)
 const NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P"]);
 
@@ -1612,7 +1615,7 @@ function renderWantedChips() {
   // 최초 1회만 DOM 생성 + 이벤트 바인딩 (이후엔 클래스만 갱신)
   if (!_wantedChipsBuilt) {
     w.innerHTML = WANTED_TYPE_OPTIONS.map(t =>
-      `<button type="button" data-type="${t}">${t}</button>`
+      `<button type="button" data-type="${t}">${wantedTypeLabel(t)}</button>`
     ).join("");
     w.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
       const t = b.dataset.type;
@@ -1712,7 +1715,7 @@ function renderMyPosts() {
       </div>
       <div class="my-post-meta">
         <span>${p.offered.type} · ${p.offered.summary || ""}</span>
-        <span>희망: ${p.wanted.types.join(" / ")}</span>
+        <span>희망: ${p.wanted.types.map(wantedTypeLabel).join(" / ")}</span>
         <span class="my-post-time">${rdDisplay}</span>
       </div>
       <details class="my-post-detail">
@@ -1723,7 +1726,7 @@ function renderMyPosts() {
           ${p.offered.flightMinutes ? `<div><dt>비행시간</dt><dd>${(p.offered.flightMinutes/60).toFixed(1)}h</dd></div>` : ""}
           ${p.offered.aircraft ? `<div><dt>기종</dt><dd>${p.offered.aircraft}${p.offered.edto?" · EDTO":""}${p.offered.cat3?" · CAT III":""}</dd></div>` : ""}
           ${p.offered.crewPublic ? `<div><dt>편조</dt><dd>${p.offered.crewPublic}</dd></div>` : ""}
-          <div><dt>희망 조건</dt><dd>${p.wanted.types.join(" / ")}${p.wanted.time?.length ? ` · ${p.wanted.time.join(", ")}` : ""}${p.wanted.excludedAirports?.length ? ` · ${p.wanted.excludedAirports.join("/")} 제외` : ""}</dd></div>
+          <div><dt>희망 조건</dt><dd>${p.wanted.types.map(wantedTypeLabel).join(" / ")}${p.wanted.time?.length ? ` · ${p.wanted.time.join(", ")}` : ""}${p.wanted.excludedAirports?.length ? ` · ${p.wanted.excludedAirports.join("/")} 제외` : ""}</dd></div>
           ${p.wanted.memo ? `<div><dt>메모</dt><dd>${p.wanted.memo}</dd></div>` : ""}
         </dl>
       </details>
@@ -1912,7 +1915,7 @@ function renderMatches() {
         <div class="arrow">⇄</div>
         <div class="get">
           <strong>상대가 원함</strong>
-          ${post.wanted.types.join(" / ")}${post.wanted.time.length ? ` · ${post.wanted.time.join(",")}` : ""}${post.wanted.excludedAirports.length ? ` · ${post.wanted.excludedAirports.join("/")} 제외` : ""}
+          ${post.wanted.types.map(wantedTypeLabel).join(" / ")}${post.wanted.time.length ? ` · ${post.wanted.time.join(",")}` : ""}${post.wanted.excludedAirports.length ? ` · ${post.wanted.excludedAirports.join("/")} 제외` : ""}
         </div>
       </div>
 
@@ -2194,7 +2197,8 @@ function switchTab(name) {
   if (name === "post") fetchMyPosts();
   history.replaceState(null, "", "#" + name);
   // 탭 전환 시 항상 맨 위에서 시작 (이전 탭 스크롤 위치 잔존 방지)
-  window.scrollTo({ top: 0, behavior: "instant" });
+  const appEl = document.querySelector(".app");
+  if (appEl) appEl.scrollTop = 0;
 }
 
 // 직군 변경 시 직책 옵션 교체 · 기종 선택 show/hide
