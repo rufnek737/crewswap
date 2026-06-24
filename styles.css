@@ -54,9 +54,9 @@ button { cursor: pointer; }
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 24px 24px max(76px, calc(56px + env(safe-area-inset-bottom)));
-  padding-top: max(24px, env(safe-area-inset-top));
-  padding-left: max(24px, env(safe-area-inset-left));
-  padding-right: max(24px, env(safe-area-inset-right));
+  padding-top: calc(24px + env(safe-area-inset-top));
+  padding-left: calc(24px + env(safe-area-inset-left));
+  padding-right: calc(24px + env(safe-area-inset-right));
 }
 
 /* ===== 헤더 ===== */
@@ -751,7 +751,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 }
 @media (max-width: 720px) {
   body { overflow-x: hidden; }
-  .app { padding: 16px 16px max(70px, calc(54px + env(safe-area-inset-bottom))); overflow-x: hidden; }
+  .app { padding: 16px 16px max(70px, calc(54px + env(safe-area-inset-bottom))); padding-top: calc(16px + env(safe-area-inset-top)); overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
   .bottom-tabs { gap: 4px; padding: 6px 4px max(6px, env(safe-area-inset-bottom)); }

@@ -1284,11 +1284,15 @@ function candidateCountForOffered() {
   const myType = ss[0]?.type;
   if (!myType) return 0;
   const isCabin = state.user.crewType === "CABIN";
+  const isFlight = ["국내선","국제선","LAYOV"].includes(myType);
   return state.posts.filter(p => {
     const roleOK = isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
       : p.ownerRole === state.user.roleType;
-    return roleOK && (p.wanted.types.includes(myType) || p.wanted.types.includes("아무거나") || p.wanted.types.includes("비행(전체)"));
+    const typeOK = p.wanted.types.includes(myType)
+      || p.wanted.types.includes("아무거나")
+      || (isFlight && p.wanted.types.includes("비행(전체)"));
+    return roleOK && typeOK;
   }).length;
 }
 
@@ -1581,10 +1585,22 @@ function renderWantedChips() {
   w.innerHTML = WANTED_TYPE_OPTIONS.map(t =>
     `<button data-type="${t}" class="${state.wantedTypes.has(t)?"is-active":""}">${t}</button>`
   ).join("");
+  // "아무거나"(어떤 유형이든), "비행(전체)"(모든 비행)는 배타적 마스터 토글
+  const MASTER_TYPES = ["아무거나", "비행(전체)"];
   w.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     const t = b.dataset.type;
-    if (state.wantedTypes.has(t)) state.wantedTypes.delete(t);
-    else state.wantedTypes.add(t);
+    const isMaster = MASTER_TYPES.includes(t);
+    if (state.wantedTypes.has(t)) {
+      state.wantedTypes.delete(t);
+    } else if (isMaster) {
+      // 마스터 선택 시 다른 모든 선택 해제 후 이것만
+      state.wantedTypes.clear();
+      state.wantedTypes.add(t);
+    } else {
+      // 일반 유형 선택 시 마스터 토글 해제
+      MASTER_TYPES.forEach(m => state.wantedTypes.delete(m));
+      state.wantedTypes.add(t);
+    }
     renderWantedChips();
     renderPostFooter();
   }));
@@ -1733,7 +1749,6 @@ function enterEditPostMode(postId) {
   const memo = document.getElementById("postMemo");
   if (memo) memo.value = post.wanted.memo || "";
   renderPostFooter();
-  document.querySelector(".app")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function exitEditPostMode() {
@@ -2122,6 +2137,8 @@ function switchTab(name) {
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
   history.replaceState(null, "", "#" + name);
+  // 탭 전환 시 항상 맨 위에서 시작 (이전 탭 스크롤 위치 잔존 방지)
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 // 직군 변경 시 직책 옵션 교체 · 기종 선택 show/hide
