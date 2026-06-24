@@ -357,6 +357,17 @@ function createMockSavedSearches() {
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+// iOS 핀치 줌 / 더블탭 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
+["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
+  document.addEventListener(evt, e => e.preventDefault(), { passive: false })
+);
+let _lastTouchEnd = 0;
+document.addEventListener("touchend", e => {
+  const now = Date.now();
+  if (now - _lastTouchEnd <= 300) e.preventDefault(); // 더블탭 줌 차단
+  _lastTouchEnd = now;
+}, { passive: false });
+
 // 공항 코드 입력 — 쉼표/공백 어느 쪽으로 구분해도 인식 (예: "CXR BKI" 또는 "CXR, BKI")
 function parseAirportList(str) {
   return (str || "").split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
@@ -1690,11 +1701,14 @@ function renderMyPosts() {
     const rdDisplay = (rd && rd.includes('T'))
       ? (() => { const d = new Date(rd); return `${d.getMonth()+1}/${d.getDate()} 등록`; })()
       : (rd || '');
+    const statusHtml = p.status === "expired"
+      ? `<span class="my-post-status expired">마감됨${p.refunded ? ` · ${(p.creditSpent||1)*0.5}크레딧 환급` : ""}</span>`
+      : `<span class="my-post-status done">등록 완료</span>`;
     return `
     <div class="my-post-card">
       <div class="my-post-head">
         <strong>${p.offered.patternName}</strong>
-        <span class="my-post-status done">등록 완료</span>
+        ${statusHtml}
       </div>
       <div class="my-post-meta">
         <span>${p.offered.type} · ${p.offered.summary || ""}</span>
@@ -2015,15 +2029,40 @@ async function fetchMyPosts() {
   if (!state.user.email) return;
   try {
     const res = await fetch(`${API_BASE}/api/posts-get-mine?email=${encodeURIComponent(state.user.email)}`);
-    if (!res.ok) return;
+    if (!res.ok) { processExpiredRefunds(); return; }
     const data = await res.json();
     const serverPosts = data.posts || [];
     // 서버에 없는(구버전·ownerEmail 미포함) 로컬 전용 글은 보존, 같은 id는 서버 데이터로 갱신
     const localOnly = state.myPosts.filter(p => !serverPosts.some(sp => sp.id === p.id));
     state.myPosts = [...serverPosts, ...localOnly];
     saveState();
+    processExpiredRefunds();
     renderMyPosts();
-  } catch (e) { console.warn("fetchMyPosts error:", e); }
+  } catch (e) { console.warn("fetchMyPosts error:", e); processExpiredRefunds(); }
+}
+
+// 마감일이 지났는데 매칭되지 않은 내 스왑 글 → 사용 크레딧 50% 자동 환급
+function processExpiredRefunds() {
+  let refundTotal = 0, count = 0;
+  state.myPosts.forEach(p => {
+    if (p.refunded || p.matched || p.status === "expired") return;
+    const dd = dDayInfo(p.deadlineDay);
+    if (dd.expired) {
+      const refund = (p.creditSpent || 1) * 0.5;
+      state.credits += refund;
+      p.refunded = true;
+      p.status = "expired";
+      refundTotal += refund;
+      count++;
+    }
+  });
+  if (count > 0) {
+    state.credits = Math.round(state.credits * 10) / 10;
+    saveState();
+    renderCredits();
+    renderMyPosts();
+    showToast(`마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급(50%)`);
+  }
 }
 
 async function fetchRequests() {
@@ -3189,6 +3228,7 @@ renderAll();
 bindEvents();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
+processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");
