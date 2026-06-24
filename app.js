@@ -1579,41 +1579,58 @@ function renderRuleCheck() {
   });
 }
 
+// "아무거나"(어떤 유형이든), "비행(전체)"(모든 비행)는 배타적 마스터 토글
+const MASTER_WANTED_TYPES = ["아무거나", "비행(전체)"];
+
+// 칩 선택 상태만 DOM 클래스로 반영 (innerHTML 재생성 금지 — 빠른 탭 시 터치 엉킴 방지)
+function syncWantedChipStates() {
+  const w = $("#wantedTypeChips");
+  if (w) w.querySelectorAll("button").forEach(b => {
+    b.classList.toggle("is-active", state.wantedTypes.has(b.dataset.type));
+  });
+  const tw = $("#wantedTimeChips");
+  if (tw) tw.querySelectorAll("button").forEach(b => {
+    b.classList.toggle("is-active", state.wantedTimes.has(b.dataset.time));
+  });
+}
+
+let _wantedChipsBuilt = false;
 function renderWantedChips() {
   const w = $("#wantedTypeChips");
   if (!w) return;
-  w.innerHTML = WANTED_TYPE_OPTIONS.map(t =>
-    `<button data-type="${t}" class="${state.wantedTypes.has(t)?"is-active":""}">${t}</button>`
-  ).join("");
-  // "아무거나"(어떤 유형이든), "비행(전체)"(모든 비행)는 배타적 마스터 토글
-  const MASTER_TYPES = ["아무거나", "비행(전체)"];
-  w.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    const t = b.dataset.type;
-    const isMaster = MASTER_TYPES.includes(t);
-    if (state.wantedTypes.has(t)) {
-      state.wantedTypes.delete(t);
-    } else if (isMaster) {
-      // 마스터 선택 시 다른 모든 선택 해제 후 이것만
-      state.wantedTypes.clear();
-      state.wantedTypes.add(t);
-    } else {
-      // 일반 유형 선택 시 마스터 토글 해제
-      MASTER_TYPES.forEach(m => state.wantedTypes.delete(m));
-      state.wantedTypes.add(t);
-    }
-    renderWantedChips();
-    renderPostFooter();
-  }));
-  $("#wantedTimeChips").querySelectorAll("button").forEach(b => {
-    b.classList.toggle("is-active", state.wantedTimes.has(b.dataset.time));
-    b.onclick = () => {
-      const t = b.dataset.time;
-      if (state.wantedTimes.has(t)) state.wantedTimes.delete(t);
-      else state.wantedTimes.add(t);
-      renderWantedChips();
+  // 최초 1회만 DOM 생성 + 이벤트 바인딩 (이후엔 클래스만 갱신)
+  if (!_wantedChipsBuilt) {
+    w.innerHTML = WANTED_TYPE_OPTIONS.map(t =>
+      `<button type="button" data-type="${t}">${t}</button>`
+    ).join("");
+    w.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+      const t = b.dataset.type;
+      const isMaster = MASTER_WANTED_TYPES.includes(t);
+      if (state.wantedTypes.has(t)) {
+        state.wantedTypes.delete(t);
+      } else if (isMaster) {
+        state.wantedTypes.clear();
+        state.wantedTypes.add(t);
+      } else {
+        MASTER_WANTED_TYPES.forEach(m => state.wantedTypes.delete(m));
+        state.wantedTypes.add(t);
+      }
+      syncWantedChipStates();
       renderPostFooter();
-    };
-  });
+    }));
+    const tw = $("#wantedTimeChips");
+    if (tw) tw.querySelectorAll("button").forEach(b => {
+      b.addEventListener("click", () => {
+        const t = b.dataset.time;
+        if (state.wantedTimes.has(t)) state.wantedTimes.delete(t);
+        else state.wantedTimes.add(t);
+        syncWantedChipStates();
+        renderPostFooter();
+      });
+    });
+    _wantedChipsBuilt = true;
+  }
+  syncWantedChipStates();
 }
 
 function syncOfferedSlot() {

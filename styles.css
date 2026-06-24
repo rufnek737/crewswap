@@ -355,6 +355,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .filter-chip.is-active, .chip-multi button.is-active { border-color: #243449; background: #243449; color: #fff; }
 .filter-grid { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 10px; }
