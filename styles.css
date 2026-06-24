@@ -526,7 +526,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 
 /* ===== 다이얼로그 ===== */
 dialog { width: min(520px, calc(100vw - 28px)); border: 0; border-radius: 12px; box-shadow: var(--shadow); padding: 0; }
-#crewDialog { width: min(860px, calc(100vw - 28px)); max-height: 92vh; }
+#crewDialog { max-width: min(820px, calc(100vw - 24px)); }
 dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .dialog-body { display: grid; gap: 14px; padding: 20px; }
 
@@ -546,8 +546,8 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .import-progress { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 8px; background: var(--blue-soft); }
 .import-progress span { width: 18px; height: 18px; border: 3px solid #93a9da; border-top-color: #2e5cc9; border-radius: 999px; animation: spin 0.8s linear infinite; }
 
-/* ===== 임포트 다이얼로그 ===== */
-.import-dialog { max-width: 820px; width: 92vw; max-height: 90vh; overflow: auto; }
+/* ===== 임포트 다이얼로그 (div 모달 내부 컨텐츠) ===== */
+.import-dialog { width: 100%; box-sizing: border-box; }
 .notice { padding: 10px 12px; background: var(--blue-soft); border: 1px solid #c8d6ef; border-radius: 6px; font-size: 12px; color: #1d3a7a; line-height: 1.5; }
 .import-tabs { display: flex; gap: 4px; margin: 12px 0 0; border-bottom: 1px solid var(--line); }
 .import-tab { padding: 8px 14px; border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 13px; border-bottom: 2px solid transparent; }
@@ -555,7 +555,9 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .import-mode { display: grid; gap: 10px; padding-top: 8px; }
 .import-mode textarea { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size: 12px; }
 
-.preview-wrap { overflow-x: auto; max-height: 380px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.preview-wrap { overflow-x: auto; max-height: 380px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; min-width: 0; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.generic-modal .dialog-body { min-width: 0; }
+.generic-modal .dialog-body > * { min-width: 0; }
 .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .preview-table th { position: sticky; top: 0; background: #eef2f6; padding: 8px 6px; text-align: left; font-weight: 700; border-bottom: 1px solid var(--line); white-space: nowrap; font-size: 11px; z-index: 1; }
 .preview-table td { padding: 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }

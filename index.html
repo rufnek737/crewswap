@@ -573,21 +573,13 @@
       <div id="alertList" class="alert-list"></div>
     </aside>
 
-    <!-- 실 데이터 입력 다이얼로그 -->
-    <dialog id="crewDialog">
-      <form method="dialog" class="dialog-body import-dialog">
-        <h2>📋 실 데이터 입력 (테스트용)</h2>
-        <div class="notice">
-          정적 HTML 환경에서는 CrewConnex API/웹뷰 자동 파싱이 불가합니다 (CORS·인증·TOS).
-          본인 CrewConnex 화면을 보고 <strong>텍스트 붙여넣기 또는 직접 편집</strong>하여 실 데이터로 테스트하세요.
-          입력값은 브라우저 메모리에만 저장되며 새로고침 시 사라집니다.
-        </div>
+    <!-- CrewConnex 불러오기 (div 모달 — iOS dialog 너비 버그 회피) -->
+    <div id="crewOverlay" class="generic-modal-overlay" hidden></div>
+    <div id="crewDialog" class="generic-modal" hidden>
+      <div class="dialog-body import-dialog">
+        <h2>📥 CrewConnex 불러오기</h2>
 
         <div id="autoMode" class="import-mode">
-          <div class="notice" style="background:#e8f6ed;border-color:#8bd2ac;color:#0d5a37;">
-            ⚡ 본인 대신 CrewConnex에 로그인 → 자동 파싱 → 즉시 적용.
-            아이디/비밀번호는 <strong>저장하지 않고</strong> 1회 요청 후 즉시 폐기됩니다.
-          </div>
           <label>CrewConnex ID
             <input type="text" id="ccUsername" autocomplete="username" placeholder="사번 또는 ID" />
           </label>
@@ -603,8 +595,6 @@
 
 
         <div id="parsePreview" hidden>
-          <h3>파싱 결과 — 확인 / 수정 / 저장</h3>
-          <p class="hint">잘못 인식된 항목은 직접 수정하세요. 매칭 정확도를 위해 <strong>편조 등급(C/F)</strong>, <strong>EDTO/CAT3</strong>, <strong>패턴 ID</strong>(같은 패턴은 동일 P1/P2 등)를 점검하세요.</p>
           <div id="previewTable" class="preview-wrap"></div>
           <div class="dialog-actions">
             <button type="button" class="secondary-button" id="addRowButton">+ 행 추가</button>
@@ -614,10 +604,10 @@
         </div>
 
         <div class="dialog-actions" id="defaultDialogActions">
-          <button value="cancel" type="submit" class="secondary-button">닫기</button>
+          <button type="button" class="secondary-button" id="crewCloseButton">닫기</button>
         </div>
-      </form>
-    </dialog>
+      </div>
+    </div>
 
     <!-- WARN 항목 확인 다이얼로그 -->
     <dialog id="warnConfirmDialog">

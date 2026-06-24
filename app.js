@@ -728,7 +728,7 @@ function openImportDialog() {
   $("#defaultDialogActions").hidden = false;
   $$(".import-mode").forEach(el => { el.hidden = el.id !== "autoMode"; });
   $$(".import-tab").forEach(t => t.classList.toggle("is-active", t.dataset.mode === "auto"));
-  $("#crewDialog").showModal();
+  openGenericModal("crewDialog", "crewOverlay");
 }
 
 function showPreview(schedules) {
@@ -2376,6 +2376,7 @@ function bindEvents() {
   });
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
+  $("#crewCloseButton")?.addEventListener("click", () => closeGenericModal("crewDialog", "crewOverlay"));
 
   // (import-tab 전환 핸들러 제거 — 단일 모드 사용)
 
@@ -2477,7 +2478,7 @@ function bindEvents() {
       state.currentMonth = monthsAvail[0];
     }
     saveState();
-    $("#crewDialog").close();
+    closeGenericModal("crewDialog", "crewOverlay");
     renderAll();
     const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
     const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
