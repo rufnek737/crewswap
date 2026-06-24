@@ -1979,6 +1979,21 @@ async function requestSwap(postId) {
   showToast("요청을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
 }
 
+async function fetchMyPosts() {
+  if (!state.user.email) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/posts-get-mine?email=${encodeURIComponent(state.user.email)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const serverPosts = data.posts || [];
+    // 서버에 없는(구버전·ownerEmail 미포함) 로컬 전용 글은 보존, 같은 id는 서버 데이터로 갱신
+    const localOnly = state.myPosts.filter(p => !serverPosts.some(sp => sp.id === p.id));
+    state.myPosts = [...serverPosts, ...localOnly];
+    saveState();
+    renderMyPosts();
+  } catch (e) { console.warn("fetchMyPosts error:", e); }
+}
+
 async function fetchRequests() {
   if (!state.user.email) return;
   try {
@@ -2105,6 +2120,7 @@ function switchTab(name) {
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   if (name === "find") fetchPosts();
   if (name === "requests") fetchRequests();
+  if (name === "post") fetchMyPosts();
   history.replaceState(null, "", "#" + name);
 }
 

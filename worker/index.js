@@ -134,6 +134,20 @@ async function handlePostsGet(env) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* ── posts-get-mine (같은 계정이면 어느 기기에서든 내가 등록한 글 동기화) ── */
+
+async function handlePostsGetMine(request, env) {
+  const url = new URL(request.url);
+  const email = url.searchParams.get('email');
+  if (!email) return json({ error: 'email 필요' }, 400);
+  try {
+    const { keys } = await env.POSTS.list({ prefix: 'post:' });
+    const posts = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
+    const mine = posts.filter(p => p && p.ownerEmail === email && p.status === 'active');
+    return json({ posts: mine });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
 /* ── posts-create ───────────────────────────────────────────── */
 
 const POST_FIELDS = [
@@ -664,6 +678,7 @@ export default {
     if (path === '/api/send-verify')  return handleSendVerify(request, env);
     if (path === '/api/check-verify') return handleCheckVerify(request, env);
     if (path === '/api/posts-get')    return handlePostsGet(env);
+    if (path === '/api/posts-get-mine') return handlePostsGetMine(request, env);
     if (path === '/api/posts-create') return handlePostsCreate(request, env);
     if (path === '/api/posts-delete') return handlePostsDelete(request, env);
     if (path === '/api/posts-update') return handlePostsUpdate(request, env);
