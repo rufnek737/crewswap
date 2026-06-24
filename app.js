@@ -1940,8 +1940,10 @@ function renderMatches() {
       </div>
 
       <div class="card-actions">
-        <button class="secondary-button" data-action="ask" data-post="${post.id}">💬 양도 의향 묻기</button>
-        <button class="primary-button" data-action="request" data-post="${post.id}">요청하기 · 1크레딧</button>
+        ${post.contactable === false
+          ? `<div class="card-unavailable">이전 버전 글이라 요청할 수 없습니다</div>`
+          : `<button class="secondary-button" data-action="ask" data-post="${post.id}">💬 양도 의향 묻기</button>
+        <button class="primary-button" data-action="request" data-post="${post.id}">요청하기 · 1크레딧</button>`}
       </div>
     </article>`;
   }).join("");

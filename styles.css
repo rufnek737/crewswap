@@ -413,6 +413,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .meta-grid strong.urgent { color: var(--c-fail); }
 
 .card-actions { display: flex; gap: 8px; }
+.card-unavailable { flex: 1; text-align: center; padding: 10px; font-size: 12px; color: var(--muted); background: #f1f3f6; border-radius: 8px; }
 .card-actions button { flex: 1; }
 
 /* ===== 양방향 등록 폼 ===== */

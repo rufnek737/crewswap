@@ -128,6 +128,8 @@ async function handlePostsGet(env) {
       const data = await env.POSTS.get(name, { type: 'json' });
       if (!data || data.status !== 'active') return null;
       const { deleteToken, ownerEmail, ...pub } = data;
+      // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
+      pub.contactable = !!ownerEmail;
       return pub;
     }));
     return json({ posts: posts.filter(Boolean) });
