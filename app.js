@@ -2573,14 +2573,40 @@ function bindEvents() {
     });
   });
 
-  // 공항 검색 필터 (입력하는 즉시 반영)
-  const airportSearchEl = $("#airportSearchFilter");
-  if (airportSearchEl) {
-    airportSearchEl.addEventListener("input", () => {
-      state.filters.airports = parseAirportList(airportSearchEl.value);
-      renderMatches();
+  // 공항 입력칸 — 스페이스 누르면 자동으로 ", " 변환 + 대문자
+  function wireAirportInput(id, onChange) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("keydown", e => {
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        const v = el.value;
+        const start = el.selectionStart ?? v.length;
+        // 직전 문자가 비었거나 이미 쉼표/공백이면 중복 구분자 방지
+        const prev = v.slice(0, start).trimEnd();
+        if (!prev || prev.endsWith(",")) return;
+        const before = v.slice(0, start).replace(/\s*$/, "");
+        const after = v.slice(start);
+        el.value = before + ", " + after.replace(/^\s*/, "");
+        const pos = before.length + 2;
+        el.setSelectionRange(pos, pos);
+        el.dispatchEvent(new Event("input"));
+      }
+    });
+    el.addEventListener("input", () => {
+      const pos = el.selectionStart;
+      const upper = el.value.toUpperCase();
+      if (upper !== el.value) { el.value = upper; el.setSelectionRange(pos, pos); }
+      if (onChange) onChange();
     });
   }
+  wireAirportInput("includedAirports");
+  wireAirportInput("excludedAirports");
+  wireAirportInput("airportSearchFilter", () => {
+    const el = document.getElementById("airportSearchFilter");
+    state.filters.airports = parseAirportList(el.value);
+    renderMatches();
+  });
 
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
