@@ -497,6 +497,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .credit-balance { font-size: 24px; font-weight: 800; margin: 8px 0 12px; }
 .credit-balance strong { color: var(--primary); font-size: 32px; }
 .beta-credit-notice { display: inline-block; padding: 6px 14px; border-radius: 20px; background: #fff5f4; border: 1px solid var(--primary); color: var(--primary); font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+.refund-note { padding: 10px 12px; margin-bottom: 12px; background: var(--blue-soft); border: 1px solid #c8d6ef; border-radius: 8px; font-size: 12px; color: #1d3a7a; line-height: 1.5; }
 
 /* ===== 하단 탭 — 스크롤 영역 밖 구조적 고정 (항상 화면 맨 아래) ===== */
 .bottom-tabs {
