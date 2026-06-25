@@ -360,16 +360,12 @@ function createMockSavedSearches() {
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-// iOS 핀치 줌 / 더블탭 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
+// iOS 핀치 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
+// 더블탭 줌은 CSS touch-action: manipulation 으로 처리 — JS touchend 차단은
+// 빠른 연속 탭의 클릭까지 취소해 칩 선택이 씹히므로 사용하지 않음
 ["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
   document.addEventListener(evt, e => e.preventDefault(), { passive: false })
 );
-let _lastTouchEnd = 0;
-document.addEventListener("touchend", e => {
-  const now = Date.now();
-  if (now - _lastTouchEnd <= 300) e.preventDefault(); // 더블탭 줌 차단
-  _lastTouchEnd = now;
-}, { passive: false });
 
 // 공항 코드 입력 — 쉼표/공백 어느 쪽으로 구분해도 인식 (예: "CXR BKI" 또는 "CXR, BKI")
 function parseAirportList(str) {
