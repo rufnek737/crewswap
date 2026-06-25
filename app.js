@@ -2081,7 +2081,17 @@ async function fetchRequests() {
     state.requests.sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
     state.requests.received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
     renderRequests();
+    renderReqTabBadge();
   } catch (e) { console.warn("fetchRequests error:", e); }
+}
+
+// 받은 요청 중 아직 수락 안 한(대기) 건수를 요청함 탭에 배지로 표시
+function renderReqTabBadge() {
+  const badge = document.getElementById("reqTabBadge");
+  if (!badge) return;
+  const pending = (state.requests.received || []).filter(r => (r.stage || 1) < 3).length;
+  if (pending > 0) { badge.textContent = pending; badge.hidden = false; }
+  else { badge.hidden = true; }
 }
 
 function renderSavedSearches() {
@@ -2416,6 +2426,9 @@ function bindEvents() {
     }
     state.user.email    = _verifyEmail;   // 인증된 이메일 저장
     state.user.hasSignedUp = true;
+    // 가입 시 데모용 가짜 스케줄 제거 — 본인 CrewConnex를 불러와야 함
+    state.schedules = [];
+    state.selectedDays.clear();
     // 프로필 폼 동기화 (crewType 포함)
     $("#nicknameInput").value = state.user.nickname;
     const crewTypeInputEl = document.getElementById("crewTypeInput");
@@ -2433,7 +2446,7 @@ function bindEvents() {
     closeSignupModal();
     saveState();
     renderAll();
-    showToast("가입 완료 · 무료 크레딧 5장 지급. Welcome to CrewSwap!");
+    showToast("가입 완료 · 크레딧 5장 지급! '📥 CrewConnex 불러오기'로 내 스케줄을 가져오세요.");
   });
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
@@ -3250,6 +3263,7 @@ renderAll();
 bindEvents();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
+fetchRequests(); // 받은 요청 배지 표시용 미리 로드
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)

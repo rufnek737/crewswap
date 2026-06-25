@@ -507,7 +507,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
   border: 0; border-top: 1px solid var(--line); border-radius: 0;
   background: var(--panel); box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
 }
-.tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: hidden; }
+.tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: visible; position: relative; }
+.tab-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 10px; font-weight: 800; vertical-align: top; }
 .tab.is-active { background: #243449; color: #fff; }
 
 /* ===== 알림 패널 ===== */
