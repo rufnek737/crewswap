@@ -2426,7 +2426,7 @@ function bindEvents() {
   // (import-tab 전환 핸들러 제거 — 단일 모드 사용)
 
   // Enter 키로 로그인 트리거 (form method="dialog" 가 Enter 로 닫히는 문제 방지)
-  ["ccUsername", "ccPassword", "ccUserName"].forEach(id => {
+  ["ccUsername", "ccPassword"].forEach(id => {
     const el = $("#" + id);
     if (el) el.addEventListener("keydown", e => {
       if (e.key === "Enter") { e.preventDefault(); $("#ccLoginButton").click(); }
@@ -2437,7 +2437,7 @@ function bindEvents() {
   $("#ccLoginButton").addEventListener("click", async () => {
     const username = ($("#ccUsername").value || "").trim();
     const password = $("#ccPassword").value || "";
-    const userName = ($("#ccUserName").value || "").trim();
+    const userName = username; // CrewConnex ID = 본인 이름 (편조 자기 제외용)
     const status = $("#ccLoginStatus");
     if (!username || !password) {
       status.style.color = "var(--c-fail)";
