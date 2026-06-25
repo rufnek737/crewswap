@@ -2103,6 +2103,7 @@ function renderSavedSearches() {
 function renderRequests() {
   const reqs = state.requests[state.reqViewMode];
   $("#requestList").innerHTML = reqs.length ? reqs.map(r => requestCard(r)).join("") : `<div class="empty-state">${state.reqViewMode==="sent"?"보낸":"받은"} 요청이 없습니다.</div>`;
+  $$("#requestList .accept-req-btn").forEach(b => b.onclick = () => acceptRequest(b.dataset.reqId));
 }
 
 function requestCard(r) {
@@ -2159,8 +2160,27 @@ function requestCard(r) {
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
+      ${(state.reqViewMode === "received" && r.type !== "ask" && !accepted)
+        ? `<button class="primary-button accept-req-btn" data-req-id="${r.id}" style="width:100%;margin-top:12px;">✓ 상호 수락하기</button>`
+        : ""}
     </article>
   `;
+}
+
+async function acceptRequest(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "수락 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("수락 실패 — 네트워크 오류"); return; }
+  recordSwapMatch();
+  showToast("상호 수락 완료 — 회사 상신 단계로 진행하세요.");
+  fetchRequests();
 }
 
 function renderAlerts() {

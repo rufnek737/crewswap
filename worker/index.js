@@ -231,6 +231,24 @@ async function handleRequestsCreate(request, env) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
+
+async function handleRequestsAccept(request, env) {
+  let id, email;
+  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
+    if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403); // 받은 사람만 수락 가능
+    rec.stage = 3;               // 상호 수락 → 회사 상신 단계
+    rec.status = '상호 수락 — 회사 상신 필요';
+    rec.acceptedAt = new Date().toISOString();
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
 /* ── requests-get (보낸/받은 요청 조회) ───────────────────────── */
 
 async function handleRequestsGet(request, env) {
@@ -686,6 +704,7 @@ export default {
     if (path === '/api/posts-update') return handlePostsUpdate(request, env);
     if (path === '/api/requests-create') return handleRequestsCreate(request, env);
     if (path === '/api/requests-get')    return handleRequestsGet(request, env);
+    if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });
   },
