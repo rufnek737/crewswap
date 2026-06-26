@@ -29,18 +29,21 @@
         <div class="brand">
           <div class="brand-mark">C</div>
           <div>
-            <strong>CrewSwap</strong>
-            <span>승무원 스케줄 스왑 매칭 · 기획 v2</span>
+            <strong id="headerNick">CrewSwap</strong>
+            <span id="headerSub">제주항공 · 조종사</span>
           </div>
         </div>
         <div class="status-strip">
-          <span id="airlineBadge" class="airline-pill">제주항공·조종사</span>
-          <span id="roleBadge">B등급 부기장</span>
-          <span id="aircraftBadge">NG + MAX</span>
-          <span id="qualBadge">EDTO / CAT III</span>
-          <span id="baseBadge">GMP</span>
-          <span class="rating-pill" id="ratingBadge">★ 4.8</span>
-          <span><b id="creditCount">5</b> 크레딧</span>
+          <!-- 자격 뱃지는 '내 정보'에서 관리 — 헤더에선 숨김(요소는 JS용으로 유지) -->
+          <div class="header-quals" hidden>
+            <span id="airlineBadge" class="airline-pill">제주항공·조종사</span>
+            <span id="roleBadge">B등급 부기장</span>
+            <span id="aircraftBadge">NG + MAX</span>
+            <span id="qualBadge">EDTO / CAT III</span>
+            <span id="baseBadge">GMP</span>
+            <span class="rating-pill" id="ratingBadge">★ 4.8</span>
+          </div>
+          <span class="credit-pill"><b id="creditCount">5</b> 크레딧</span>
           <button id="bellButton" class="bell-button" aria-label="알림">
             🔔<span class="bell-badge" id="bellBadge">3</span>
           </button>
@@ -171,8 +174,14 @@
           </div>
         </div>
 
-        <!-- 누적 진행바 -->
-        <div class="metrics-strip">
+        <!-- 요약 바: 평소엔 정상, 룰 경고가 있을 때만 강조 -->
+        <button type="button" id="metricsSummary" class="metrics-summary" aria-expanded="false">
+          <span id="metricsSummaryText">이번 달 정상</span>
+          <span class="metrics-summary-toggle">자세히 <span id="metricsChevron">▾</span></span>
+        </button>
+
+        <!-- 누적 진행바 (기본 접힘) -->
+        <div class="metrics-strip" id="metricsStrip" hidden>
           <div class="metric">
             <span class="metric-label">월 승무시간</span>
             <div class="metric-bar"><div id="hoursBar" class="metric-fill"></div></div>

@@ -1341,6 +1341,12 @@ function updateBadges() {
   }
   $("#baseBadge").textContent = state.user.base;
   $("#ratingBadge").textContent = `★ ${state.user.rating.toFixed(1)}`;
+  // 헤더 상단: 닉네임 + 소속 한 줄
+  const nickEl = $("#headerNick");
+  if (nickEl) nickEl.textContent = `${state.user.nickname || "CrewSwap"} 님`;
+  const subEl = $("#headerSub");
+  const roleLbl = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
+  if (subEl) subEl.textContent = `${airlineLbl} · ${roleLbl} · ${state.user.base}`;
 }
 
 function renderCredits() {
@@ -1394,6 +1400,23 @@ function renderMetrics() {
   } else {
     $("#nextDeadline").textContent = "임박 마감 없음";
     $("#nextDeadline").className = "deadline-text calm";
+  }
+
+  // 요약 바: 경고가 있을 때만 빨갛게, 없으면 정상
+  const warns = [];
+  if (c.maxConsec >= consecLimit) warns.push(`연속근무 ${c.maxConsec}일`);
+  if (upcoming && upcoming.dd.days <= 1) warns.push(`마감 D-${upcoming.dd.days}`);
+  if (hPct >= 95) warns.push("승무시간 한도 임박");
+  const sumEl = $("#metricsSummary");
+  const sumTxt = $("#metricsSummaryText");
+  if (sumEl && sumTxt) {
+    if (warns.length) {
+      sumEl.classList.add("has-warn");
+      sumTxt.textContent = "⚠ " + warns.join(" · ");
+    } else {
+      sumEl.classList.remove("has-warn");
+      sumTxt.textContent = "이번 달 정상";
+    }
   }
 }
 
@@ -2450,6 +2473,18 @@ function bindEvents() {
   });
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
+
+  // 메트릭 요약 바 → 상세 펼치기/접기
+  $("#metricsSummary")?.addEventListener("click", () => {
+    const strip = document.getElementById("metricsStrip");
+    const chev = document.getElementById("metricsChevron");
+    const btn = document.getElementById("metricsSummary");
+    if (!strip) return;
+    const show = strip.hidden;
+    strip.hidden = !show;
+    if (chev) chev.textContent = show ? "▴" : "▾";
+    if (btn) btn.setAttribute("aria-expanded", show ? "true" : "false");
+  });
   $("#crewCloseButton")?.addEventListener("click", () => closeGenericModal("crewDialog", "crewOverlay"));
 
   // (import-tab 전환 핸들러 제거 — 단일 모드 사용)

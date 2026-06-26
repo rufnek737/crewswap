@@ -77,7 +77,10 @@ button { cursor: pointer; }
 .brand span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
 
 .status-strip { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.status-strip span { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; }
+.status-strip > span, .status-strip .credit-pill { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 12px; font-weight: 600; }
+.credit-pill { color: var(--text); }
+.credit-pill b { color: var(--primary); margin-right: 3px; }
+.header-quals { display: none; }
 .status-strip .rating-pill { color: #b07a00; background: var(--yellow-soft); border-color: #e8d27a; }
 .status-strip .airline-pill { color: #fff; background: var(--primary); border-color: var(--primary-dark); font-weight: 700; }
 
@@ -200,6 +203,17 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .metric-fill.danger { background: linear-gradient(90deg, #e87264, #c43a2a); }
 .deadline-text { color: var(--c-fail); }
 .deadline-text.calm { color: var(--text); }
+
+/* 메트릭 요약 바 (평소 정상 / 경고 시 강조) */
+.metrics-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; margin-bottom: 12px; padding: 12px 14px;
+  border: 1px solid var(--green-soft); border-radius: 10px;
+  background: var(--green-soft); color: var(--green);
+  font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.metrics-summary.has-warn { background: #fdecea; border-color: #f0b8b2; color: var(--c-fail); }
+.metrics-summary-toggle { font-size: 12px; font-weight: 600; opacity: 0.85; white-space: nowrap; }
 
 /* ===== 달력 ===== */
 .schedule-layout, .post-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; }
