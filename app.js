@@ -380,8 +380,12 @@ function showToast(msg) {
   showToast.timer = setTimeout(() => t.classList.remove("is-visible"), 2800);
 }
 
-function dayToDate(day) {
-  return new Date(`${state.currentMonth}-${String(day).padStart(2,"0")}T00:00:00`);
+function dayToDate(day, month) {
+  return new Date(`${month || state.currentMonth}-${String(day).padStart(2,"0")}T00:00:00`);
+}
+// 스케줄 객체의 월 숫자 (크로스월 표시용) — s.month "2026-06" → 6
+function schedMonthNum(s) {
+  return parseInt((s && s.month || state.currentMonth).split("-")[1], 10);
 }
 // 스케줄의 월이 현재 보고있는 달과 일치하는지
 function scheduleInCurrentMonth(s) {
@@ -867,12 +871,12 @@ function calcCumulative() {
   return { totalHours: totalMin / 60, maxConsec, warnDays };
 }
 
-function dDayInfo(day) {
+function dDayInfo(day, month) {
   // 마감: 패턴 시작일 기준 영업일 역산 (조종사 D-2 17시 / 객실 D-3)
   const rules = currentRules();
   const bDays = (rules.deadline && rules.deadline.businessDays) || 2;
   const deadlineHour = (rules.deadline && rules.deadline.hour) || 17;
-  const start = dayToDate(day);
+  const start = dayToDate(day, month);
   const deadline = addBusinessDays(start, -bDays);
   deadline.setHours(deadlineHour, 0, 0, 0);
   const diffMs = deadline - today();
@@ -924,7 +928,7 @@ function userQualOK(s) {
 function checkRulesCabin(ss, rules) {
   const cum = calcCumulative();
   const firstDay = ss[0].day;
-  const dd = dDayInfo(firstDay);
+  const dd = dDayInfo(firstDay, ss[0].month);
   const hasLocked = ss.some(s => s.lockReason);
   const blockedHoliday = ss.some(s => isHoliday(s.day));
 
@@ -1057,7 +1061,7 @@ function checkRulesForSelection() {
 
   const cum = calcCumulative();
   const firstDay = ss[0].day;
-  const dd = dDayInfo(firstDay);
+  const dd = dDayInfo(firstDay, ss[0].month);
 
   const totalFlightMin = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
   const monthAfter = cum.totalHours; // 단순화: 선택분 포함 합계
@@ -1132,7 +1136,7 @@ function matchScore(post) {
 
   // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
   if (state.user.crewType === "CABIN") {
-    const dd = dDayInfo(post.deadlineDay);
+    const dd = dDayInfo(post.deadlineDay, post.deadlineMonth);
     const breakdown = {
       roleMatch: 30,
       aircraftMatch: 20,
@@ -1168,7 +1172,7 @@ function matchScore(post) {
     ratingBonus: post.ownerRating >= 4.5 ? 5 : 0,
   };
   // 마감 임박 시 가중치
-  const dd = dDayInfo(post.deadlineDay);
+  const dd = dDayInfo(post.deadlineDay, post.deadlineMonth);
   if (!dd.expired) {
     if (dd.days <= 1) breakdown.deadlineUrgency = 10;
     else if (dd.days <= 3) breakdown.deadlineUrgency = 6;
@@ -1390,11 +1394,11 @@ function renderMetrics() {
 
   // 다음 마감 (이번 주 내 가장 가까운 패턴 시작일)
   const upcoming = state.schedules.filter(s => s.type !== "OFF" && !s.lockReason)
-    .map(s => ({ day:s.day, dd:dDayInfo(s.day) }))
+    .map(s => ({ day:s.day, mon:s.month, dd:dDayInfo(s.day, s.month) }))
     .filter(x => !x.dd.expired && x.dd.days <= 7)
     .sort((a,b) => a.dd.days - b.dd.days)[0];
   if (upcoming) {
-    const monthNum = parseInt(state.currentMonth.split("-")[1]);
+    const monthNum = parseInt((upcoming.mon || state.currentMonth).split("-")[1]);
     $("#nextDeadline").textContent = `${monthNum}/${upcoming.day} 마감 D-${upcoming.dd.days} ${upcoming.dd.hours}h`;
     $("#nextDeadline").className = "deadline-text" + (upcoming.dd.days >= 3 ? " calm" : "");
   } else {
@@ -1535,13 +1539,13 @@ function renderSelection() {
   }
   const totalBlockMin = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
   const totalDutyMin = ss.reduce((sum, s) => sum + dutyMinutesOf(s), 0);
-  const dd = dDayInfo(ss[0].day);
-  const ddText = dd.expired ? "마감 지남" : `D-${dd.days} ${dd.hours}h`;
+  const dd = dDayInfo(ss[0].day, ss[0].month);
+  const ddText = dd.expired ? "지남" : `D-${dd.days} ${dd.hours}h`;
 
   $("#selectedSummary").className = "";
   $("#selectedSummary").innerHTML = `
     <div class="pattern-summary">
-      <strong>${parseInt(state.currentMonth.split("-")[1])}/${ss[0].day}~${parseInt(state.currentMonth.split("-")[1])}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
+      <strong>${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
       <div class="meta">
         <span>승무(BLH) <b>${formatHM(totalBlockMin)}</b></span>
         <span>근무 <b>${formatHM(totalDutyMin)}</b></span>
@@ -1554,7 +1558,7 @@ function renderSelection() {
         const pair = crewPairingCheck(s);
         return `
         <div class="selected-item">
-          <strong>${parseInt(state.currentMonth.split("-")[1])}/${s.day} · ${s.title}</strong>
+          <strong>${schedMonthNum(s)}/${s.day} · ${s.title}</strong>
           <dl>
             <div><dt>유형</dt><dd>${s.type}${s.routeSummary ? ` · ${s.routeSummary}${s.legs?` (${s.legs}leg)`:""}` : s.dep ? ` · ${s.dep}-${s.arr}` : s.layoverAirport ? ` · ${s.layoverAirport}` : ""}</dd></div>
             ${s.reportTime ? `<div><dt>check in</dt><dd>${s.reportTime}</dd></div>` : ""}
@@ -1696,7 +1700,7 @@ function syncOfferedSlot() {
     const routes = ss.map(s => s.routeSummary || (s.dep&&s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : s.type)).join(" · ");
     const totalLegs = ss.reduce((sum, s) => sum + (s.legs || (s.dep && s.arr ? 1 : 0)), 0);
     slot.innerHTML = `
-      <strong>${parseInt(state.currentMonth.split("-")[1])}/${ss[0].day}~${parseInt(state.currentMonth.split("-")[1])}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
+      <strong>${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
       <div>${ss.map(s => s.title).join(" · ")}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">${routes}</div>
       <div class="slot-meta">
@@ -2070,7 +2074,7 @@ function processExpiredRefunds() {
   let refundTotal = 0, count = 0;
   state.myPosts.forEach(p => {
     if (p.refunded || p.matched || p.status === "expired") return;
-    const dd = dDayInfo(p.deadlineDay);
+    const dd = dDayInfo(p.deadlineDay, p.deadlineMonth);
     if (dd.expired) {
       const refund = (p.creditSpent || 1) * 0.5;
       state.credits += refund;
@@ -2787,6 +2791,7 @@ function bindEvents() {
         ownerRating: state.user.rating || 4.5,
         ownerBase: state.user.base || "GMP",
         deadlineDay: ss[0].day,
+        deadlineMonth: ss[0].month || state.currentMonth,
         watchers: 0,
         offered: {
           patternName: `${fm}/${firstParsed.day}${keyGroup.length > 1 ? `~${fm !== lm ? lm + "/" : ""}${lastParsed.day}` : ""} · ${ss[0].type} 패턴`,
@@ -3023,7 +3028,7 @@ function renderListView() {
     const tod = parseTimeOfDay(s.reportTime);
     return `
       <div style="display:grid;grid-template-columns:60px 80px 1fr auto;gap:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;align-items:center;">
-        <strong>${parseInt(state.currentMonth.split("-")[1])}/${s.day} ${isWeekend(s.day)?"(주말)":""}</strong>
+        <strong>${schedMonthNum(s)}/${s.day} ${isWeekend(s.day)?"(주말)":""}</strong>
         <span class="lg lg-${s.type==="OFF"?"off":s.type==="국내선"?"dom":s.type==="국제선"?"intl":s.type==="LAYOV"?"lay":s.type==="RSV"?"rsv":"stby"}">${s.type}</span>
         <div>
           <strong>${s.title}</strong>
