@@ -2223,8 +2223,13 @@ function renderAlerts() {
 
 /* ====== 9. 이벤트 ====== */
 function switchTab(name) {
-  $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === name));
+  // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
+  const SWAP_VIEWS = ["find", "post"];
+  const bottomActive = SWAP_VIEWS.includes(name) ? "find" : name;
+  $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
+  // 스왑하기 서브탭 상태 동기화
+  $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
   if (name === "find") fetchPosts();
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
@@ -2268,6 +2273,10 @@ function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId, 
 
 function bindEvents() {
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  // 스왑하기 서브탭 (바꿀 근무 찾기 / 스왑 요청 올리기)
+  $$(".swap-subtab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.swaptab)));
+  // 스왑 찾기 새로고침
+  $("#refreshFindBtn")?.addEventListener("click", () => { fetchPosts(); showToast("최신 글을 불러왔습니다."); });
 
   // 직군 변경 → 직책 옵션 동적 전환 (가입 팝업 + 프로필 탭)
   const signupCT = $("#signupCrewType");
@@ -3222,14 +3231,14 @@ function syncFormsFromState() {
 /* ====== 언어 토글 (KO ↔ EN) — 핵심 라벨만 ====== */
 const I18N = {
   KO: {
-    "탭.스케줄":"📅 내 스케줄","탭.찾기":"🔍 스왑 찾기","탭.등록":"➕ 스왑 등록","탭.요청함":"📨 요청함","탭.정보":"👤 내 정보",
+    "탭.스케줄":"📅 내 근무","탭.찾기":"🔄 스왑하기","탭.등록":"➕ 스왑하기","탭.요청함":"📨 요청함","탭.정보":"👤 내 정보",
     "버튼.불러오기":"📥 CrewConnex 불러오기","버튼.삭제":"데이터 삭제",
-    "월":"월","주":"주","리스트":"리스트","제목.내스케줄":"내 스케줄","제목.스왑찾기":"스왑 찾기","제목.스왑등록":"스왑 등록","제목.요청함":"요청함","제목.내정보":"내 정보",
+    "월":"월","주":"주","리스트":"리스트","제목.내스케줄":"내 근무","제목.스왑찾기":"바꿀 근무 찾기","제목.스왑등록":"스왑 요청 올리기","제목.요청함":"요청함","제목.내정보":"내 정보",
   },
   EN: {
-    "탭.스케줄":"📅 My Schedule","탭.찾기":"🔍 Find Swap","탭.등록":"➕ Post Swap","탭.요청함":"📨 Requests","탭.정보":"👤 Profile",
+    "탭.스케줄":"📅 My Roster","탭.찾기":"🔄 Swap","탭.등록":"➕ Swap","탭.요청함":"📨 Requests","탭.정보":"👤 Profile",
     "버튼.불러오기":"📥 Import from CrewConnex","버튼.삭제":"Clear data",
-    "월":"Month","주":"Week","리스트":"List","제목.내스케줄":"My Schedule","제목.스왑찾기":"Find Swap","제목.스왑등록":"Post Swap","제목.요청함":"Requests","제목.내정보":"Profile",
+    "월":"Month","주":"Week","리스트":"List","제목.내스케줄":"My Roster","제목.스왑찾기":"Find a swap","제목.스왑등록":"Post a request","제목.요청함":"Requests","제목.내정보":"Profile",
   }
 };
 state.lang = localStorage.getItem("jjswap_lang") || "KO";

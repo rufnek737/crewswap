@@ -88,6 +88,13 @@ button { cursor: pointer; }
 .bell-badge { position: absolute; top: -7px; right: -16px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--bg); pointer-events: none; white-space: nowrap; }
 
 .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.find-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#refreshFindBtn { white-space: nowrap; }
+
+/* 스왑하기 서브탭 (찾기 / 요청 올리기) */
+.swap-subtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.swap-subtab { padding: 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-weight: 700; font-size: 14px; cursor: pointer; }
+.swap-subtab.is-active { background: var(--primary); color: #fff; }
 .section-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 h1, h2, h3, h4, p { margin-top: 0; }
@@ -520,7 +527,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 /* ===== 하단 탭 — 스크롤 영역 밖 구조적 고정 (항상 화면 맨 아래) ===== */
 .bottom-tabs {
   flex: 0 0 auto;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   width: 100%; margin: 0; padding: 6px 4px max(6px, env(safe-area-inset-bottom));
   border: 0; border-top: 1px solid var(--line); border-radius: 0;
   background: var(--panel); box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
