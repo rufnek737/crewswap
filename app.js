@@ -59,7 +59,7 @@ const AIRPORT_REGION = {
 const SPECIAL_AIRPORTS = ["CXR","TAG","BKI"];
 
 const PILL_CLASS = {
-  "OFF":"pill-off", "국내선":"pill-dom", "국제선":"pill-intl",
+  "OFF":"pill-off", "VAC":"pill-off", "국내선":"pill-dom", "국제선":"pill-intl",
   "LAYOV":"pill-lay", "RSV":"pill-rsv", "STBY":"pill-stby", "PICK UP":"pill-pickup",
   "ARRIVAL":"pill-arrival",
 };
@@ -730,7 +730,7 @@ function fillLayoverGaps(schedules) {
 /* ====== 5c. 파싱 미리보기 / 편집 ====== */
 let previewSchedules = [];
 
-const TYPE_OPTIONS = ["OFF","국내선","국제선","LAYOV","RSV","STBY","PICK UP","ARRIVAL","UNKNOWN"];
+const TYPE_OPTIONS = ["OFF","VAC","국내선","국제선","LAYOV","RSV","STBY","PICK UP","ARRIVAL","UNKNOWN"];
 const GRADE_OPTIONS = ["","A","B","C"];
 
 function openImportDialog() {

@@ -367,6 +367,8 @@ const HOME_BASES = new Set(['GMP','ICN','PUS','CJU']);
 const CAPT_CODES = /^(C|H|L|K|2C|2NC|C1|C2|PC|NC|3PC|3NC)$/i;
 const FO_CODES = /^(F|2F|2NF|F1|F2|3F)$/i;
 const STBY_CODES = /^S[AB]\d*$/i;
+// 휴가 코드: VAC, VA, V/L, AL, ANL, A/L, 연차, 휴가, 월차, 경조, LVE 등 (연속근무 계산 제외)
+const VAC_CODES = /(^|\b)(VAC\w*|VA|V\/?L|A\/?L|ANL|LVE|LEAVE|연차|휴가|월차|경조|병가|공가)(\b|$)/i;
 
 function parseRosterToSchedules(html, userNameHint) {
   const tableHtml = findRosterTable(html);
@@ -397,6 +399,7 @@ function parseRosterToSchedules(html, userNameHint) {
     if (STBY_CODES.test(activity) || STBY_CODES.test(pairing) || /STBY/i.test(activity + ' ' + pairing)) {
       type = 'STBY'; const sc = STBY_CODES.test(activity) ? activity : STBY_CODES.test(pairing) ? pairing : 'STBY'; title = `STBY ${sc}`;
     } else if (/^OFF/i.test(activity) || /^OFF/i.test(pairing)) { type = 'OFF'; title = 'OFF'; }
+    else if (VAC_CODES.test(activity) || VAC_CODES.test(pairing)) { type = 'VAC'; title = '휴가'; }
     else if (/RSV/i.test(activity + ' ' + pairing)) { type = 'RSV'; title = 'RSV'; }
     else if (/LAYOV/i.test(activity + ' ' + pairing)) {
       type = 'LAYOV'; const m = /LAYOV\s*\(?([A-Z]{3})/i.exec(activity + ' ' + pairing);
