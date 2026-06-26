@@ -1808,6 +1808,7 @@ function renderMyPosts() {
           });
         } catch (e) { console.warn("posts-delete failed:", e); }
       }
+      _deletedPostIds.add(pid);
       state.myPosts = state.myPosts.filter(x => x.id !== pid);
       state.credits += post.creditSpent;
       saveState();
@@ -2026,15 +2027,19 @@ async function requestSwap(postId) {
   showToast("요청을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
 }
 
+// 방금 취소한 글 ID — KV 최종일관성으로 목록에 잠시 남아도 다시 안 불러오게 차단 (세션 한정)
+const _deletedPostIds = new Set();
+
 async function fetchMyPosts() {
   if (!state.user.email) return;
   try {
     const res = await fetch(`${API_BASE}/api/posts-get-mine?email=${encodeURIComponent(state.user.email)}`);
     if (!res.ok) { processExpiredRefunds(); return; }
     const data = await res.json();
-    const serverPosts = data.posts || [];
+    // 방금 취소한 글은 서버 목록에 남아있어도 제외
+    const serverPosts = (data.posts || []).filter(p => !_deletedPostIds.has(p.id));
     // 서버에 없는(구버전·ownerEmail 미포함) 로컬 전용 글은 보존, 같은 id는 서버 데이터로 갱신
-    const localOnly = state.myPosts.filter(p => !serverPosts.some(sp => sp.id === p.id));
+    const localOnly = state.myPosts.filter(p => !serverPosts.some(sp => sp.id === p.id) && !_deletedPostIds.has(p.id));
     state.myPosts = [...serverPosts, ...localOnly];
     saveState();
     processExpiredRefunds();
