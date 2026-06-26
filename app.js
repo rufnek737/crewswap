@@ -387,6 +387,17 @@ function dayToDate(day, month) {
 function schedMonthNum(s) {
   return parseInt((s && s.month || state.currentMonth).split("-")[1], 10);
 }
+// 글의 마감 기준 월 — deadlineMonth 우선, 없으면 패턴 제목("7/7~9")에서 추출, 그래도 없으면 현재월
+function postDeadlineMonth(post) {
+  if (post && post.deadlineMonth) return post.deadlineMonth;
+  const name = post && post.offered && post.offered.patternName || "";
+  const m = /^\s*(\d{1,2})\//.exec(name);
+  if (m) {
+    const yr = (state.currentMonth || "2026-01").split("-")[0];
+    return `${yr}-${String(parseInt(m[1], 10)).padStart(2, "0")}`;
+  }
+  return state.currentMonth;
+}
 // 스케줄의 월이 현재 보고있는 달과 일치하는지
 function scheduleInCurrentMonth(s) {
   return (s.month || state.currentMonth) === state.currentMonth;
@@ -1136,7 +1147,7 @@ function matchScore(post) {
 
   // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
   if (state.user.crewType === "CABIN") {
-    const dd = dDayInfo(post.deadlineDay, post.deadlineMonth);
+    const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
     const breakdown = {
       roleMatch: 30,
       aircraftMatch: 20,
@@ -1172,7 +1183,7 @@ function matchScore(post) {
     ratingBonus: post.ownerRating >= 4.5 ? 5 : 0,
   };
   // 마감 임박 시 가중치
-  const dd = dDayInfo(post.deadlineDay, post.deadlineMonth);
+  const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
   if (!dd.expired) {
     if (dd.days <= 1) breakdown.deadlineUrgency = 10;
     else if (dd.days <= 3) breakdown.deadlineUrgency = 6;
@@ -2074,7 +2085,7 @@ function processExpiredRefunds() {
   let refundTotal = 0, count = 0;
   state.myPosts.forEach(p => {
     if (p.refunded || p.matched || p.status === "expired") return;
-    const dd = dDayInfo(p.deadlineDay, p.deadlineMonth);
+    const dd = dDayInfo(p.deadlineDay, postDeadlineMonth(p));
     if (dd.expired) {
       const refund = (p.creditSpent || 1) * 0.5;
       state.credits += refund;
