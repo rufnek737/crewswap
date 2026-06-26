@@ -367,8 +367,11 @@ const HOME_BASES = new Set(['GMP','ICN','PUS','CJU']);
 const CAPT_CODES = /^(C|H|L|K|2C|2NC|C1|C2|PC|NC|3PC|3NC)$/i;
 const FO_CODES = /^(F|2F|2NF|F1|F2|3F)$/i;
 const STBY_CODES = /^S[AB]\d*$/i;
-// 휴가 코드: VAC, VA, V/L, AL, ANL, A/L, 연차, 휴가, 월차, 경조, LVE 등 (연속근무 계산 제외)
-const VAC_CODES = /(^|\b)(VAC\w*|VA|V\/?L|A\/?L|ANL|LVE|LEAVE|연차|휴가|월차|경조|병가|공가)(\b|$)/i;
+// 휴가/비근무 코드 (CrewConnex 실제 코드): 모두 근무 아님 → 연속근무 계산 제외
+//   OV_FE(경조) OV_MAT(배우자출산) OV_MV(주거이전) OV_FLT(비행휴직) OVSICK(공상)
+//   OVAC(공무/장기근속) UV_ML(여성보건) VAC(연차) VASICK(연차소진병가) VO(연차/OFF)
+//   + 한글 키워드 fallback
+const VAC_CODES = /^(OV|UV|VA|VO)([_A-Z0-9]|$)|연차|휴가|경조|병가|공가|공상|휴직|보건|출산|환갑|고희|주거이전/i;
 
 function parseRosterToSchedules(html, userNameHint) {
   const tableHtml = findRosterTable(html);
