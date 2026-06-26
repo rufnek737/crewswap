@@ -2071,6 +2071,7 @@ function processExpiredRefunds() {
   }
 }
 
+let _seenReceivedIds = null; // 첫 로드 후부터 "새로 온 요청" 감지
 async function fetchRequests() {
   if (!state.user.email) return;
   try {
@@ -2083,11 +2084,42 @@ async function fetchRequests() {
       if (mins < 60) return `${mins}분 전`;
       return `${Math.round(mins / 60)}시간 전`;
     };
+    const received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
     state.requests.sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
-    state.requests.received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
+    // 새로 도착한 받은 요청 → 종 알림 + 토스트 (첫 로드는 기준선만 설정)
+    if (_seenReceivedIds === null) {
+      _seenReceivedIds = new Set(received.map(r => r.id));
+    } else {
+      received.forEach(r => {
+        if (!_seenReceivedIds.has(r.id)) {
+          _seenReceivedIds.add(r.id);
+          const isAsk = r.type === "ask";
+          state.alerts.unshift({
+            kind: "match",
+            title: isAsk ? "💬 양도 의향 문의 도착" : "📩 스왑 요청 도착",
+            body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
+            time: "방금",
+          });
+          showToast(`${isAsk ? "💬 의향 문의" : "📩 스왑 요청"} 도착 — ${r.fromNick || "상대"} 님`);
+        }
+      });
+      saveState();
+      renderAlerts();
+    }
+    state.requests.received = received;
     renderRequests();
     renderReqTabBadge();
   } catch (e) { console.warn("fetchRequests error:", e); }
+}
+
+// 앱 켜져 있는 동안 주기적으로 새 요청/글 확인 (가벼운 폴링)
+let _pollTimer = null;
+function startRequestPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(() => {
+    if (document.hidden || !state.user.email) return; // 백그라운드면 스킵
+    fetchRequests();
+  }, 25000);
 }
 
 // 받은 요청 중 아직 수락 안 한(대기) 건수를 요청함 탭에 배지로 표시
@@ -3277,6 +3309,7 @@ bindEvents();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
+startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
