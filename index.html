@@ -165,12 +165,7 @@
             <h2>내 스케줄</h2>
           </div>
           <div class="actions">
-            <div class="view-toggle">
-              <button class="is-active" data-view="month">월</button>
-              <button data-view="week">주</button>
-              <button data-view="list">리스트</button>
-            </div>
-            <button id="importScheduleButton" class="primary-button">📥 CrewConnex 자동로그인</button>
+            <button id="importScheduleButton" class="primary-button">📥 CrewConnex 불러오기</button>
           </div>
         </div>
 
@@ -210,7 +205,6 @@
                 <button type="button" class="month-nav-btn" id="prevMonthBtn" aria-label="이전 달">‹</button>
                 <div>
                   <strong id="calendarMonthLabel">2026년 6월</strong>
-                  <span>패턴은 가로 색띠로 묶임 · 셀 색상 = 스케줄 유형</span>
                 </div>
                 <button type="button" class="month-nav-btn" id="nextMonthBtn" aria-label="다음 달">›</button>
               </div>
@@ -246,9 +240,8 @@
             <h2>스왑 찾기</h2>
           </div>
           <select id="sortSelect" aria-label="정렬 기준">
-            <option value="score">매칭 점수 높은 순</option>
-            <option value="deadline">마감 임박순 (D-2 17시)</option>
-            <option value="newest">새로 올라온 순</option>
+            <option value="newest" selected>새로 올라온 순</option>
+            <option value="deadline">마감 임박순</option>
             <option value="off">OFF 포함 우선</option>
             <option value="base">같은 베이스 우선</option>
             <option value="flightShort">비행시간 적은 순</option>
@@ -371,41 +364,21 @@
 
           <div class="swap-arrow" aria-hidden="true">⇄</div>
 
-          <!-- 오른쪽: 내가 원하는 것 -->
+          <!-- 오른쪽: 내가 원하는 것 (자유 입력) -->
           <div class="form-side">
             <div class="side-head">
               <span class="side-num">②</span>
               <h3>내가 원하는 것</h3>
             </div>
-            <label>유형 (복수 선택)
-              <div id="wantedTypeChips" class="chip-row chip-multi"></div>
+            <label>희망 조건 <small style="font-weight:normal;color:var(--muted);">(상대에게 그대로 보여집니다)</small>
+              <textarea id="postMemo" rows="6" placeholder="예) 오후 출발 국내선 원해요 / CJU·KIX 선호, CXR 제외 / 7월 셋째 주 OFF면 더 좋아요 / 새벽 도착은 피하고 싶어요"></textarea>
             </label>
-            <label>날짜 유연성 <small style="font-weight:normal;color:var(--text-muted);">(원하는 스왑 날짜 범위)</small>
-              <select id="wantedDateFlex">
-                <option value="sameDay" selected>선택 날짜와 동일</option>
-                <option value="any">날짜 무관</option>
-                <option value="weekend">주말 우선</option>
-              </select>
-            </label>
-            <label>시간대 선호
-              <div id="wantedTimeChips" class="chip-row chip-multi">
-                <button data-time="AM">오전</button>
-                <button data-time="PM">오후</button>
-                <button data-time="NIGHT">야간</button>
-                <button data-time="noEarlyArr">새벽 도착 제외</button>
-              </div>
-            </label>
-            <label>선호 공항 <input id="includedAirports" placeholder="예: CJU, KIX (쉼표 구분)" /></label>
-            <label>제외 공항 <input id="excludedAirports" placeholder="예: CXR, BKI, TAG" /></label>
-            <label>공개 메모 <textarea id="postMemo" rows="3" placeholder="상대에게 보일 추가 희망 조건"></textarea></label>
           </div>
         </div>
 
         <!-- 등록 전 요약 -->
         <div class="post-footer">
           <div class="preview-stats" id="previewStats">
-            <div class="stat-cell"><span>예상 노출</span><strong id="exposureCount">-</strong><small>같은 등급·자격 사용자</small></div>
-            <div class="stat-cell"><span>현재 매칭 후보</span><strong id="candidateCount">-</strong><small>역방향 검색 기준</small></div>
             <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>또는 광고 1회</small></div>
           </div>
           <div class="rule-check-summary" id="postRuleCheck"></div>

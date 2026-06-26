@@ -162,7 +162,7 @@ const state = {
   alertFilter: "all",
   savedSearches: [],
   filters: { direction:"all", types:[], date:"all", time:"all", arrTime:"all", region:"all", layover:"all", airports:[] },
-  sortBy: "score",
+  sortBy: "newest",
   wantedTypes: new Set(["OFF"]),
   wantedTimes: new Set(),
   user: {
@@ -361,11 +361,21 @@ const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 // iOS 핀치 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
-// 더블탭 줌은 CSS touch-action: manipulation 으로 처리 — JS touchend 차단은
-// 빠른 연속 탭의 클릭까지 취소해 칩 선택이 씹히므로 사용하지 않음
 ["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
   document.addEventListener(evt, e => e.preventDefault(), { passive: false })
 );
+// 더블탭 줌 차단 — "같은 자리에서 빠른 두번째 탭"만 막음
+// (다른 칩을 빠르게 연속 탭하는 건 거리가 멀어서 안 막힘 → 칩 선택 정상)
+let _lastTapInfo = { t: 0, x: 0, y: 0 };
+document.addEventListener("touchend", e => {
+  const tch = e.changedTouches && e.changedTouches[0];
+  if (!tch) return;
+  const now = Date.now();
+  const dt = now - _lastTapInfo.t;
+  const dist = Math.hypot(tch.clientX - _lastTapInfo.x, tch.clientY - _lastTapInfo.y);
+  if (dt > 0 && dt < 320 && dist < 40) e.preventDefault(); // 더블탭 줌 제스처
+  _lastTapInfo = { t: now, x: tch.clientX, y: tch.clientY };
+}, { passive: false });
 
 // 공항 코드 입력 — 쉼표/공백 어느 쪽으로 구분해도 인식 (예: "CXR BKI" 또는 "CXR, BKI")
 function parseAirportList(str) {
@@ -1726,6 +1736,17 @@ function syncOfferedSlot() {
   renderPostFooter();
 }
 
+// 희망 조건 표시 — 새 방식(memo) 우선, 구버전(구조화 필드) 호환
+function wantedSummary(w) {
+  if (!w) return "";
+  if (w.memo) return w.memo;
+  const parts = [];
+  if (w.types && w.types.length) parts.push(w.types.map(wantedTypeLabel).join(" / "));
+  if (w.time && w.time.length) parts.push(w.time.join(", "));
+  if (w.excludedAirports && w.excludedAirports.length) parts.push(w.excludedAirports.join("/") + " 제외");
+  return parts.join(" · ") || "조건 없음";
+}
+
 function renderMyPosts() {
   const el = $("#myPostList");
   if (!el) return;
@@ -1749,7 +1770,6 @@ function renderMyPosts() {
       </div>
       <div class="my-post-meta">
         <span>${p.offered.type} · ${p.offered.summary || ""}</span>
-        <span>희망: ${p.wanted.types.map(wantedTypeLabel).join(" / ")}</span>
         <span class="my-post-time">${rdDisplay}</span>
       </div>
       <details class="my-post-detail">
@@ -1760,8 +1780,7 @@ function renderMyPosts() {
           ${p.offered.flightMinutes ? `<div><dt>비행시간</dt><dd>${(p.offered.flightMinutes/60).toFixed(1)}h</dd></div>` : ""}
           ${p.offered.aircraft ? `<div><dt>기종</dt><dd>${p.offered.aircraft}${p.offered.edto?" · EDTO":""}${p.offered.cat3?" · CAT III":""}</dd></div>` : ""}
           ${p.offered.crewPublic ? `<div><dt>편조</dt><dd>${p.offered.crewPublic}</dd></div>` : ""}
-          <div><dt>희망 조건</dt><dd>${p.wanted.types.map(wantedTypeLabel).join(" / ")}${p.wanted.time?.length ? ` · ${p.wanted.time.join(", ")}` : ""}${p.wanted.excludedAirports?.length ? ` · ${p.wanted.excludedAirports.join("/")} 제외` : ""}</dd></div>
-          ${p.wanted.memo ? `<div><dt>메모</dt><dd>${p.wanted.memo}</dd></div>` : ""}
+          <div><dt>희망 조건</dt><dd>${wantedSummary(p.wanted)}</dd></div>
         </dl>
       </details>
       <div class="my-post-btn-row">
@@ -1803,19 +1822,11 @@ function enterEditPostMode(postId) {
   const post = state.myPosts.find(p => p.id === postId);
   if (!post) return;
   state.editingPostId = postId;
-  state.wantedTypes = new Set(post.wanted.types || []);
-  state.wantedTimes = new Set(post.wanted.time || []);
   switchTab("post");
-  renderWantedChips();
   syncOfferedSlot();
-  const dateFlexEl = document.getElementById("wantedDateFlex");
-  if (dateFlexEl) dateFlexEl.value = post.wanted.dateFlex || "any";
-  const inc = document.getElementById("includedAirports");
-  if (inc) inc.value = (post.wanted.includedAirports || []).join(", ");
-  const exc = document.getElementById("excludedAirports");
-  if (exc) exc.value = (post.wanted.excludedAirports || []).join(", ");
   const memo = document.getElementById("postMemo");
-  if (memo) memo.value = post.wanted.memo || "";
+  // 새 글은 memo, 구버전 글은 구조화 필드를 텍스트로 변환해서 채움
+  if (memo) memo.value = post.wanted.memo || wantedSummary(post.wanted).replace("조건 없음", "");
   renderPostFooter();
 }
 
@@ -1829,9 +1840,6 @@ function renderPostFooter() {
   const editing = !!state.editingPostId;
   const ss = selectedSchedules();
   const hasOffered = editing || ss.length > 0;
-  const wantedTypeCount = state.wantedTypes.size;
-  $("#exposureCount").textContent = exposureCount();
-  $("#candidateCount").textContent = candidateCountForOffered();
 
   const submitBtn = $("#submitPostButton");
   const existingBanner = document.getElementById("editPostBanner");
@@ -1858,7 +1866,7 @@ function renderPostFooter() {
     return;
   }
   if (editing) {
-    submitBtn.disabled = wantedTypeCount === 0;
+    submitBtn.disabled = false;
     $("#saveDraftButton").disabled = true;
     $("#postRuleCheck").innerHTML = `<p class="hint">희망 조건 수정 중에는 회사 룰 재검사를 하지 않습니다.</p>`;
     return;
@@ -1866,7 +1874,7 @@ function renderPostFooter() {
   const checks = checkRulesForSelection();
   const hasFail = checks.some(c => c.status === "FAIL");
   const hasWarn = checks.some(c => c.status === "WARN");
-  const canSubmit = hasOffered && wantedTypeCount > 0 && !hasFail;
+  const canSubmit = hasOffered && !hasFail;
   submitBtn.disabled = !canSubmit || state.credits < 1;
   $("#saveDraftButton").disabled = !hasOffered;
 
@@ -1907,7 +1915,7 @@ function renderMatches() {
   }
   list.innerHTML = items.map(({post, score}) => {
     const dd = score.dDay;
-    const tone = score.total >= 80 ? "" : score.total >= 60 ? "mid" : "low";
+    const wantedTxt = wantedSummary(post.wanted);
     return `
     <article class="match-card">
       <div class="card-head">
@@ -1916,62 +1924,16 @@ function renderMatches() {
           <p>${post.offered.summary}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</p>
           <div class="badges">
             <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${post.offered.type}</span>
-            <span class="badge badge-position">Position: ${positionLabel(post.ownerRole)}</span>
+            <span class="badge badge-position">${positionLabel(post.ownerRole)}</span>
             ${post.offered.aircraft ? `<span class="badge">${post.offered.aircraft}</span>` : ""}
             ${post.offered.edto ? `<span class="badge">EDTO</span>` : ""}
             ${post.offered.cat3 ? `<span class="badge">CAT III</span>` : ""}
           </div>
         </div>
-        <div class="score-block">
-          <div class="score-num ${tone}">${score.total}</div>
-          <div class="score-bar"><div class="${tone}" style="width:${Math.min(100,score.total)}%"></div></div>
-          <span style="font-size:10px;color:var(--muted);">매칭 점수</span>
-        </div>
+        <div class="match-deadline ${dd.days<=1?"urgent":""}">${dd.expired?"마감 지남":`마감 D-${dd.days}`}</div>
       </div>
 
-      <div class="bidirectional-display">
-        <details class="give-expand">
-          <summary>
-            <div class="give-summary-row">
-              <strong>상대가 내놓음</strong>
-              <span class="give-name">${post.offered.patternName}</span>
-              <span class="expand-caret">▾</span>
-            </div>
-          </summary>
-          <dl class="offered-detail-dl">
-            <div><dt>유형</dt><dd>${post.offered.type}${post.offered.summary ? ` · ${post.offered.summary}` : ""}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</dd></div>
-            ${post.offered.reportTime ? `<div><dt>check in</dt><dd>${post.offered.reportTime}</dd></div>` : ""}
-            ${post.offered.releaseTime ? `<div><dt>check out</dt><dd>${post.offered.releaseTime}</dd></div>` : ""}
-            ${post.offered.crewPublic ? `<div><dt>편조</dt><dd>${post.offered.crewPublic}</dd></div>` : ""}
-            ${post.offered.aircraft ? `<div><dt>기종</dt><dd>${post.offered.aircraft}${post.offered.edto ? " · EDTO" : ""}${post.offered.cat3 ? " · CAT III" : ""}</dd></div>` : ""}
-          </dl>
-        </details>
-        <div class="arrow">⇄</div>
-        <div class="get">
-          <strong>상대가 원함</strong>
-          ${post.wanted.types.map(wantedTypeLabel).join(" / ")}${post.wanted.time.length ? ` · ${post.wanted.time.join(",")}` : ""}${post.wanted.excludedAirports.length ? ` · ${post.wanted.excludedAirports.join("/")} 제외` : ""}
-        </div>
-      </div>
-
-      <details class="score-breakdown">
-        <summary>매칭 근거 보기 (${score.total}점)</summary>
-        <div class="br-grid">
-          <div><span>등급 일치</span><b>+${score.breakdown.roleMatch}</b></div>
-          <div><span>기종 호환</span><b>+${score.breakdown.aircraftMatch}</b></div>
-          <div><span>자격 통과</span><b>+${score.breakdown.qualMatch}</b></div>
-          <div><span>같은 베이스</span><b>+${score.breakdown.baseBonus}</b></div>
-          <div><span>방향 변환 일치</span><b>+${score.breakdown.timeMatch}</b></div>
-          <div><span>마감 임박 가중</span><b>+${score.breakdown.deadlineUrgency}</b></div>
-          <div><span>신뢰도 보너스</span><b>+${score.breakdown.ratingBonus}</b></div>
-        </div>
-      </details>
-
-      <div class="meta-grid">
-        <div><span>상대 유형</span><strong>${ROLE_LABELS[post.ownerRole] || CABIN_ROLE_LABELS[post.ownerRole] || post.ownerRole}</strong></div>
-        <div><span>신청 마감</span><strong class="${dd.days<=1?"urgent":""}">${dd.expired?"지남":`D-${dd.days} ${dd.hours}h`}</strong></div>
-        <div><span>신뢰도</span><strong>★ ${post.ownerRating.toFixed(1)}</strong></div>
-        <div><span>관심</span><strong>👀 ${post.watchers}명</strong></div>
-      </div>
+      ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${wantedTxt}</div>` : ""}
 
       <div class="card-actions">
         ${post.contactable === false
@@ -1987,7 +1949,7 @@ function renderMatches() {
     const post = state.posts.find(x => x.id === b.dataset.post);
     const dialog = $("#askDialog");
     $("#askDialogTitle").textContent = post
-      ? `💬 ${post.offered.patternName} — 의향 묻기`
+      ? `💬 ${post.ownerNick || "상대"} 님에게 의향 묻기`
       : "💬 양도 의향 묻기";
     $("#askMessage").value = "";
     dialog._pendingPostId = b.dataset.post;
@@ -2757,14 +2719,7 @@ function bindEvents() {
       return;
     }
 
-    const wanted = {
-      types: [...state.wantedTypes],
-      time: [...state.wantedTimes],
-      dateFlex: $("#wantedDateFlex").value,
-      includedAirports: parseAirportList($("#includedAirports").value),
-      excludedAirports: parseAirportList($("#excludedAirports").value),
-      memo: $("#postMemo").value || "",
-    };
+    const wanted = { memo: ($("#postMemo").value || "").trim() };
 
     for (const keyGroup of groups) {
       const ss = keyGroup.map(key => {
@@ -2852,14 +2807,7 @@ function bindEvents() {
   async function doUpdatePost() {
     const post = state.myPosts.find(p => p.id === state.editingPostId);
     if (!post) { exitEditPostMode(); return; }
-    const wanted = {
-      types: [...state.wantedTypes],
-      time: [...state.wantedTimes],
-      dateFlex: $("#wantedDateFlex").value,
-      includedAirports: parseAirportList($("#includedAirports").value),
-      excludedAirports: parseAirportList($("#excludedAirports").value),
-      memo: $("#postMemo").value || "",
-    };
+    const wanted = { memo: ($("#postMemo").value || "").trim() };
     try {
       const res = await fetch(`${API_BASE}/api/posts-update`, {
         method: "POST",
