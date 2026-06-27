@@ -156,6 +156,7 @@ const state = {
   myPosts: [],      // 내가 등록한 글
   postDraft: null,  // 임시 저장된 등록 폼
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
+  pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
   alerts: [],
@@ -584,6 +585,14 @@ function selectPattern(day) {
   renderSelection();
   renderRuleCheck();
   syncOfferedSlot();
+
+  // 요청 진행 중(줄 근무 고르러 옴)이고 이제 선택됨 → 요청 모달 자동 재개
+  if (state.pendingRequestPostId && selectedSchedules().length > 0) {
+    const pid = state.pendingRequestPostId;
+    state.pendingRequestPostId = null;
+    switchTab("find");
+    setTimeout(() => openRequestModal(pid), 50);
+  }
 }
 
 function selectedSchedules() {
@@ -1990,17 +1999,63 @@ function recordSwapMatch() {
   renderMetrics();
 }
 
-async function requestSwap(postId) {
-  if (state.credits < 1) {
-    showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다.");
-    return;
-  }
+// 선택된 내 근무를 요청용 offered(X) 객체로 요약
+function buildMyOfferedForRequest() {
+  const ss = selectedSchedules();
+  if (ss.length === 0) return null;
+  const routes = ss.map(s => s.routeSummary || (s.dep&&s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : s.type)).join(" · ");
+  return {
+    patternName: `${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴`,
+    summary: routes,
+    type: ss[0].type,
+    days: ss.map(s => s.day),
+    aircraft: ss[0].aircraft || null,
+    reportTime: (ss.find(s => s.reportTime && /^\d/.test(s.reportTime)) || {}).reportTime || null,
+    releaseTime: ([...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime)) || {}).releaseTime || null,
+  };
+}
+
+// 요청하기 진입 — 줄 근무가 선택돼 있으면 확인 모달, 없으면 내 근무에서 고르게
+function requestSwap(postId) {
+  if (state.credits < 1) { showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다."); return; }
+  if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  if (!state.user.email) {
-    showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요.");
+  if (selectedSchedules().length === 0) {
+    // 줄 근무를 아직 안 골랐으면 → 내 근무에서 고르도록 안내
+    state.pendingRequestPostId = postId;
+    switchTab("schedule");
+    showToast("바꿔줄 내 근무를 달력에서 선택하면 요청을 이어갑니다.");
     return;
   }
+  openRequestModal(postId);
+}
+
+function openRequestModal(postId) {
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  const mine = buildMyOfferedForRequest();
+  const reqD = document.getElementById("reqDialog");
+  reqD._postId = postId;
+  document.getElementById("reqDialogTitle").textContent = `${p.ownerNick || "상대"} 님에게 스왑 요청`;
+  document.getElementById("reqMine").innerHTML = mine
+    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>`
+    : `<span class="hint">내 근무에서 줄 근무를 선택하세요</span>`;
+  document.getElementById("reqTheirs").innerHTML =
+    `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
+  document.getElementById("reqHint").textContent = "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
+  document.getElementById("reqConfirmButton").disabled = !mine;
+  openGenericModal("reqDialog", "reqOverlay");
+}
+
+async function sendSwapRequest() {
+  const reqD = document.getElementById("reqDialog");
+  const postId = reqD._postId;
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  const mine = buildMyOfferedForRequest();
+  if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
+  if (state.credits < 1) { showToast("크레딧 부족"); return; }
   try {
     const res = await fetch(`${API_BASE}/api/requests-create`, {
       method: "POST",
@@ -2009,22 +2064,18 @@ async function requestSwap(postId) {
         postId, type: "request",
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
+        offered: mine,
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      showToast(data.error || "요청 전송 실패 — 다시 시도해주세요.");
-      return;
-    }
-  } catch (e) {
-    showToast("요청 전송 실패 — 네트워크 오류");
-    return;
-  }
+    if (!res.ok) { showToast(data.error || "요청 전송 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("요청 전송 실패 — 네트워크 오류"); return; }
   state.credits--;
   saveState();
   renderCredits();
+  closeGenericModal("reqDialog", "reqOverlay");
   fetchRequests();
-  showToast("요청을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
+  showToast("요청을 보냈습니다 (내 근무 ⇄ 상대 근무). 상호 수락 전 개인정보는 비공개입니다.");
 }
 
 // 방금 취소한 글 ID — KV 최종일관성으로 목록에 잠시 남아도 다시 안 불러오게 차단 (세션 한정)
@@ -2185,6 +2236,11 @@ function requestCard(r) {
         <span class="badge ${badgeCls}">${r.status}</span>
       </div>
       ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${r.message}</div>` : ""}
+      ${r.offered ? `<div class="req-exchange">
+        <div class="req-ex-side"><span>${state.reqViewMode==="received"?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
+        <div class="req-ex-arrow">⇄</div>
+        <div class="req-ex-side"><span>${state.reqViewMode==="received"?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
+      </div>` : ""}
       ${r.type === "ask" ? "" : `<div class="privacy-stepper">${stagesHtml}</div>`}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
@@ -2972,6 +3028,9 @@ function bindEvents() {
   // 알림
   // 양도 의향 묻기 dialog
   $("#askCancelButton").addEventListener("click", () => closeGenericModal("askDialog", "askOverlay"));
+  // 스왑 요청 확인 모달
+  $("#reqCancelButton")?.addEventListener("click", () => closeGenericModal("reqDialog", "reqOverlay"));
+  $("#reqConfirmButton")?.addEventListener("click", () => sendSwapRequest());
   $("#askSendButton").addEventListener("click", async () => {
     const msg = $("#askMessage").value.trim();
     if (!msg) { showToast("메시지를 입력해주세요."); return; }

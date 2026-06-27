@@ -202,9 +202,12 @@ function randId() {
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const { postId, fromEmail, fromNick, fromBase, fromRole, type, message } = body || {};
+  const { postId, fromEmail, fromNick, fromBase, fromRole, type, message, offered } = body || {};
   if (!postId || !fromEmail || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
+  // 정식 요청은 "내가 줄 근무(offered)"가 반드시 있어야 함 (의향묻기는 선택)
+  if (type === 'request' && (!offered || !offered.patternName))
+    return json({ error: '바꿔줄 내 근무를 선택해야 합니다' }, 400);
 
   try {
     const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
@@ -221,6 +224,7 @@ async function handleRequestsCreate(request, env) {
       base: post.ownerBase || null,
       message: message || '',
       fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
+      offered: offered || null, // 요청자가 줄 근무(X)
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
       status: type === 'ask' ? '의향 문의' : '요청 대기',
       stage: 1,

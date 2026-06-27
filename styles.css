@@ -438,6 +438,20 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .meta-grid strong.urgent { color: var(--c-fail); }
 
 .card-actions { display: flex; gap: 8px; }
+
+/* 스왑 요청 X ⇄ Y */
+.req-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; margin-top: 10px; }
+.req-side { display: flex; flex-direction: column; gap: 4px; }
+.req-side-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+.req-box { flex: 1; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #f6f8fb; font-size: 12px; }
+.req-box strong { display: block; font-size: 13px; margin-bottom: 2px; }
+.req-arrow { display: grid; place-items: center; font-size: 20px; color: var(--primary); font-weight: 800; }
+.req-exchange { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; padding: 10px; margin-bottom: 10px; background: var(--blue-soft); border-radius: 8px; }
+.req-ex-side { min-width: 0; }
+.req-ex-side span { display: block; font-size: 10px; color: #1d3a7a; font-weight: 700; }
+.req-ex-side strong { display: block; font-size: 12px; color: var(--text); overflow-wrap: break-word; }
+.req-ex-side small { font-size: 11px; color: var(--muted); }
+.req-ex-arrow { font-size: 16px; color: var(--primary); font-weight: 800; }
 .card-unavailable { flex: 1; text-align: center; padding: 10px; font-size: 12px; color: var(--muted); background: #f1f3f6; border-radius: 8px; }
 .card-actions button { flex: 1; }
 
