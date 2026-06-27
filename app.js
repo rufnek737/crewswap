@@ -2071,7 +2071,15 @@ function processExpiredRefunds() {
   }
 }
 
-let _seenReceivedIds = null; // 첫 로드 후부터 "새로 온 요청" 감지
+// 이미 종 알림으로 띄운 요청 ID (localStorage 영속화 — 새로고침해도 중복 알림 방지)
+function getAlertedReqIds() {
+  try { return new Set(JSON.parse(localStorage.getItem("crewswap_alerted_reqs") || "[]")); }
+  catch { return new Set(); }
+}
+function saveAlertedReqIds(set) {
+  localStorage.setItem("crewswap_alerted_reqs", JSON.stringify([...set].slice(-200)));
+}
+
 async function fetchRequests() {
   if (!state.user.email) return;
   try {
@@ -2086,26 +2094,24 @@ async function fetchRequests() {
     };
     const received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
     state.requests.sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
-    // 새로 도착한 받은 요청 → 종 알림 + 토스트 (첫 로드는 기준선만 설정)
-    if (_seenReceivedIds === null) {
-      _seenReceivedIds = new Set(received.map(r => r.id));
-    } else {
-      received.forEach(r => {
-        if (!_seenReceivedIds.has(r.id)) {
-          _seenReceivedIds.add(r.id);
-          const isAsk = r.type === "ask";
-          state.alerts.unshift({
-            kind: "match",
-            title: isAsk ? "💬 양도 의향 문의 도착" : "📩 스왑 요청 도착",
-            body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
-            time: "방금",
-          });
-          showToast(`${isAsk ? "💬 의향 문의" : "📩 스왑 요청"} 도착 — ${r.fromNick || "상대"} 님`);
-        }
+    // 받은 요청 중 아직 종 알림 안 띄운 것 → 종 알림 추가 (있던 것/새 것 모두 한 번씩)
+    const alerted = getAlertedReqIds();
+    let changed = false;
+    received.forEach(r => {
+      if (alerted.has(r.id)) return;
+      alerted.add(r.id); changed = true;
+      const isAsk = r.type === "ask";
+      state.alerts.unshift({
+        kind: "match",
+        title: isAsk ? "💬 양도 의향 문의 도착" : "📩 스왑 요청 도착",
+        body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
+        time: r.sentAgo || "방금",
       });
-      saveState();
-      renderAlerts();
-    }
+      // 토스트는 최근(2분 내) 도착분만 (오래된 것 무더기 토스트 방지)
+      const mins = (Date.now() - new Date(r.createdAt).getTime()) / 60000;
+      if (mins <= 2) showToast(`${isAsk ? "💬 의향 문의" : "📩 스왑 요청"} 도착 — ${r.fromNick || "상대"} 님`);
+    });
+    if (changed) { saveAlertedReqIds(alerted); saveState(); renderAlerts(); }
     state.requests.received = received;
     renderRequests();
     renderReqTabBadge();
