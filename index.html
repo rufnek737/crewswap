@@ -227,17 +227,17 @@
             <h3>선택한 패턴</h3>
             <div id="selectedSummary" class="empty-state">달력에서 패턴을 드래그하거나 클릭하세요.</div>
             <div id="ruleCheck" class="rule-check"></div>
-            <button id="registerSelectionButton" class="primary-button" disabled>이 근무로 스왑 요청 올리기</button>
+            <button id="registerSelectionButton" class="primary-button" disabled>이 근무로 스왑 올리기</button>
             <button id="clearSelectionButton" class="secondary-button" disabled>선택 해제</button>
           </aside>
         </div>
       </section>
 
-      <!-- ===================== 스왑하기: 바꿀 근무 찾기 ===================== -->
+      <!-- ===================== 스왑하기: 가능한 스왑 보기 ===================== -->
       <section id="find" class="view">
         <div class="swap-subtabs">
-          <button type="button" class="swap-subtab is-active" data-swaptab="find">바꿀 근무 찾기</button>
-          <button type="button" class="swap-subtab" data-swaptab="post">스왑 요청 올리기</button>
+          <button type="button" class="swap-subtab is-active" data-swaptab="find">가능한 스왑 보기</button>
+          <button type="button" class="swap-subtab" data-swaptab="post">내 스왑 올리기</button>
         </div>
         <div class="find-actions" style="margin-bottom:14px;">
           <button type="button" id="refreshFindBtn" class="secondary-button">↻ 새로고침</button>
@@ -340,11 +340,11 @@
         <div id="matchList" class="card-list"></div>
       </section>
 
-      <!-- ===================== 스왑하기: 스왑 요청 올리기 ===================== -->
+      <!-- ===================== 스왑하기: 내 스왑 올리기 ===================== -->
       <section id="post" class="view">
         <div class="swap-subtabs">
-          <button type="button" class="swap-subtab" data-swaptab="find">바꿀 근무 찾기</button>
-          <button type="button" class="swap-subtab is-active" data-swaptab="post">스왑 요청 올리기</button>
+          <button type="button" class="swap-subtab" data-swaptab="find">가능한 스왑 보기</button>
+          <button type="button" class="swap-subtab is-active" data-swaptab="post">내 스왑 올리기</button>
         </div>
 
         <!-- 내가 등록한 글 -->
@@ -395,7 +395,7 @@
       <section id="requests" class="view">
         <div class="section-head">
           <div>
-            <h2>요청함</h2>
+            <h2>받은/보낸 요청</h2>
           </div>
           <div class="actions">
             <div class="view-toggle">
@@ -525,7 +525,7 @@
     <nav class="bottom-tabs" aria-label="메인 메뉴">
       <button class="tab is-active" data-tab="schedule">내 근무</button>
       <button class="tab" data-tab="find">스왑하기</button>
-      <button class="tab" data-tab="requests">요청함<span id="reqTabBadge" class="tab-badge" hidden>0</span></button>
+      <button class="tab" data-tab="requests">요청<span id="reqTabBadge" class="tab-badge" hidden>0</span></button>
       <button class="tab" data-tab="profile">내 정보</button>
     </nav>
 
