@@ -119,20 +119,55 @@ async function handleCheckVerify(request, env) {
   return json({ verified: true, email });
 }
 
+/* ── 글/요청 인덱스 캐시 ──────────────────────────────────────────
+   KV list()는 무료 플랜 하루 1,000회로 한도가 작아 화면 조회마다 쓰면 금방 바닥남.
+   대신 전체 목록을 idx:posts / idx:requests 키 하나에 캐싱해두고 get()(하루 100,000회)만 사용.
+   인덱스가 없을 때(최초 1회, 또는 키 유실 시)만 list()로 재구성. ── */
+
+async function getPostsIndex(env) {
+  let idx = await env.POSTS.get('idx:posts', { type: 'json' });
+  if (idx) return idx;
+  const { keys } = await env.POSTS.list({ prefix: 'post:' });
+  const posts = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
+  idx = posts.filter(Boolean);
+  await env.POSTS.put('idx:posts', JSON.stringify(idx));
+  return idx;
+}
+async function savePostsIndex(env, arr) {
+  await env.POSTS.put('idx:posts', JSON.stringify(arr));
+}
+
+async function getRequestsIndex(env) {
+  let idx = await env.POSTS.get('idx:requests', { type: 'json' });
+  if (idx) return idx;
+  const { keys } = await env.POSTS.list({ prefix: 'req:' });
+  const all = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
+  idx = all.filter(Boolean);
+  await env.POSTS.put('idx:requests', JSON.stringify(idx));
+  return idx;
+}
+async function saveRequestsIndex(env, arr) {
+  await env.POSTS.put('idx:requests', JSON.stringify(arr));
+}
+async function updateRequestsIndexEntry(env, updated) {
+  const idx = await getRequestsIndex(env);
+  const i = idx.findIndex(r => r.id === updated.id);
+  if (i >= 0) idx[i] = updated; else idx.push(updated);
+  await saveRequestsIndex(env, idx);
+}
+
 /* ── posts-get ──────────────────────────────────────────────── */
 
 async function handlePostsGet(env) {
   try {
-    const { keys } = await env.POSTS.list({ prefix: 'post:' });
-    const posts = await Promise.all(keys.map(async ({ name }) => {
-      const data = await env.POSTS.get(name, { type: 'json' });
-      if (!data || data.status !== 'active') return null;
-      const { deleteToken, ownerEmail, ...pub } = data;
+    const idx = await getPostsIndex(env);
+    const posts = idx.filter(p => p && p.status === 'active').map(p => {
+      const { deleteToken, ownerEmail, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
       return pub;
-    }));
-    return json({ posts: posts.filter(Boolean) });
+    });
+    return json({ posts });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
@@ -143,9 +178,8 @@ async function handlePostsGetMine(request, env) {
   const email = url.searchParams.get('email');
   if (!email) return json({ error: 'email 필요' }, 400);
   try {
-    const { keys } = await env.POSTS.list({ prefix: 'post:' });
-    const posts = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
-    const mine = posts.filter(p => p && p.ownerEmail === email && p.status === 'active');
+    const idx = await getPostsIndex(env);
+    const mine = idx.filter(p => p && p.ownerEmail === email && p.status === 'active');
     return json({ posts: mine });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -172,6 +206,9 @@ async function handlePostsCreate(request, env) {
 
   try {
     await env.POSTS.put(`post:${clean.id}`, JSON.stringify(clean));
+    const idx = await getPostsIndex(env);
+    idx.push(clean);
+    await savePostsIndex(env, idx);
     return json({ id: clean.id });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -189,6 +226,10 @@ async function handlePostsUpdate(request, env) {
     if (post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     post.wanted = wanted;
     await env.POSTS.put(`post:${id}`, JSON.stringify(post));
+    const idx = await getPostsIndex(env);
+    const i = idx.findIndex(p => p.id === id);
+    if (i >= 0) idx[i] = post; else idx.push(post);
+    await savePostsIndex(env, idx);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -242,6 +283,9 @@ async function handleRequestsCreate(request, env) {
       createdAt: new Date().toISOString(),
     };
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    const idx = await getRequestsIndex(env);
+    idx.push(rec);
+    await saveRequestsIndex(env, idx);
     return json({ id });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -260,6 +304,7 @@ async function handleRequestsAccept(request, env) {
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -280,6 +325,7 @@ async function handleRequestsReply(request, env) {
     if (!Array.isArray(rec.thread)) rec.thread = [];
     rec.thread.push({ from: email, nick: nick || null, message, at: new Date().toISOString() });
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
     return json({ ok: true, thread: rec.thread });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -296,6 +342,8 @@ async function handleRequestsDelete(request, env) {
     if (rec.fromEmail !== email && rec.toEmail !== email)
       return json({ error: '삭제 권한이 없습니다' }, 403);
     await env.POSTS.delete(`req:${id}`);
+    const idx = await getRequestsIndex(env);
+    await saveRequestsIndex(env, idx.filter(r => r.id !== id));
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -308,11 +356,9 @@ async function handleRequestsGet(request, env) {
   if (!email) return json({ error: 'email 필요' }, 400);
 
   try {
-    const { keys } = await env.POSTS.list({ prefix: 'req:' });
-    const all = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
-    const valid = all.filter(Boolean);
-    const sent = valid.filter(r => r.fromEmail === email);
-    const received = valid.filter(r => r.toEmail === email);
+    const idx = await getRequestsIndex(env);
+    const sent = idx.filter(r => r.fromEmail === email);
+    const received = idx.filter(r => r.toEmail === email);
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -329,6 +375,8 @@ async function handlePostsDelete(request, env) {
     if (!post) return json({ ok: true, alreadyGone: true });
     if (post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     await env.POSTS.delete(`post:${id}`);
+    const idx = await getPostsIndex(env);
+    await savePostsIndex(env, idx.filter(p => p.id !== id));
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
