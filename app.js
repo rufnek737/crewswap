@@ -157,6 +157,7 @@ const state = {
   postDraft: null,  // 임시 저장된 등록 폼
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
+  pendingRequestType: null,   // "request" | "ask"
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
   alerts: [],
@@ -389,6 +390,12 @@ function parseAirportList(str) {
   return (str || "").split(/[,\s]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
 }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
 function showToast(msg) {
   const t = $("#toast");
   t.textContent = msg;
@@ -558,14 +565,41 @@ function selectPattern(day) {
   renderSelection();
   renderRuleCheck();
   syncOfferedSlot();
+  renderPendingBar();
+}
 
-  // 요청 진행 중(줄 근무 고르러 옴)이고 이제 선택됨 → 요청 모달 자동 재개
-  if (state.pendingRequestPostId && selectedSchedules().length > 0) {
-    const pid = state.pendingRequestPostId;
-    state.pendingRequestPostId = null;
-    switchTab("find");
-    setTimeout(() => openRequestModal(pid), 50);
-  }
+// 요청/의향묻기 진행 중일 때 하단에 뜨는 "N일 선택됨 · 다음" 바
+function renderPendingBar() {
+  const bar = $("#pendingActionBar");
+  if (!bar) return;
+  if (!state.pendingRequestPostId) { bar.hidden = true; return; }
+  const n = selectedSchedules().length;
+  const label = state.pendingRequestType === "ask" ? "의향 표시" : "요청";
+  $("#pendingActionText").textContent = n > 0
+    ? `${n}일 선택됨 — 다 고르면 다음을 누르세요 (${label})`
+    : `바꿔줄 근무를 달력에서 선택하세요 (${label})`;
+  $("#pendingActionNext").disabled = n === 0;
+  bar.hidden = false;
+}
+
+function cancelPendingAction() {
+  state.pendingRequestPostId = null;
+  state.pendingRequestType = null;
+  renderPendingBar();
+}
+
+function confirmPendingAction() {
+  const pid = state.pendingRequestPostId;
+  const type = state.pendingRequestType;
+  if (!pid || selectedSchedules().length === 0) return;
+  state.pendingRequestPostId = null;
+  state.pendingRequestType = null;
+  renderPendingBar();
+  switchTab("find");
+  setTimeout(() => {
+    if (type === "ask") openAskModal(pid);
+    else openRequestModal(pid);
+  }, 50);
 }
 
 function selectedSchedules() {
@@ -1940,16 +1974,7 @@ function renderMatches() {
   }).join("");
 
   list.querySelectorAll("[data-action='request']").forEach(b => b.onclick = () => requestSwap(b.dataset.post));
-  list.querySelectorAll("[data-action='ask']").forEach(b => b.onclick = () => {
-    const post = state.posts.find(x => x.id === b.dataset.post);
-    const dialog = $("#askDialog");
-    $("#askDialogTitle").textContent = post
-      ? `💬 ${post.ownerNick || "상대"} 님에게 의향 묻기`
-      : "💬 양도 의향 묻기";
-    $("#askMessage").value = "";
-    dialog._pendingPostId = b.dataset.post;
-    openGenericModal("askDialog", "askOverlay");
-  });
+  list.querySelectorAll("[data-action='ask']").forEach(b => b.onclick = () => askAboutPost(b.dataset.post));
 }
 
 /* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
@@ -2006,14 +2031,64 @@ function requestSwap(postId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  if (selectedSchedules().length === 0) {
-    // 줄 근무를 아직 안 골랐으면 → 내 근무에서 고르도록 안내
-    state.pendingRequestPostId = postId;
-    switchTab("schedule");
-    showToast("바꿔줄 내 근무를 달력에서 선택하면 요청을 이어갑니다.");
-    return;
-  }
-  openRequestModal(postId);
+  // 바꿔줄 내 근무를 고르도록 항상 내 근무 화면으로 이동 — 여러 날을 고른 뒤 "다음"으로 직접 넘어가게 함
+  state.pendingRequestPostId = postId;
+  state.pendingRequestType = "request";
+  switchTab("schedule");
+  renderPendingBar();
+}
+
+// 양도 의향 묻기 진입 — 자유 텍스트 대신 내 스케줄을 선택해 관심을 표시 (일수 일치 불필요, 크레딧 없음)
+function askAboutPost(postId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없어 의향을 보낼 수 없습니다. 다시 가입해주세요."); return; }
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  state.pendingRequestPostId = postId;
+  state.pendingRequestType = "ask";
+  switchTab("schedule");
+  renderPendingBar();
+}
+
+function openAskModal(postId) {
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  const mine = buildMyOfferedForRequest();
+  const askD = document.getElementById("askDialog");
+  askD._postId = postId;
+  document.getElementById("askDialogTitle").textContent = `💬 ${p.ownerNick || "상대"} 님에게 의향 표시`;
+  document.getElementById("askMine").innerHTML = mine
+    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>`
+    : `<span class="hint">내 근무에서 줄 근무를 선택하세요</span>`;
+  document.getElementById("askTheirs").innerHTML =
+    `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
+  document.getElementById("askSendButton").disabled = !mine;
+  openGenericModal("askDialog", "askOverlay");
+}
+
+async function sendAskInterest() {
+  const askD = document.getElementById("askDialog");
+  const postId = askD._postId;
+  const p = state.posts.find(x => x.id === postId);
+  if (!p) return;
+  const mine = buildMyOfferedForRequest();
+  if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        postId, type: "ask",
+        fromEmail: state.user.email, fromNick: state.user.nickname,
+        fromBase: state.user.base, fromRole: state.user.roleType,
+        offered: mine,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "의향 전송 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("의향 전송 실패 — 네트워크 오류"); return; }
+  closeGenericModal("askDialog", "askOverlay");
+  fetchRequests();
+  showToast("의향을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
 }
 
 function openRequestModal(postId) {
@@ -2203,6 +2278,49 @@ function renderRequests() {
   const reqs = state.requests[state.reqViewMode];
   $("#requestList").innerHTML = reqs.length ? reqs.map(r => requestCard(r)).join("") : `<div class="empty-state">${state.reqViewMode==="sent"?"보낸":"받은"} 요청이 없습니다.</div>`;
   $$("#requestList .accept-req-btn").forEach(b => b.onclick = () => acceptRequest(b.dataset.reqId));
+  $$("#requestList .reply-req-btn").forEach(b => b.onclick = () => replyToRequest(b.dataset.reqId));
+  $$("#requestList .delete-req-btn").forEach(b => b.onclick = () => deleteRequest(b.dataset.reqId));
+}
+
+async function replyToRequest(reqId) {
+  const input = document.querySelector(`.reply-req-input[data-req-id="${reqId}"]`);
+  const msg = input ? input.value.trim() : "";
+  if (!msg) { showToast("답장 내용을 입력하세요."); return; }
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  if (containsPersonalInfo(msg)) {
+    showToast("⚠ 연락처/신상정보는 보낼 수 없습니다. 상호 수락 후 공개됩니다.");
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email, nick: state.user.nickname, message: msg }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "답장 전송 실패"); return; }
+  } catch (e) { showToast("답장 전송 실패 — 네트워크 오류"); return; }
+  if (input) input.value = "";
+  fetchRequests();
+  showToast("답장을 보냈습니다.");
+}
+
+async function deleteRequest(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  if (!confirm("이 요청/의향을 삭제할까요? 상대방 화면에서도 사라집니다.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "삭제 실패"); return; }
+  } catch (e) { showToast("삭제 실패 — 네트워크 오류"); return; }
+  state.requests.sent = state.requests.sent.filter(r => r.id !== reqId);
+  state.requests.received = state.requests.received.filter(r => r.id !== reqId);
+  renderRequests();
+  showToast("삭제했습니다.");
 }
 
 function requestCard(r) {
@@ -2230,7 +2348,12 @@ function requestCard(r) {
         </div>
         <span class="badge ${badgeCls}">${r.status}</span>
       </div>
-      ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${r.message}</div>` : ""}
+      ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
+      ${r.thread && r.thread.length ? `<div class="req-thread">${r.thread.map(t => `
+        <div class="req-thread-msg ${t.from === state.user.email ? "mine" : ""}">
+          <strong>${t.from === state.user.email ? "나" : (t.nick || "상대")}</strong>
+          <span>${escapeHtml(t.message)}</span>
+        </div>`).join("")}</div>` : ""}
       ${r.offered ? `<div class="req-exchange">
         <div class="req-ex-side"><span>${state.reqViewMode==="received"?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
         <div class="req-ex-arrow">⇄</div>
@@ -2267,6 +2390,11 @@ function requestCard(r) {
       ${(state.reqViewMode === "received" && r.type !== "ask" && !accepted)
         ? `<button class="primary-button accept-req-btn" data-req-id="${r.id}" style="width:100%;margin-top:12px;">✓ 상호 수락하기</button>`
         : ""}
+      <div class="req-reply-box">
+        <input type="text" class="reply-req-input" data-req-id="${r.id}" placeholder="답장 (연락처/이름 등 신상정보는 자동 차단)" maxlength="200" />
+        <button class="secondary-button reply-req-btn" data-req-id="${r.id}">답장</button>
+      </div>
+      <button class="link-button danger delete-req-btn" data-req-id="${r.id}">🗑 삭제</button>
     </article>
   `;
 }
@@ -3034,35 +3162,13 @@ function bindEvents() {
   // 알림
   // 양도 의향 묻기 dialog
   $("#askCancelButton").addEventListener("click", () => closeGenericModal("askDialog", "askOverlay"));
+  $("#askSendButton").addEventListener("click", () => sendAskInterest());
   // 스왑 요청 확인 모달
   $("#reqCancelButton")?.addEventListener("click", () => closeGenericModal("reqDialog", "reqOverlay"));
   $("#reqConfirmButton")?.addEventListener("click", () => sendSwapRequest());
-  $("#askSendButton").addEventListener("click", async () => {
-    const msg = $("#askMessage").value.trim();
-    if (!msg) { showToast("메시지를 입력해주세요."); return; }
-    if (!state.user.email) { showToast("이메일 인증 정보가 없어 보낼 수 없습니다."); return; }
-    if (containsPersonalInfo(msg)) {
-      showToast("⚠ 연락처/신상정보는 보낼 수 없습니다. 상호 수락 후 공개됩니다.");
-      return;
-    }
-    const postId = $("#askDialog")._pendingPostId;
-    try {
-      const res = await fetch(`${API_BASE}/api/requests-create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postId, type: "ask", message: msg,
-          fromEmail: state.user.email, fromNick: state.user.nickname,
-          fromBase: state.user.base, fromRole: state.user.roleType,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return; }
-    } catch (e) { showToast("전송 실패 — 네트워크 오류"); return; }
-    closeGenericModal("askDialog", "askOverlay");
-    fetchRequests();
-    showToast("💬 의향 문의 발송 완료 — 상대가 확인하면 알림이 옵니다.");
-  });
+  // 줄 근무 선택 중 하단 진행 바
+  $("#pendingActionCancel")?.addEventListener("click", () => cancelPendingAction());
+  $("#pendingActionNext")?.addEventListener("click", () => confirmPendingAction());
 
   $("#bellButton").addEventListener("click", () => {
     $("#alertPanel").hidden = false;

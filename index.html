@@ -169,6 +169,15 @@
           </div>
         </div>
 
+        <!-- 요청/의향묻기 진행 중 — 여러 날을 고른 뒤 직접 "다음"으로 넘어가게 함 -->
+        <div id="pendingActionBar" class="pending-action-bar" hidden>
+          <span id="pendingActionText">선택 중</span>
+          <div class="pending-action-buttons">
+            <button class="secondary-button" id="pendingActionCancel">취소</button>
+            <button class="primary-button" id="pendingActionNext">다음 →</button>
+          </div>
+        </div>
+
         <!-- 요약 바: 평소엔 정상, 룰 경고가 있을 때만 강조 -->
         <button type="button" id="metricsSummary" class="metrics-summary" aria-expanded="false">
           <span id="metricsSummaryText">이번 달 정상</span>
@@ -587,15 +596,26 @@
       </div>
     </dialog>
 
-    <!-- 양도 의향 묻기 (div 모달 — iOS dialog top-layer 버그 회피) -->
+    <!-- 양도 의향 묻기 (자유 텍스트 대신 내 스케줄 선택 — 신상정보 노출 경로 차단) -->
     <div id="askOverlay" class="generic-modal-overlay" hidden></div>
     <div id="askDialog" class="generic-modal" hidden>
       <div class="dialog-body">
         <h3 id="askDialogTitle">💬 양도 의향 묻기</h3>
-        <textarea id="askMessage" rows="4" placeholder="안녕하세요, 해당 스케줄 스왑에 관심이 있습니다. 조건이 맞으면 연락 주세요!" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
-        <div class="dialog-actions" style="margin-top:12px;">
+        <div class="req-pair">
+          <div class="req-side">
+            <span class="req-side-label">내 스케줄 (관심 표시용)</span>
+            <div id="askMine" class="req-box"></div>
+          </div>
+          <div class="req-arrow">⇄</div>
+          <div class="req-side">
+            <span class="req-side-label">관심있는 상대 근무</span>
+            <div id="askTheirs" class="req-box"></div>
+          </div>
+        </div>
+        <p class="hint" style="margin:4px 0 0;">메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음</p>
+        <div class="dialog-actions" style="margin-top:14px;">
           <button class="secondary-button" id="askCancelButton">취소</button>
-          <button class="primary-button" id="askSendButton">보내기</button>
+          <button class="primary-button" id="askSendButton">관심 보내기</button>
         </div>
       </div>
     </div>
