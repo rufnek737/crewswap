@@ -2405,6 +2405,19 @@ function bindEvents() {
     el.style.color = type === "ok" ? "var(--c-pass)" : type === "err" ? "var(--c-fail)" : "var(--muted)";
   }
 
+  // 인증 UI 초기화 (탈퇴/재가입 시 "이미 인증 완료" 잔존 방지)
+  function resetVerifyUI() {
+    _verifyEmail = null;
+    if (_verifyCooldown) { clearInterval(_verifyCooldown); _verifyCooldown = null; }
+    const emailEl = $("#signupEmail");
+    if (emailEl) { emailEl.value = ""; emailEl.readOnly = false; emailEl.disabled = false; }
+    const codeRow = $("#verifyCodeRow"); if (codeRow) codeRow.hidden = true;
+    const codeInput = $("#verifyCodeInput"); if (codeInput) codeInput.value = "";
+    const sendBtn = $("#sendVerifyBtn"); if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "코드 발송"; }
+    setVerifyStatus("", "hint");
+  }
+  window.__resetVerifyUI = resetVerifyUI; // 다른 핸들러에서 호출용
+
   function startCooldown(btn, seconds) {
     let remaining = seconds;
     btn.disabled = true;
@@ -2704,6 +2717,7 @@ function bindEvents() {
       monthlySwapUsed: 0, monthlySwapLimit: 3, yearlySwapUsed: 0,
     };
     clearStorage();
+    resetVerifyUI(); // 인증 상태 초기화 (재가입 시 "이미 인증 완료" 방지)
     renderAll();
     // 가입 팝업 다시 표시
     const sp = document.getElementById("signupPanel");
