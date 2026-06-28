@@ -199,6 +199,9 @@ function randId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+// 메시지에 연락처/신상정보 포함 시 차단 (크레딧 우회 직거래 방지) — 실제 보안 경계는 서버
+const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]\d{6})|(카카오\s?(아이디|id|톡)?\s?[:：]?\s?[a-zA-Z0-9_.]{2,})|(010|011|016|017|018|019)\s*[-.\s]?\s*\d/;
+
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -208,11 +211,19 @@ async function handleRequestsCreate(request, env) {
   // 정식 요청은 "내가 줄 근무(offered)"가 반드시 있어야 함 (의향묻기는 선택)
   if (type === 'request' && (!offered || !offered.patternName))
     return json({ error: '바꿔줄 내 근무를 선택해야 합니다' }, 400);
+  if (PERSONAL_INFO_RE.test(message || ''))
+    return json({ error: '연락처/신상정보는 보낼 수 없습니다 (상호 수락 후 공개)' }, 400);
 
   try {
     const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
+    if (type === 'request') {
+      const theirDays = (post.offered?.days || []).length || 1;
+      const myDays = (offered.days || []).length || 0;
+      if (myDays !== theirDays)
+        return json({ error: `일수가 맞지 않습니다 (상대 ${theirDays}일 / 내 선택 ${myDays}일)` }, 400);
+    }
 
     const id = 'REQ-' + Date.now() + '-' + randId();
     const rec = {

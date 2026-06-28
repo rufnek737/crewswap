@@ -192,10 +192,7 @@
             <div class="metric-bar"><div id="swapBar" class="metric-fill"></div></div>
             <strong id="swapText">0 / 3회</strong>
           </div>
-          <div class="metric">
-            <span class="metric-label">다음 마감</span>
-            <strong id="nextDeadline" class="deadline-text">계산 중...</strong>
-          </div>
+          <strong id="nextDeadline" class="deadline-text" hidden>계산 중...</strong>
         </div>
 
         <div class="schedule-layout">
@@ -418,14 +415,8 @@
 
         <div class="profile-grid">
           <div class="profile-card rating-card">
-            <h3>내 신뢰도</h3>
-            <div class="big-rating">★ 4.8 <span>/ 5.0</span></div>
-            <div class="rating-stats">
-              <div><span>매칭 성공률</span><strong>92%</strong></div>
-              <div><span>회사 승인률</span><strong>98%</strong></div>
-              <div><span>평균 응답</span><strong>1.2h</strong></div>
-              <div><span>노쇼 신고</span><strong>0건</strong></div>
-            </div>
+            <h3>내 계정</h3>
+            <div class="profile-email-display"><span>이메일</span><strong id="profileEmailDisplay">-</strong></div>
           </div>
 
           <form id="profileForm" class="profile-form">

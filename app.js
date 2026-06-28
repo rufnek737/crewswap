@@ -361,6 +361,12 @@ function createMockSavedSearches() {
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+// 양도 의향 묻기 메시지에서 연락처/신상정보 패턴 감지 (크레딧 우회 직거래 방지)
+const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]\d{6})|(카카오\s?(아이디|id|톡)?\s?[:：]?\s?[a-zA-Z0-9_.]{2,})|(010|011|016|017|018|019)\s*[-.\s]?\s*\d/;
+function containsPersonalInfo(text) {
+  return PERSONAL_INFO_RE.test(text || "");
+}
+
 // iOS 핀치 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
 ["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
   document.addEventListener(evt, e => e.preventDefault(), { passive: false })
@@ -525,60 +531,27 @@ function areConsecCalendarDays(k1, k2) {
   return (new Date(k2) - new Date(k1)) === 86400000;
 }
 
-// 월 경계를 넘는 패턴도 포함한 연결 일자 — {day, month}[] 반환
-function connectedPatternDaysAllMonths(pid, anchorDay, anchorMonth) {
-  const am = anchorMonth || state.currentMonth;
-  const anchorSched = state.schedules.find(s => s.day === anchorDay && s.patternId === pid && (s.month || state.currentMonth) === am);
-  if (!anchorSched || anchorSched.type === "OFF") return [{ day: anchorDay, month: am }];
-
-  const pidSched = state.schedules
-    .filter(s => s.patternId === pid)
-    .map(s => ({ ...s, effectiveMonth: s.month || state.currentMonth }))
-    .sort((a, b) => a.effectiveMonth < b.effectiveMonth ? -1 : a.effectiveMonth > b.effectiveMonth ? 1 : a.day - b.day);
-
-  const anchorIdx = pidSched.findIndex(s => s.day === anchorDay && s.effectiveMonth === am);
-  if (anchorIdx < 0) return [{ day: anchorDay, month: am }];
-
-  let start = anchorIdx, end = anchorIdx;
-  while (end < pidSched.length - 1) {
-    if (pidSched[end].type === "ARRIVAL") break;
-    if (pidSched[end + 1].type === "OFF") break;
-    if (!areConsecCalendarDays(dayKey(pidSched[end].day, pidSched[end].effectiveMonth), dayKey(pidSched[end + 1].day, pidSched[end + 1].effectiveMonth))) break;
-    end++;
-  }
-  while (start > 0) {
-    if (pidSched[start - 1].type === "ARRIVAL") break;
-    if (pidSched[start - 1].type === "OFF") break;
-    if (!areConsecCalendarDays(dayKey(pidSched[start - 1].day, pidSched[start - 1].effectiveMonth), dayKey(pidSched[start].day, pidSched[start].effectiveMonth))) break;
-    start--;
-  }
-  return pidSched.slice(start, end + 1).map(s => ({ day: s.day, month: s.effectiveMonth }));
-}
 
 function selectPattern(day) {
-  const s = getSchedule(day);
-  if (!s) return;
+  let s = getSchedule(day);
+  if (!s) {
+    // 파싱 데이터가 없는 날(예: 다음 달로 넘어간 직후)도 선택은 가능하게 —
+    // 빈 placeholder를 만들어 묶음 등록에 포함시킬 수 있도록 함
+    s = { month: state.currentMonth, day, patternId: null, type: "UNKNOWN", title: "미정 (데이터 없음)" };
+    state.schedules.push(s);
+  }
   if (s.lockReason) {
     showToast(`이 비행은 SWAP할 수 없습니다 — ${s.lockReason}`);
     return;
   }
 
-  if (s.patternId) {
-    const patternKeys = connectedPatternDaysAllMonths(s.patternId, day, state.currentMonth)
-      .map(({ day: d, month: m }) => dayKey(d, m));
-    const allSelected = patternKeys.every(k => state.selectedDays.has(k));
-    if (allSelected) {
-      patternKeys.forEach(k => state.selectedDays.delete(k));
-    } else {
-      patternKeys.forEach(k => state.selectedDays.add(k));
-    }
+  // 패턴 자동 묶음 선택 비활성화 — CrewConnex 파싱이 묶음을 잘못 잡는 경우가 있어
+  // 클릭한 날짜만 개별 토글 (여러 날을 묶고 싶으면 각각 클릭)
+  const key = dayKey(day);
+  if (state.selectedDays.has(key)) {
+    state.selectedDays.delete(key);
   } else {
-    const key = dayKey(day);
-    if (state.selectedDays.has(key)) {
-      state.selectedDays.delete(key);
-    } else {
-      state.selectedDays.add(key);
-    }
+    state.selectedDays.add(key);
   }
 
   renderCalendar();
@@ -1381,6 +1354,8 @@ function updateBadges() {
   const subEl = $("#headerSub");
   const roleLbl = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
   if (subEl) subEl.textContent = `${airlineLbl} · ${roleLbl} · ${state.user.base}`;
+  const emailEl = $("#profileEmailDisplay");
+  if (emailEl) emailEl.textContent = state.user.email || "-";
 }
 
 function renderCredits() {
@@ -1575,7 +1550,7 @@ function renderSelection() {
   $("#selectedSummary").className = "";
   $("#selectedSummary").innerHTML = `
     <div class="pattern-summary">
-      <strong>${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
+      <strong>${patternTitleFor(ss)}</strong>
       <div class="meta">
         <span>승무(BLH) <b>${formatHM(totalBlockMin)}</b></span>
         <span>근무 <b>${formatHM(totalDutyMin)}</b></span>
@@ -1730,7 +1705,7 @@ function syncOfferedSlot() {
     const routes = ss.map(s => s.routeSummary || (s.dep&&s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : s.type)).join(" · ");
     const totalLegs = ss.reduce((sum, s) => sum + (s.legs || (s.dep && s.arr ? 1 : 0)), 0);
     slot.innerHTML = `
-      <strong>${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴</strong>
+      <strong>${patternTitleFor(ss)}</strong>
       <div>${ss.map(s => s.title).join(" · ")}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px;">${routes}</div>
       <div class="slot-meta">
@@ -1740,9 +1715,19 @@ function syncOfferedSlot() {
         <span>승무 ${formatHM(totalBlock)}</span>
         <span>${ss.length}일${totalLegs>ss.length?` · ${totalLegs}leg`:""}</span>
       </div>
+      <button class="link-button" id="editOfferedSlot" style="margin-top:8px;">✏️ 선택 수정하러 가기 →</button>
     `;
+    document.getElementById("editOfferedSlot").onclick = () => switchTab("schedule");
   }
   renderPostFooter();
+}
+
+// 선택된 스케줄들의 유형이 섞여 있으면 "혼합 패턴"으로, 같으면 기존처럼 표시
+function patternTitleFor(ss) {
+  const range = `${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day}`;
+  const types = [...new Set(ss.map(s => s.type))];
+  if (types.length === 1) return `${range} · ${types[0]} 패턴`;
+  return `${range} · ${types.join("→")} 혼합 패턴`;
 }
 
 // 희망 조건 표시 — 새 방식(memo) 우선, 구버전(구조화 필드) 호환
@@ -2005,7 +1990,7 @@ function buildMyOfferedForRequest() {
   if (ss.length === 0) return null;
   const routes = ss.map(s => s.routeSummary || (s.dep&&s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : s.type)).join(" · ");
   return {
-    patternName: `${schedMonthNum(ss[0])}/${ss[0].day}~${schedMonthNum(ss.at(-1))}/${ss.at(-1).day} · ${ss[0].type} 패턴`,
+    patternName: patternTitleFor(ss),
     summary: routes,
     type: ss[0].type,
     days: ss.map(s => s.day),
@@ -2037,14 +2022,19 @@ function openRequestModal(postId) {
   const mine = buildMyOfferedForRequest();
   const reqD = document.getElementById("reqDialog");
   reqD._postId = postId;
+  const theirDays = (p.offered.days || []).length || 1;
+  const myDays = mine ? mine.days.length : 0;
+  const dayMismatch = mine && myDays !== theirDays;
   document.getElementById("reqDialogTitle").textContent = `${p.ownerNick || "상대"} 님에게 스왑 요청`;
   document.getElementById("reqMine").innerHTML = mine
-    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>`
-    : `<span class="hint">내 근무에서 줄 근무를 선택하세요</span>`;
+    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>${dayMismatch ? `<div class="req-day-warn">⚠ ${myDays}일 선택됨 (상대는 ${theirDays}일)</div>` : ""}`
+    : `<span class="hint">내 근무에서 줄 근무를 선택하세요 (상대와 같은 ${theirDays}일)</span>`;
   document.getElementById("reqTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
-  document.getElementById("reqHint").textContent = "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
-  document.getElementById("reqConfirmButton").disabled = !mine;
+  document.getElementById("reqHint").textContent = dayMismatch
+    ? `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 요청을 보낼 수 없습니다.`
+    : "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
+  document.getElementById("reqConfirmButton").disabled = !mine || dayMismatch;
   openGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -2055,6 +2045,11 @@ async function sendSwapRequest() {
   if (!p) return;
   const mine = buildMyOfferedForRequest();
   if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
+  const theirDays = (p.offered.days || []).length || 1;
+  if (mine.days.length !== theirDays) {
+    showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
+    return;
+  }
   if (state.credits < 1) { showToast("크레딧 부족"); return; }
   try {
     const res = await fetch(`${API_BASE}/api/requests-create`, {
@@ -2850,9 +2845,6 @@ function bindEvents() {
       }).filter(Boolean);
       if (ss.length === 0) continue;
       const firstParsed = parseDayKey(keyGroup[0]);
-      const lastParsed = parseDayKey(keyGroup[keyGroup.length - 1]);
-      const fm = parseInt(firstParsed.month.split('-')[1]);
-      const lm = parseInt(lastParsed.month.split('-')[1]);
 
       const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
       const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
@@ -2882,7 +2874,7 @@ function bindEvents() {
         deadlineMonth: ss[0].month || state.currentMonth,
         watchers: 0,
         offered: {
-          patternName: `${fm}/${firstParsed.day}${keyGroup.length > 1 ? `~${fm !== lm ? lm + "/" : ""}${lastParsed.day}` : ""} · ${ss[0].type} 패턴`,
+          patternName: patternTitleFor(ss),
           days: keyGroup.map(k => parseDayKey(k).day),
           summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
           type: ss[0].type,
@@ -3049,6 +3041,10 @@ function bindEvents() {
     const msg = $("#askMessage").value.trim();
     if (!msg) { showToast("메시지를 입력해주세요."); return; }
     if (!state.user.email) { showToast("이메일 인증 정보가 없어 보낼 수 없습니다."); return; }
+    if (containsPersonalInfo(msg)) {
+      showToast("⚠ 연락처/신상정보는 보낼 수 없습니다. 상호 수락 후 공개됩니다.");
+      return;
+    }
     const postId = $("#askDialog")._pendingPostId;
     try {
       const res = await fetch(`${API_BASE}/api/requests-create`, {
