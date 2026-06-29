@@ -2204,6 +2204,15 @@ function saveAlertedReqIds(set) {
   localStorage.setItem("crewswap_alerted_reqs", JSON.stringify([...set].slice(-200)));
 }
 
+// 내가 보낸 의향 문의가 상대에게 수락됐을 때 — 이미 알림 띄운 건 중복 방지
+function getSeenAskAcceptedIds() {
+  try { return new Set(JSON.parse(localStorage.getItem("crewswap_seen_ask_accepted") || "[]")); }
+  catch { return new Set(); }
+}
+function saveSeenAskAcceptedIds(set) {
+  localStorage.setItem("crewswap_seen_ask_accepted", JSON.stringify([...set].slice(-200)));
+}
+
 async function fetchRequests() {
   if (!state.user.email) return;
   try {
@@ -2217,7 +2226,8 @@ async function fetchRequests() {
       return `${Math.round(mins / 60)}시간 전`;
     };
     const received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
-    state.requests.sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
+    const sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
+    state.requests.sent = sent;
     // 받은 요청 중 아직 종 알림 안 띄운 것 → 종 알림 추가 (있던 것/새 것 모두 한 번씩)
     const alerted = getAlertedReqIds();
     let changed = false;
@@ -2230,12 +2240,27 @@ async function fetchRequests() {
         title: isAsk ? "💬 양도 의향 문의 도착" : "📩 스왑 요청 도착",
         body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
         time: r.sentAgo || "방금",
+        viewMode: "received",
       });
       // 토스트는 최근(2분 내) 도착분만 (오래된 것 무더기 토스트 방지)
       const mins = (Date.now() - new Date(r.createdAt).getTime()) / 60000;
       if (mins <= 2) showToast(`${isAsk ? "💬 의향 문의" : "📩 스왑 요청"} 도착 — ${r.fromNick || "상대"} 님`);
     });
-    if (changed) { saveAlertedReqIds(alerted); saveState(); renderAlerts(); }
+    // 내가 보낸 의향 문의가 상대에게 수락됐을 때도 알려줌 (받은 쪽만 알림 가던 문제 보완)
+    const seenAccepted = getSeenAskAcceptedIds();
+    sent.forEach(r => {
+      if (r.type !== "ask" || !r.askAccepted || seenAccepted.has(r.id)) return;
+      seenAccepted.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "✓ 의향 수락됨",
+        body: `${r.toNick || "상대"} 님이 관심을 수락했습니다 · ${r.postTitle || ""} — 정식 요청을 보내보세요`,
+        time: r.sentAgo || "방금",
+        viewMode: "sent",
+      });
+      showToast(`✓ ${r.toNick || "상대"} 님이 의향을 수락했습니다`);
+    });
+    if (changed) { saveAlertedReqIds(alerted); saveSeenAskAcceptedIds(seenAccepted); saveState(); renderAlerts(); }
     state.requests.received = received;
     renderRequests();
     renderReqTabBadge();
@@ -2436,8 +2461,10 @@ function renderAlerts() {
   // 매칭 알림(받은 요청/의향 도착) 클릭 시 요청함 받은 탭으로 이동 — 원본은 그대로 유지, 알림만 닫힘
   $$("#alertList .alert-item.match").forEach(el => {
     el.addEventListener("click", () => {
-      state.reqViewMode = "received";
-      $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === "received"));
+      const a = state.alerts[parseInt(el.dataset.alertIdx, 10)];
+      const mode = (a && a.viewMode) || "received";
+      state.reqViewMode = mode;
+      $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
       switchTab("requests");
       $("#alertPanel").hidden = true;
     });
