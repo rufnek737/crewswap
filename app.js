@@ -345,7 +345,7 @@ function createMockRequests() {
 function createMockAlerts() {
   return [
     { kind:"announce", title:"📢 CrewSwap 사용 안내",
-      body:"① 내 스케줄 탭에서 스왑할 패턴 선택 → ② 스왑 등록 탭에서 희망 조건 입력 후 등록(1크레딧) → ③ 스왑 찾기 탭에서 상대방 글 확인 · 요청. 가입 시 5크레딧 지급. 비연속 패턴은 각각 1크레딧 차감됩니다.",
+      body:"CrewSwap은 승무원 스케줄 스왑을 더 쉽게 찾고 요청할 수 있는 서비스입니다.\n\n내 근무 확인\n내 근무에서 스케줄을 확인하고, 바꾸고 싶은 근무를 선택할 수 있습니다.\n\n스왑 찾기\n스왑하기에서 다른 사용자가 올린 스왑 글을 확인하세요.\n\n요청하기\n원하는 스왑 글을 찾았다면 요청하기를 누르고, 내가 대신 줄 근무를 선택해 제안할 수 있습니다.\n\n요청 확인\n요청함에서 내가 보낸 요청과 받은 요청을 확인할 수 있습니다.\n\n수락 후 진행\n상대가 요청을 수락하면 상세 정보를 확인한 뒤 회사 절차에 따라 스케줄 변경을 진행하면 됩니다.\n\n현재 베타 기간에는 일부 기능이 변경될 수 있습니다.\n사용 중 불편한 점이나 오류가 있으면 언제든 피드백 부탁드립니다.",
       time:"공지" },
   ];
 }
@@ -362,11 +362,6 @@ function createMockSavedSearches() {
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-// 양도 의향 묻기 메시지에서 연락처/신상정보 패턴 감지 (크레딧 우회 직거래 방지)
-const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]\d{6})|(카카오\s?(아이디|id|톡)?\s?[:：]?\s?[a-zA-Z0-9_.]{2,})|(010|011|016|017|018|019)\s*[-.\s]?\s*\d/;
-function containsPersonalInfo(text) {
-  return PERSONAL_INFO_RE.test(text || "");
-}
 
 // iOS 핀치 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
 ["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
@@ -550,6 +545,14 @@ function selectPattern(day) {
   if (s.lockReason) {
     showToast(`이 비행은 SWAP할 수 없습니다 — ${s.lockReason}`);
     return;
+  }
+  const isAdding = !state.selectedDays.has(dayKey(day));
+  if (isAdding) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (dayToDate(day, s.month) < today) {
+      showToast("이미 지난 근무는 SWAP/의향 표시를 할 수 없습니다.");
+      return;
+    }
   }
 
   // 패턴 자동 묶음 선택 비활성화 — CrewConnex 파싱이 묶음을 잘못 잡는 경우가 있어
@@ -2278,36 +2281,35 @@ function renderRequests() {
   const reqs = state.requests[state.reqViewMode];
   $("#requestList").innerHTML = reqs.length ? reqs.map(r => requestCard(r)).join("") : `<div class="empty-state">${state.reqViewMode==="sent"?"보낸":"받은"} 요청이 없습니다.</div>`;
   $$("#requestList .accept-req-btn").forEach(b => b.onclick = () => acceptRequest(b.dataset.reqId));
-  $$("#requestList .reply-req-btn").forEach(b => b.onclick = () => replyToRequest(b.dataset.reqId));
+  $$("#requestList .ask-accept-btn").forEach(b => b.onclick = () => acceptAsk(b.dataset.reqId));
+  $$("#requestList .decline-req-btn").forEach(b => b.onclick = () => declineRequest(b.dataset.reqId));
   $$("#requestList .delete-req-btn").forEach(b => b.onclick = () => deleteRequest(b.dataset.reqId));
 }
 
-async function replyToRequest(reqId) {
-  const input = document.querySelector(`.reply-req-input[data-req-id="${reqId}"]`);
-  const msg = input ? input.value.trim() : "";
-  if (!msg) { showToast("답장 내용을 입력하세요."); return; }
+// 받은 의향 문의에 "관심 수락" — 자유 텍스트 답장 없이 구조화된 응답만 허용
+async function acceptAsk(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
-  if (containsPersonalInfo(msg)) {
-    showToast("⚠ 연락처/신상정보는 보낼 수 없습니다. 상호 수락 후 공개됩니다.");
-    return;
-  }
   try {
-    const res = await fetch(`${API_BASE}/api/requests-reply`, {
+    const res = await fetch(`${API_BASE}/api/requests-ask-accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email, nick: state.user.nickname, message: msg }),
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { showToast(data.error || "답장 전송 실패"); return; }
-  } catch (e) { showToast("답장 전송 실패 — 네트워크 오류"); return; }
-  if (input) input.value = "";
+    if (!res.ok) { showToast(data.error || "처리 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("처리 실패 — 네트워크 오류"); return; }
   fetchRequests();
-  showToast("답장을 보냈습니다.");
+  showToast("💬 관심을 수락했습니다 — 상대가 정식 요청을 보낼 수 있습니다.");
 }
 
-async function deleteRequest(reqId) {
+// 거절 — 자유 텍스트 답장 대신 삭제로 처리 (양쪽 화면에서 사라짐)
+async function declineRequest(reqId) {
+  await deleteRequest(reqId, "이 요청/의향을 거절할까요? 상대방 화면에서도 사라집니다.");
+}
+
+async function deleteRequest(reqId, confirmMsg) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
-  if (!confirm("이 요청/의향을 삭제할까요? 상대방 화면에서도 사라집니다.")) return;
+  if (!confirm(confirmMsg || "이 요청/의향을 삭제할까요? 상대방 화면에서도 사라집니다.")) return;
   try {
     const res = await fetch(`${API_BASE}/api/requests-delete`, {
       method: "POST",
@@ -2338,6 +2340,8 @@ function requestCard(r) {
   }).join("");
   const badgeCls = newStage >= 2 ? "accepted" : "";
   const accepted = newStage >= 2;
+  const isAsk = r.type === "ask";
+  const needsResponse = state.reqViewMode === "received" && (isAsk ? !r.askAccepted : !accepted);
 
   return `
     <article class="request-card">
@@ -2349,11 +2353,6 @@ function requestCard(r) {
         <span class="badge ${badgeCls}">${r.status}</span>
       </div>
       ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
-      ${r.thread && r.thread.length ? `<div class="req-thread">${r.thread.map(t => `
-        <div class="req-thread-msg ${t.from === state.user.email ? "mine" : ""}">
-          <strong>${t.from === state.user.email ? "나" : (t.nick || "상대")}</strong>
-          <span>${escapeHtml(t.message)}</span>
-        </div>`).join("")}</div>` : ""}
       ${r.offered ? `<div class="req-exchange">
         <div class="req-ex-side"><span>${state.reqViewMode==="received"?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
         <div class="req-ex-arrow">⇄</div>
@@ -2387,13 +2386,12 @@ function requestCard(r) {
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
-      ${(state.reqViewMode === "received" && r.type !== "ask" && !accepted)
-        ? `<button class="primary-button accept-req-btn" data-req-id="${r.id}" style="width:100%;margin-top:12px;">✓ 상호 수락하기</button>`
+      ${needsResponse
+        ? `<div class="req-respond-buttons">
+             <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
+             <button class="primary-button ${isAsk ? "ask-accept-btn" : "accept-req-btn"}" data-req-id="${r.id}">${isAsk ? "✓ 관심 수락" : "✓ 상호 수락하기"}</button>
+           </div>`
         : ""}
-      <div class="req-reply-box">
-        <input type="text" class="reply-req-input" data-req-id="${r.id}" placeholder="답장 (연락처/이름 등 신상정보는 자동 차단)" maxlength="200" />
-        <button class="secondary-button reply-req-btn" data-req-id="${r.id}">답장</button>
-      </div>
       <button class="link-button danger delete-req-btn" data-req-id="${r.id}">🗑 삭제</button>
     </article>
   `;
@@ -2420,18 +2418,28 @@ function renderAlerts() {
   const allIndexed = state.alerts.map((a, i) => ({ a, i }));
   const items = filter === "all" ? allIndexed : allIndexed.filter(x => x.a.kind === filter);
   $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => `
-    <div class="alert-item ${a.kind}">
+    <div class="alert-item ${a.kind}" data-alert-idx="${i}">
       <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
-      <strong>${a.title}</strong>
-      <p>${a.body}</p>
+      <strong>${escapeHtml(a.title)}</strong>
+      <p>${escapeHtml(a.body)}</p>
       <span class="time">${a.time}</span>
     </div>
   `).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
   $$("#alertList .alert-del-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       state.alerts.splice(parseInt(btn.dataset.alertIdx, 10), 1);
       saveState();
       renderAlerts();
+    });
+  });
+  // 매칭 알림(받은 요청/의향 도착) 클릭 시 요청함 받은 탭으로 이동 — 원본은 그대로 유지, 알림만 닫힘
+  $$("#alertList .alert-item.match").forEach(el => {
+    el.addEventListener("click", () => {
+      state.reqViewMode = "received";
+      $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === "received"));
+      switchTab("requests");
+      $("#alertPanel").hidden = true;
     });
   });
   $("#bellBadge").textContent = state.alerts.length;
@@ -3178,7 +3186,8 @@ function bindEvents() {
   });
   document.getElementById("clearAllAlerts")?.addEventListener("click", () => {
     if (!state.alerts.length) return;
-    state.alerts = [];
+    // 공지(사용 안내)는 모두 삭제에서 제외 — 매칭/마감 알림만 비움
+    state.alerts = state.alerts.filter(a => a.kind === "announce");
     saveState();
     renderAlerts();
   });
@@ -3274,6 +3283,13 @@ function loadStateFromStorage() {
       // 구버전 목업 알림이면 새 공지로 교체
       if (state.alerts.some(a => a.title === "🎯 매칭 후보 등장" || a.title === "⏰ 마감 임박")) {
         state.alerts = createMockAlerts();
+      }
+      // 공지 안내문 갱신 — 기존에 저장된 옛 공지 내용을 최신 안내문으로 교체
+      const latestAnnounce = createMockAlerts()[0];
+      if (state.alerts.some(a => a.kind === "announce")) {
+        state.alerts = state.alerts.map(a => a.kind === "announce" ? { ...a, ...latestAnnounce } : a);
+      } else {
+        state.alerts.push(latestAnnounce);
       }
     }
 

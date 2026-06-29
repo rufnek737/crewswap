@@ -309,24 +309,22 @@ async function handleRequestsAccept(request, env) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
-/* ── requests-reply (요청/의향에 짧은 답장 — 신상정보는 동일하게 차단) ── */
+/* ── requests-ask-accept (받은 의향 문의에 "관심 수락" — 자유 텍스트 답장 없음) ── */
 
-async function handleRequestsReply(request, env) {
-  let id, email, nick, message;
-  try { ({ id, email, nick, message } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
-  if (!id || !email || !message) return json({ error: '필수 필드 누락' }, 400);
-  if (PERSONAL_INFO_RE.test(message))
-    return json({ error: '연락처/신상정보는 보낼 수 없습니다 (상호 수락 후 공개)' }, 400);
+async function handleRequestsAskAccept(request, env) {
+  let id, email;
+  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.fromEmail !== email && rec.toEmail !== email)
-      return json({ error: '답장 권한이 없습니다' }, 403);
-    if (!Array.isArray(rec.thread)) rec.thread = [];
-    rec.thread.push({ from: email, nick: nick || null, message, at: new Date().toISOString() });
+    if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403);
+    if (rec.type !== 'ask') return json({ error: '의향 문의가 아닙니다' }, 400);
+    rec.askAccepted = true;
+    rec.status = '💬 의향 수락 — 정식 요청을 기다리는 중';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
-    return json({ ok: true, thread: rec.thread });
+    return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
@@ -810,7 +808,7 @@ export default {
     if (path === '/api/requests-create') return handleRequestsCreate(request, env);
     if (path === '/api/requests-get')    return handleRequestsGet(request, env);
     if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
-    if (path === '/api/requests-reply')  return handleRequestsReply(request, env);
+    if (path === '/api/requests-ask-accept') return handleRequestsAskAccept(request, env);
     if (path === '/api/requests-delete') return handleRequestsDelete(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });
