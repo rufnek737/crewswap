@@ -472,12 +472,17 @@ function dutyMinutesOf(s) {
   return Math.max(0, b - a);
 }
 
-/* ====== FOM 5.5.3 가 — 휴식시간 검증 (운항승무원) ======
- * 계획 단계 기준: 실제 비행시각 대신 C/I(reportTime)~C/O(releaseTime)로 비행근무시간(FDT) 추정.
+/* ====== 비행 전후 휴식시간 검증 ======
+ * 계획 단계 기준: 실제 비행시각 대신 C/I(reportTime)·STA(arrivalTime)·C/O(releaseTime)로 산정.
  * 새로 받는 근무 블록의 직전/직후 날짜에 내 근무가 남아 있을 때, 그 사이 휴식이
- * FOM 최소 기준을 만족하는지 검사한다. (객실용은 별도 테이블로 추후 추가) */
+ * 최소 기준을 만족하는지 검사한다.
+ *
+ * - 운항(PILOT): FOM 5.5.3 가 — 직전 근무 C/O → 새 근무 C/I 간격이 직전 FDT 기준 휴식 이상.
+ * - 객실(CABIN): 회사 SKD Swap 산정기준 — 직전 STA(도착) → 새 근무 C/I(출두) 간격.
+ *     도착공항 ICN이면 12h00(인천-김포 셔틀 40분 포함), 그 외(GMP/PUS 등) 11h20.
+ *     (Rest 10h 포함값. 객실 FOM상 비행근무 14h 초과 시 휴식 14h → +4h 가산) */
 
-// 비행근무시간(분) → 최소 휴식(분). FOM 5.5.3 가 표.
+// [운항] 비행근무시간(분) → 최소 휴식(분). FOM 5.5.3 가 표.
 function minRestMinForFDT(fdtMin) {
   const h = fdtMin / 60;
   if (h < 8)  return 600;   // 10h
@@ -515,36 +520,71 @@ function fmtDur(min) {
   return m ? `${h}시간 ${m}분` : `${h}시간`;
 }
 
-// offered: { days, reportTime(첫날 C/I), releaseTime(막날 C/O), lastReport(막날 C/I) }
+// [객실] 직전 근무 도착공항·비행근무시간 → 최소 STA→C/I 필요시간(분). 회사 SKD Swap 산정기준.
+function cabinRestReqMin(arrAirport, fdtMin) {
+  let base = arrAirport === "ICN" ? 720 : 680; // 12h00(셔틀 포함) / 11h20 — Rest 10h 포함값
+  if (fdtMin > 14 * 60) base += 240;           // 객실 FOM: 비행근무 14h 초과 시 휴식 14h(+4h)
+  return base;
+}
+
+// offered: { days, reportTime(첫날 C/I), releaseTime(막날 C/O), lastReport(막날 C/I),
+//            lastArrival(막날 STA), lastArrAirport(막날 도착공항) }
 // givenAwayDays: 내가 내주는 날짜(이 날들의 내 근무는 사라지므로 인접 검사에서 제외)
 function restCheckIncoming(offered, givenAwayDays) {
   if (!offered || !offered.days || !offered.days.length) return { ok: true, issues: [] };
   const days = [...offered.days].sort((a, b) => a - b);
   const firstDay = days[0], lastDay = days[days.length - 1];
-  const firstCI = offered.reportTime, lastCO = offered.releaseTime;
-  const lastCI = offered.lastReport || offered.reportTime;
-  // OFF/RSV 등 시각 없는 근무를 받는 경우 → 검사 불가(제약 없음)
-  if (!firstCI || !/^\d/.test(firstCI) || !lastCO || !/^\d/.test(lastCO)) return { ok: true, issues: [], unknown: true };
+  const firstCI = offered.reportTime;
+  // 새로 받는 근무에 출두(C/I) 정보가 없으면(OFF/RSV 등) 검사 불가 → 제약 없음
+  if (!firstCI || !/^\d/.test(firstCI)) return { ok: true, issues: [], unknown: true };
+  const isCabin = state.user.crewType === "CABIN";
   const given = new Set(givenAwayDays || []);
   const issues = [];
+  const newCI = absMinAt(firstDay, firstCI);
 
-  // 직전 휴식: (firstDay-1) 내 근무 C/O → 새 근무 첫날 C/I (직전 근무 FDT 기준)
+  // ── 직전 휴식: (firstDay-1)의 내 근무 → 새 근무 첫날 출두(C/I)
   if (!given.has(firstDay - 1)) {
     const prev = dutyOnDay(firstDay - 1);
     if (prev) {
-      const gap = absMinAt(firstDay, firstCI) - absMinAt(prev.day, prev.releaseTime);
-      const need = minRestMinForFDT(dutyMinutesOf(prev));
+      let gap = null, need = null;
+      if (isCabin) {
+        // STA(도착) → C/I(출두), 직전 근무 도착공항·FDT 기준
+        if (prev.arrivalTime && /^\d/.test(prev.arrivalTime)) {
+          gap = newCI - absMinAt(prev.day, prev.arrivalTime);
+          need = cabinRestReqMin(prev.arr, dutyMinutesOf(prev));
+        }
+      } else {
+        // 운항: C/O(퇴근) → C/I(출두), 직전 근무 FDT 기준
+        gap = newCI - absMinAt(prev.day, prev.releaseTime);
+        need = minRestMinForFDT(dutyMinutesOf(prev));
+      }
       if (gap != null && !isNaN(gap) && gap < need)
         issues.push({ side: "before", gap, need, label: `${prev.day}일 ${prev.title}` });
     }
   }
-  // 직후 휴식: 새 근무 막날 C/O → (lastDay+1) 내 근무 C/I (새 근무 막날 FDT 기준)
+  // ── 직후 휴식: 새 근무 막날 → (lastDay+1)의 내 근무 출두(C/I)
   if (!given.has(lastDay + 1)) {
     const next = dutyOnDay(lastDay + 1);
-    if (next) {
-      const gap = absMinAt(next.day, next.reportTime) - absMinAt(lastDay, lastCO);
-      const newFDT = Math.max(0, absMinAt(lastDay, lastCO) - absMinAt(lastDay, lastCI));
-      const need = minRestMinForFDT(newFDT);
+    if (next && next.reportTime && /^\d/.test(next.reportTime)) {
+      const nextCI = absMinAt(next.day, next.reportTime);
+      let gap = null, need = null;
+      if (isCabin) {
+        // 새 근무 막날 STA(도착) → 다음 근무 C/I(출두)
+        if (offered.lastArrival && /^\d/.test(offered.lastArrival)) {
+          const blockFDT = (offered.lastReport && /^\d/.test(offered.lastReport) && offered.releaseTime && /^\d/.test(offered.releaseTime))
+            ? Math.max(0, absMinAt(lastDay, offered.releaseTime) - absMinAt(lastDay, offered.lastReport)) : 0;
+          gap = nextCI - absMinAt(lastDay, offered.lastArrival);
+          need = cabinRestReqMin(offered.lastArrAirport, blockFDT);
+        }
+      } else {
+        // 운항: 새 근무 막날 C/O → 다음 근무 C/I, 막날 FDT 기준
+        if (offered.releaseTime && /^\d/.test(offered.releaseTime)) {
+          const lastCI = offered.lastReport && /^\d/.test(offered.lastReport) ? offered.lastReport : firstCI;
+          const blockFDT = Math.max(0, absMinAt(lastDay, offered.releaseTime) - absMinAt(lastDay, lastCI));
+          gap = nextCI - absMinAt(lastDay, offered.releaseTime);
+          need = minRestMinForFDT(blockFDT);
+        }
+      }
       if (gap != null && !isNaN(gap) && gap < need)
         issues.push({ side: "after", gap, need, label: `${next.day}일 ${next.title}` });
     }
@@ -557,7 +597,7 @@ function restIssueMessage(rc) {
   if (!rc || rc.ok) return null;
   const i = rc.issues[0];
   const where = i.side === "before" ? "직전" : "직후";
-  return `❌ 휴식시간 부족 — ${where} 근무(${i.label})와 간격 ${fmtDur(i.gap)} · FOM 최소 ${fmtDur(i.need)} 필요`;
+  return `❌ 휴식시간 부족 — ${where} 근무(${i.label})와 간격 ${fmtDur(i.gap)} · 최소 ${fmtDur(i.need)} 필요`;
 }
 
 function airportRegion(code) { return AIRPORT_REGION[code] || "OTHER"; }
@@ -2114,6 +2154,8 @@ function buildMyOfferedForRequest() {
     reportTime: (ss.find(s => s.reportTime && /^\d/.test(s.reportTime)) || {}).reportTime || null,
     releaseTime: ([...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime)) || {}).releaseTime || null,
     lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
+    lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
+    lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
   };
 }
 
@@ -2207,7 +2249,7 @@ function openRequestModal(postId) {
     hintEl.textContent = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 요청을 보낼 수 없습니다.`;
     hintEl.style.color = "";
   } else if (restMsg) {
-    hintEl.innerHTML = `${restMsg}<br><small>FOM 5.5.3 휴식 기준 위반 — 회사 신청이 반려될 수 있어 요청을 보낼 수 없습니다.</small>`;
+    hintEl.innerHTML = `${restMsg}<br><small>휴식시간 기준 위반 — 회사 신청이 반려될 수 있어 요청을 보낼 수 없습니다.</small>`;
     hintEl.style.color = "#e53e3e";
   } else {
     hintEl.textContent = "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
@@ -2555,7 +2597,7 @@ function requestCard(r) {
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
-      ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 FOM 휴식 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
+      ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 휴식시간 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
       ${needsResponse
         ? `<div class="req-respond-buttons">
              <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
@@ -3206,6 +3248,8 @@ function bindEvents() {
           reportTime: firstFlight ? firstFlight.reportTime : null,
           releaseTime: lastFlight ? lastFlight.releaseTime : null,
           lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
+          lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
+          lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
           crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
         },
         wanted,
