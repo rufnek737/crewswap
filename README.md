@@ -125,6 +125,33 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-06-30 — 연락처 공개·거절 양해·휴식시간 검증(운항/객실)·당겨서 새로고침
+
+#### 상호 수락 시 실명/사번/연락처 공개
+- 문제: 상호 수락해도 "회사 상신 단계에서 양측에 공개" 안내만 뜨고 실제 연락처가 안 보임.
+- 해결: 가입·내정보 폼에 실명/사번/연락처 입력 필드 추가(`signupRealName`/`employeeIdInput` 등). 요청 생성 시 `fromRealName`/`fromEmployeeId`/`fromPhone`, 수락 시 `toRealName`/`toEmployeeId`/`toPhone`를 worker(`req:` 레코드)에 저장. 상호 수락(stage≥2) 후 카드의 "실명/사번/연락처" 행에 상대방 정보를 실제 노출(보낸/받은 관점에 따라 상대 측 값 표시).
+
+#### 거절 시 양해 메세지 전송 (자동 삭제 → 회신)
+- 문제: 받은 요청/의향을 거절하면 그냥 삭제되어 상대가 이유를 알 수 없음.
+- 해결: worker `requests-decline` 신규 — 거절 시 레코드에 `declined`/`declineMsg`("관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다.") 저장. 보낸 사람은 폴링으로 거절 감지 → 토스트 + 종 알림, 보낸 카드에 양해 메세지 표시.
+
+#### 쓸모없던 버튼 제거 + 알림 시간 정확화
+- 상호수락 옆 동작 없는 "요청 발송/회사 상신" 스테퍼 아이콘(`privacy-stepper`) 제거.
+- 알림이 12시간 전 것도 "방금"으로 고정되던 문제 → 알림에 `createdAt` 저장, 렌더 시 `alertTimeAgo()`로 경과시간 동적 계산(방금/N분 전/N시간 전/N일 전).
+
+#### 비행 전후 휴식시간 검증 — 스왑 가능 여부 자동 판정
+- 새로 받는 근무 블록의 직전/직후 날짜에 내 근무가 남으면, 그 사이 휴식이 규정 최소를 만족하는지 검사(C/I·STA·C/O 기준, 계획단계). 양방향(요청 보낼 때·받을 때) 각자 자기 로스터로 판정 → 위반 시 빨간 경고 + 요청/상호수락 버튼 비활성화.
+- **운항(FOM 5.5.3 가)**: 직전 근무 C/O → 새 근무 C/I 간격이 직전 FDT(비행근무시간)별 최소휴식(8h미만 10h … 19h↑ 26h) 이상인지. `minRestMinForFDT`.
+- **객실(회사 SKD Swap 산정기준)**: 직전 STA(도착) → 새 근무 C/I(출두) 간격. 회사 "최소 필요시간" 표를 STA→C/I로 환산하면 출두~STD·여력이 상쇄되어 **도착공항 ICN 12h00(인천-김포 셔틀 40분 포함) / 그 외 11h20**로 단순화(5개 노선조합·예시표 검증 일치). 비행근무 14h 초과 시 휴식 14h(+4h). `cabinRestReqMin`. `state.user.crewType`로 분기.
+- offered/mine에 `lastReport`(막날 C/I)·`lastArrival`(막날 STA)·`lastArrAirport`(막날 도착공항) 추가 — 다중일 패턴 막날 FDT/도착공항 산정용.
+
+#### 당겨서 새로고침 (pull-to-refresh)
+- Capacitor WebView는 기본 새로고침이 없어 직접 구현(`initPullToRefresh`). 화면 맨 위에서 당겼다 놓으면 현재 탭 갱신(스왑찾기 `fetchPosts`/요청 `fetchRequests`/올린글 `fetchMyPosts`/내근무 `renderAll`). 입력 폼 탭은 미적용(작성 내용 유실 방지). 임계값 70px, 당김 인디케이터 표시.
+
+#### 빌드/배포 메모
+- `www/`는 Capacitor webDir이자 `.gitignore` 대상(루트 web 파일의 수동 복사본). 앱 빌드 전 `cp app.js index.html styles.css sw.js manifest.json www/` 필수 — 누락 시 앱이 구버전을 담음.
+- sw 캐시 v46 → v50. Netlify 배포는 매번 사용자 허가 후에만.
+
 ### 2026-06-28 (오후) — 의향묻기 구조화 전환 + 다중 선택 흐름 + 회신/삭제 + KV 캐싱
 
 #### 양도 의향 묻기 재설계 (자유 텍스트 → 스케줄 선택)
