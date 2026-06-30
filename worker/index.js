@@ -246,7 +246,7 @@ const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const { postId, fromEmail, fromNick, fromBase, fromRole, type, message, offered } = body || {};
+  const { postId, fromEmail, fromNick, fromBase, fromRole, fromRealName, fromEmployeeId, fromPhone, type, message, offered } = body || {};
   if (!postId || !fromEmail || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
   // 정식 요청은 "내가 줄 근무(offered)"가 반드시 있어야 함 (의향묻기는 선택)
@@ -276,6 +276,7 @@ async function handleRequestsCreate(request, env) {
       base: post.ownerBase || null,
       message: message || '',
       fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
+      fromRealName: fromRealName || '', fromEmployeeId: fromEmployeeId || '', fromPhone: fromPhone || '',
       offered: offered || null, // 요청자가 줄 근무(X)
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
       status: type === 'ask' ? '의향 문의' : '요청 대기',
@@ -293,16 +294,20 @@ async function handleRequestsCreate(request, env) {
 /* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
 
 async function handleRequestsAccept(request, env) {
-  let id, email;
-  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, realName, employeeId, phone;
+  try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403); // 받은 사람만 수락 가능
-    rec.stage = 3;               // 상호 수락 → 회사 상신 단계
+    if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403);
+    rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
+    // 수락자(받은 사람) 연락처 저장
+    rec.toRealName = realName || '';
+    rec.toEmployeeId = employeeId || '';
+    rec.toPhone = phone || '';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     return json({ ok: true });
@@ -322,6 +327,26 @@ async function handleRequestsAskAccept(request, env) {
     if (rec.type !== 'ask') return json({ error: '의향 문의가 아닙니다' }, 400);
     rec.askAccepted = true;
     rec.status = '💬 의향 수락 — 정식 요청을 기다리는 중';
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-decline (받은 요청 거절 — 양해 메세지 상태로 저장) ─────── */
+
+async function handleRequestsDecline(request, env) {
+  let id, email;
+  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ ok: true, alreadyGone: true });
+    if (rec.toEmail !== email) return json({ error: '거절 권한이 없습니다' }, 403);
+    rec.status = '💔 거절됨';
+    rec.declined = true;
+    rec.declinedAt = new Date().toISOString();
+    rec.declineMsg = '관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다.';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     return json({ ok: true });
@@ -809,6 +834,7 @@ export default {
     if (path === '/api/requests-get')    return handleRequestsGet(request, env);
     if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
     if (path === '/api/requests-ask-accept') return handleRequestsAskAccept(request, env);
+    if (path === '/api/requests-decline') return handleRequestsDecline(request, env);
     if (path === '/api/requests-delete') return handleRequestsDelete(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });

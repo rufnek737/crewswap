@@ -2083,6 +2083,7 @@ async function sendAskInterest() {
         postId, type: "ask",
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
+        fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
         offered: mine,
       }),
     });
@@ -2137,6 +2138,7 @@ async function sendSwapRequest() {
         postId, type: "request",
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
+        fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
         offered: mine,
       }),
     });
@@ -2240,6 +2242,7 @@ async function fetchRequests() {
         title: isAsk ? "💬 양도 의향 문의 도착" : "📩 스왑 요청 도착",
         body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
         time: r.sentAgo || "방금",
+        createdAt: r.createdAt || new Date().toISOString(),
         viewMode: "received",
       });
       // 토스트는 최근(2분 내) 도착분만 (오래된 것 무더기 토스트 방지)
@@ -2256,10 +2259,27 @@ async function fetchRequests() {
         title: "✓ 의향 수락됨",
         body: `${r.toNick || "상대"} 님이 관심을 수락했습니다 · ${r.postTitle || ""} — 정식 요청을 보내보세요`,
         time: r.sentAgo || "방금",
+        createdAt: new Date().toISOString(),
         viewMode: "sent",
       });
       showToast(`✓ ${r.toNick || "상대"} 님이 의향을 수락했습니다`);
     });
+    // 내가 보낸 요청이 거절됐을 때 알림
+    const seenDeclined = new Set(JSON.parse(localStorage.getItem("crewswap_seen_declined") || "[]"));
+    sent.forEach(r => {
+      if (!r.declined || seenDeclined.has(r.id)) return;
+      seenDeclined.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "💔 요청/의향 거절됨",
+        body: `${r.toNick || "상대"} 님 · ${r.declineMsg || "개인적 사정으로 거절"}`,
+        time: "방금",
+        createdAt: r.declinedAt || new Date().toISOString(),
+        viewMode: "sent",
+      });
+      showToast(`💔 ${r.toNick || "상대"} 님이 요청을 거절했습니다`);
+    });
+    localStorage.setItem("crewswap_seen_declined", JSON.stringify([...seenDeclined].slice(-200)));
     if (changed) { saveAlertedReqIds(alerted); saveSeenAskAcceptedIds(seenAccepted); saveState(); renderAlerts(); }
     state.requests.received = received;
     renderRequests();
@@ -2318,7 +2338,7 @@ async function acceptAsk(reqId) {
     const res = await fetch(`${API_BASE}/api/requests-ask-accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email }),
+      body: JSON.stringify({ id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || "처리 실패 — 다시 시도해주세요."); return; }
@@ -2327,9 +2347,22 @@ async function acceptAsk(reqId) {
   showToast("💬 관심을 수락했습니다 — 상대가 정식 요청을 보낼 수 있습니다.");
 }
 
-// 거절 — 자유 텍스트 답장 대신 삭제로 처리 (양쪽 화면에서 사라짐)
+// 거절 — 양해 메세지를 보낸 후 요청 삭제
 async function declineRequest(reqId) {
-  await deleteRequest(reqId, "이 요청/의향을 거절할까요? 상대방 화면에서도 사라집니다.");
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  if (!confirm("거절할까요? 상대방에게 양해 메세지가 전송됩니다.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-decline`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "거절 처리 실패"); return; }
+  } catch (e) { showToast("거절 실패 — 네트워크 오류"); return; }
+  state.requests.received = state.requests.received.filter(r => r.id !== reqId);
+  renderRequests();
+  showToast("거절했습니다. 상대방에게 양해 메세지가 전송되었습니다.");
 }
 
 async function deleteRequest(reqId, confirmMsg) {
@@ -2351,46 +2384,48 @@ async function deleteRequest(reqId, confirmMsg) {
 }
 
 function requestCard(r) {
-  // 3단계 구조 — 베이스/닉네임은 항상 공개, 실명/사번/연락처만 상호수락 후 공개
-  const stages = [
-    { icon:"📩", label:"요청 발송" },
-    { icon:"✓",  label:"상호 수락" },
-    { icon:"📞", label:"회사 상신" },
-  ];
-  // 기존 stage 1~4를 새로운 1~3으로 매핑: 1→1, 2→1, 3→2, 4→3
   const newStage = r.stage >= 4 ? 3 : r.stage >= 3 ? 2 : 1;
-  const stagesHtml = stages.map((s, i) => {
-    const cls = (i+1) < newStage ? "done" : (i+1) === newStage ? "current" : "";
-    return `<div class="step ${cls}"><span class="step-icon">${s.icon}</span>${s.label}</div>`;
-  }).join("");
   const badgeCls = newStage >= 2 ? "accepted" : "";
   const accepted = newStage >= 2;
   const isAsk = r.type === "ask";
   const needsResponse = state.reqViewMode === "received" && (isAsk ? !r.askAccepted : !accepted);
+
+  // 상호 수락 후 공개할 상대방 연락처
+  // received: 상대 = fromRealName/fromEmployeeId/fromPhone
+  // sent: 상대 = toRealName/toEmployeeId/toPhone
+  const isSent = state.reqViewMode === "sent";
+  const otherName = accepted ? (isSent ? r.toRealName : r.fromRealName) : "";
+  const otherEmpId = accepted ? (isSent ? r.toEmployeeId : r.fromEmployeeId) : "";
+  const otherPhone = accepted ? (isSent ? r.toPhone : r.fromPhone) : "";
+  const contactLine = accepted
+    ? (otherName || otherEmpId || otherPhone
+        ? `${otherName || "미입력"} · ${otherEmpId || "미입력"} · ${otherPhone || "미입력"}`
+        : "상대방이 아직 연락처를 등록하지 않았습니다")
+    : null;
 
   return `
     <article class="request-card">
       <div class="card-head">
         <div>
           <h3>${r.postTitle}</h3>
-          <p>${state.reqViewMode==="sent"?"내가 보냄":"내가 받음"} · ${r.sentAgo}</p>
+          <p>${isSent?"내가 보냄":"내가 받음"} · ${r.sentAgo}</p>
         </div>
         <span class="badge ${badgeCls}">${r.status}</span>
       </div>
       ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
+      ${r.declined && r.declineMsg ? `<div class="notice" style="margin-bottom:10px;border-color:#e53e3e;background:#fff5f5;">💔 ${escapeHtml(r.declineMsg)}</div>` : ""}
       ${r.offered ? `<div class="req-exchange">
-        <div class="req-ex-side"><span>${state.reqViewMode==="received"?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
+        <div class="req-ex-side"><span>${!isSent?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
         <div class="req-ex-arrow">⇄</div>
-        <div class="req-ex-side"><span>${state.reqViewMode==="received"?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
+        <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
       </div>` : ""}
-      ${r.type === "ask" ? "" : `<div class="privacy-stepper">${stagesHtml}</div>`}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
         <div class="info-row"><span>직책/등급</span><strong>${ROLE_LABELS[r.postOwnerRole || r.requesterRole]}</strong></div>
         <div class="info-row"><span>기종/자격</span><strong>${r.aircraft} / ${r.quals}</strong></div>
         <div class="info-row"><span>베이스</span><strong>${r.base && r.base !== "비공개" ? r.base : "GMP"}</strong></div>
         <div class="info-row"><span>닉네임</span><strong>${r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)"}</strong></div>
-        <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? "✓ 상호 수락 — 회사 상신 단계에서 양측에 공개" : "🔒 상호 수락 후 공개"}</strong></div>
+        <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? `✓ ${contactLine}` : "🔒 상호 수락 후 공개"}</strong></div>
       </div>
       ${accepted ? (() => {
         const rules = currentRules();
@@ -2428,7 +2463,7 @@ async function acceptRequest(reqId) {
     const res = await fetch(`${API_BASE}/api/requests-accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email }),
+      body: JSON.stringify({ id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || "수락 실패 — 다시 시도해주세요."); return; }
@@ -2436,6 +2471,15 @@ async function acceptRequest(reqId) {
   recordSwapMatch();
   showToast("상호 수락 완료 — 회사 상신 단계로 진행하세요.");
   fetchRequests();
+}
+
+function alertTimeAgo(a) {
+  if (!a.createdAt) return a.time || "방금";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(a.createdAt).getTime()) / 60000));
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
+  if (mins < 1440) return `${Math.round(mins / 60)}시간 전`;
+  return `${Math.round(mins / 1440)}일 전`;
 }
 
 function renderAlerts() {
@@ -2447,7 +2491,7 @@ function renderAlerts() {
       <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
       <strong>${escapeHtml(a.title)}</strong>
       <p>${escapeHtml(a.body)}</p>
-      <span class="time">${a.time}</span>
+      <span class="time">${alertTimeAgo(a)}</span>
     </div>
   `).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
   $$("#alertList .alert-del-btn").forEach(btn => {
@@ -2703,6 +2747,9 @@ function bindEvents() {
       state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
         .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
     }
+    state.user.realName    = $("#signupRealName").value.trim();
+    state.user.employeeId  = $("#signupEmployeeId").value.trim();
+    state.user.phone       = $("#signupPhone").value.trim();
     state.user.email    = _verifyEmail;   // 인증된 이메일 저장
     state.user.hasSignedUp = true;
     // 가입 시 데모용 가짜 스케줄 제거 — 본인 CrewConnex를 불러와야 함
@@ -3180,9 +3227,12 @@ function bindEvents() {
     state.user.roleType = $("#roleTypeInput").value;
     state.user.aircraft = $("#aircraftInput").value;
     state.user.base     = $("#baseInput").value;
-    state.user.edto     = $("#edtoInput").checked;
-    state.user.cat2     = $("#cat2Input").checked;
-    state.user.cat3     = $("#cat3Input").checked;
+    state.user.edto        = $("#edtoInput").checked;
+    state.user.cat2        = $("#cat2Input").checked;
+    state.user.cat3        = $("#cat3Input").checked;
+    state.user.realName    = $("#realNameInput").value.trim();
+    state.user.employeeId  = $("#employeeIdInput").value.trim();
+    state.user.phone       = $("#phoneInput").value.trim();
     if (state.user.crewType === "CABIN") {
       state.user.gender = $("#genderInput").value;
       state.user.hasBroadcastRating = $("#broadcastInput")?.checked || false;
@@ -3482,6 +3532,13 @@ function syncFormsFromState() {
     Object.entries(langMap).forEach(([k, id]) => check(id, langs.includes(k)));
     Object.entries(langMapP).forEach(([k, id]) => check(id, langs.includes(k)));
   }
+  // 개인 연락처 복원
+  set("signupRealName",  u.realName   || "");
+  set("signupEmployeeId",u.employeeId || "");
+  set("signupPhone",     u.phone      || "");
+  set("realNameInput",   u.realName   || "");
+  set("employeeIdInput", u.employeeId || "");
+  set("phoneInput",      u.phone      || "");
 }
 
 /* ====== 언어 토글 (KO ↔ EN) — 핵심 라벨만 ====== */
