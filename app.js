@@ -2719,6 +2719,60 @@ function updateRoleSelectForCrewType(crewTypeId, roleSelectId, aircraftLabelId, 
   if (cabinDiv) cabinDiv.hidden = !isCabin;
 }
 
+// 당겨서 새로고침 — 현재 탭에 맞는 갱신 (목록 탭만)
+const PULL_REFRESH_VIEWS = { find: fetchPosts, requests: fetchRequests, post: fetchMyPosts, schedule: renderAll };
+function currentViewId() {
+  const v = document.querySelector(".view.is-active");
+  return v ? v.id : "schedule";
+}
+async function refreshCurrentTab() {
+  const fn = PULL_REFRESH_VIEWS[currentViewId()];
+  if (!fn) return;
+  try { await fn(); } catch (e) { console.warn("pull-refresh error:", e); }
+}
+
+// 화면 맨 위에서 아래로 당겼다 놓으면 새로고침 (Capacitor WebView는 기본 새로고침 없음)
+function initPullToRefresh() {
+  const scroller = document.querySelector(".app");
+  if (!scroller) return;
+  const ind = document.getElementById("pullRefreshIndicator");
+  const THRESHOLD = 70, MAX = 110;
+  let startY = 0, pulling = false, dist = 0, refreshing = false;
+
+  scroller.addEventListener("touchstart", e => {
+    if (refreshing || scroller.scrollTop > 0 || !PULL_REFRESH_VIEWS[currentViewId()]) { pulling = false; return; }
+    startY = e.touches[0].clientY; pulling = true; dist = 0;
+  }, { passive: true });
+
+  scroller.addEventListener("touchmove", e => {
+    if (!pulling || refreshing) return;
+    dist = e.touches[0].clientY - startY;
+    if (dist <= 0) { if (ind) ind.style.height = "0px"; return; }
+    const pull = Math.min(dist * 0.5, MAX);
+    if (ind) {
+      ind.style.height = pull + "px";
+      ind.textContent = pull >= THRESHOLD ? "↑ 놓으면 새로고침" : "↓ 당겨서 새로고침";
+    }
+  }, { passive: true });
+
+  const end = async () => {
+    if (!pulling || refreshing) { pulling = false; return; }
+    pulling = false;
+    const trigger = dist * 0.5 >= THRESHOLD;
+    if (trigger && ind) {
+      refreshing = true;
+      ind.style.height = "44px";
+      ind.textContent = "⟳ 새로고침 중...";
+      await refreshCurrentTab();
+      refreshing = false;
+    }
+    if (ind) { ind.style.height = "0px"; }
+    dist = 0;
+  };
+  scroller.addEventListener("touchend", end, { passive: true });
+  scroller.addEventListener("touchcancel", end, { passive: true });
+}
+
 function bindEvents() {
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
   // 스왑하기 서브탭 (바꿀 근무 찾기 / 스왑 요청 올리기)
@@ -3742,6 +3796,7 @@ function applyLang() {
 
 renderAll();
 bindEvents();
+initPullToRefresh();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
