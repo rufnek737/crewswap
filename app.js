@@ -600,6 +600,63 @@ function restIssueMessage(rc) {
   return `❌ 휴식시간 부족 — ${where} 근무(${i.label})와 간격 ${fmtDur(i.gap)} · 최소 ${fmtDur(i.need)} 필요`;
 }
 
+/* ====== 노조 협약(JPUF 단체교섭 협약서) — 모기지 휴식일수 검증 (운항승무원 전용) ======
+ * "모기지를 떠난 일수"(오버나이트 LAYOV가 포함된 연속 트립의 총 일수)에 따라
+ * 복귀 후 필요한 모기지(집·베이스) 휴식일수가 정해져 있음. 퀵턴(당일 왕복, LAYOV 없음)은 해당 없음.
+ * 검사 방향은 직후만: 새 트립 복귀 후 → 다음 LAYOV 트립 출발 전까지 남는 날수가 부족하면 경고. */
+function mogijiRestReqDays(tripDays) {
+  if (tripDays < 3) return 0;
+  if (tripDays <= 5) return 1;
+  if (tripDays === 6) return 2;
+  if (tripDays === 7) return 3;
+  if (tripDays <= 10) return 4;
+  if (tripDays <= 13) return 5;
+  return 6;
+}
+
+// day 이후(> day) 가장 빠른 "LAYOV 포함 트립"의 시작일 찾기 (현재 달 스케줄 범위 내)
+function nextLayoverTripStartAfter(day) {
+  const seenPid = new Set();
+  let best = null;
+  currentMonthSchedules().forEach(s => {
+    if (s.day <= day || !s.patternId || seenPid.has(s.patternId)) return;
+    seenPid.add(s.patternId);
+    const groupDays = connectedPatternDays(s.patternId, s.day);
+    const hasLayover = groupDays.some(d => {
+      const gs = getSchedule(d);
+      return gs && (gs.type === "LAYOV" || gs.type === "ARRIVAL");
+    });
+    if (!hasLayover) return;
+    const start = groupDays[0];
+    if (start > day && (best === null || start < best)) best = start;
+  });
+  return best;
+}
+
+// offered: { days, hasLayover }. givenAwayDays: 내가 내주는 날짜(사라지는 근무라 다음 트립 판정에서 제외)
+function mogijiRestCheckIncoming(offered, givenAwayDays) {
+  if (state.user.crewType !== "PILOT") return { ok: true, issues: [] };
+  if (!offered || !offered.hasLayover || !offered.days || !offered.days.length) return { ok: true, issues: [] };
+  const tripDays = offered.days.length;
+  const required = mogijiRestReqDays(tripDays);
+  if (required === 0) return { ok: true, issues: [] };
+  const lastDay = Math.max(...offered.days);
+  const given = new Set(givenAwayDays || []);
+  let nextStart = nextLayoverTripStartAfter(lastDay);
+  if (nextStart != null && given.has(nextStart)) nextStart = null; // 그 트립도 이번 스왑으로 내가 내주는 근무면 제외
+  if (nextStart == null) return { ok: true, issues: [] }; // 이번 달엔 다음 LAYOV 트립 없음 → 판정 불가(제약 없음)
+  const available = nextStart - lastDay - 1;
+  if (available < required)
+    return { ok: false, issues: [{ available, required, nextStart, tripDays }] };
+  return { ok: true, issues: [] };
+}
+
+function mogijiIssueMessage(rc) {
+  if (!rc || rc.ok) return null;
+  const i = rc.issues[0];
+  return `❌ 모기지 휴식일수 부족 — ${i.tripDays}일 트립 복귀 후 ${i.required}일 필요하나 다음 트립(${i.nextStart}일)까지 ${Math.max(0, i.available)}일뿐 (노조 협약 기준)`;
+}
+
 function airportRegion(code) { return AIRPORT_REGION[code] || "OTHER"; }
 
 /* ====== 5. 패턴 / 선택 ====== */
@@ -1037,6 +1094,10 @@ function calcCumulative() {
     if (s && !NON_DUTY_TYPES.has(s.type)) { current++; maxConsec = Math.max(maxConsec, current); }
     else current = 0;
   }
+  // warnDays: 달력 셀에 ⚠ 경고 아이콘(.is-warn-consec)을 띄우는 날짜 집합.
+  // 회사 최대 연속 근무일(dutyConsecLimit, 운항 5일/객실 7일) 한도 "하루 전" 시점에
+  // 도달한 날부터 경고 — 이 날짜에 근무를 더 얹으면(스왑 등) 한도 초과 위험이라는 사전 알림.
+  // OFF/RSV 등 NON_DUTY_TYPES는 연속 카운트를 리셋시킴.
   const consecLimit = (currentRules().dutyConsecLimit || 5) - 1;
   const warnDays = new Set();
   let run = 0;
@@ -1653,9 +1714,11 @@ function renderCalendar() {
     if (state.selectedDays.has(dayKey(day))) cell.classList.add("is-selected");
     if (isWeekend(day)) cell.classList.add("is-weekend");
     if (isHoliday(day)) cell.classList.add("is-holiday");
-    if (cum.warnDays.has(day)) cell.classList.add("is-warn-consec");
-    if (s?.lockReason) cell.classList.add("is-locked");
+    if (cum.warnDays.has(day)) cell.classList.add("is-warn-consec"); // ⚠ 연속근무 한도 임박 (calcCumulative 참고)
+    if (s?.lockReason) cell.classList.add("is-locked"); // 자물쇠 표시 — 이 날 근무는 SWAP 불가(특수공항 자격비행 등, s.lockReason 사유)
 
+    // 👀 워처 카운트 — 다른 사용자가 이 날짜를 원하는 스왑 글을 올려둔 건수 (post.offered.days에 해당 날짜 포함).
+    // 내 스케줄을 스왑 시장에 올리면 매칭될 수요가 있다는 힌트로 표시.
     const watcherCount = state.posts.filter(p => p.offered.days.includes(day)).length;
     cell.innerHTML = `
       <div class="date-number">
@@ -2177,6 +2240,7 @@ function buildMyOfferedForRequest() {
     lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
     lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
     lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
+    hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"), // 모기지 이탈(오버나이트) 트립 여부 — 노조 협약 모기지 휴식일수 판정용
   };
 }
 
@@ -2221,19 +2285,20 @@ function openAskModal(postId) {
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
   // 의향묻기도 요청하기와 동일하게 일수 일치 + 휴식시간 검증 적용
   const rest = !dayMismatch && mine ? restCheckIncoming(p.offered, mine.days) : { ok: true };
-  const restMsg = restIssueMessage(rest);
+  const mogiji = !dayMismatch && mine ? mogijiRestCheckIncoming(p.offered, mine.days) : { ok: true };
+  const restMsg = restIssueMessage(rest) || mogijiIssueMessage(mogiji);
   const askHint = document.getElementById("askHint");
   if (dayMismatch) {
     askHint.innerHTML = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 의향을 보낼 수 없습니다.`;
     askHint.style.color = "#e53e3e";
   } else if (restMsg) {
-    askHint.innerHTML = `${restMsg}<br><small>휴식시간 기준 위반 — 스왑 불가 근무입니다.</small>`;
+    askHint.innerHTML = `${restMsg}<br><small>휴식 기준 위반 — 스왑 불가 근무입니다.</small>`;
     askHint.style.color = "#e53e3e";
   } else {
     askHint.textContent = "메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음";
     askHint.style.color = "";
   }
-  document.getElementById("askSendButton").disabled = !mine || dayMismatch || !rest.ok;
+  document.getElementById("askSendButton").disabled = !mine || dayMismatch || !rest.ok || !mogiji.ok;
   openGenericModal("askDialog", "askOverlay");
 }
 
@@ -2249,8 +2314,8 @@ async function sendAskInterest() {
     showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
     return;
   }
-  if (!restCheckIncoming(p.offered, mine.days).ok) {
-    showToast("휴식시간 기준 위반 — 스왑 불가 근무입니다.");
+  if (!restCheckIncoming(p.offered, mine.days).ok || !mogijiRestCheckIncoming(p.offered, mine.days).ok) {
+    showToast("휴식 기준 위반 — 스왑 불가 근무입니다.");
     return;
   }
   try {
@@ -2288,21 +2353,22 @@ function openRequestModal(postId) {
     : `<span class="hint">내 근무에서 줄 근무를 선택하세요 (상대와 같은 ${theirDays}일)</span>`;
   document.getElementById("reqTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
-  // FOM 휴식시간 검증 — 내가 받게 될 상대 근무(p.offered)를 내 로스터에 넣었을 때 전후 휴식 확인
+  // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 내가 받게 될 상대 근무(p.offered)를 내 로스터에 넣었을 때 확인
   const rest = !dayMismatch && mine ? restCheckIncoming(p.offered, mine.days) : { ok: true };
-  const restMsg = restIssueMessage(rest);
+  const mogiji = !dayMismatch && mine ? mogijiRestCheckIncoming(p.offered, mine.days) : { ok: true };
+  const restMsg = restIssueMessage(rest) || mogijiIssueMessage(mogiji);
   const hintEl = document.getElementById("reqHint");
   if (dayMismatch) {
     hintEl.textContent = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 요청을 보낼 수 없습니다.`;
     hintEl.style.color = "";
   } else if (restMsg) {
-    hintEl.innerHTML = `${restMsg}<br><small>휴식시간 기준 위반 — 회사 신청이 반려될 수 있어 요청을 보낼 수 없습니다.</small>`;
+    hintEl.innerHTML = `${restMsg}<br><small>휴식 기준 위반 — 회사 신청이 반려될 수 있어 요청을 보낼 수 없습니다.</small>`;
     hintEl.style.color = "#e53e3e";
   } else {
     hintEl.textContent = "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
     hintEl.style.color = "";
   }
-  document.getElementById("reqConfirmButton").disabled = !mine || dayMismatch || !rest.ok;
+  document.getElementById("reqConfirmButton").disabled = !mine || dayMismatch || !rest.ok || !mogiji.ok;
   openGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -2316,6 +2382,10 @@ async function sendSwapRequest() {
   const theirDays = (p.offered.days || []).length || 1;
   if (mine.days.length !== theirDays) {
     showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
+    return;
+  }
+  if (!restCheckIncoming(p.offered, mine.days).ok || !mogijiRestCheckIncoming(p.offered, mine.days).ok) {
+    showToast("휴식 기준 위반 — 스왑 불가 근무입니다.");
     return;
   }
   if (state.credits < 1) { showToast("크레딧 부족"); return; }
@@ -2620,13 +2690,15 @@ function requestCard(r) {
   const isAsk = r.type === "ask";
   const needsResponse = state.reqViewMode === "received" && (isAsk ? !r.askAccepted : !accepted);
 
-  // FOM 휴식시간 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
-  // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 전후 휴식 확인.
+  // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
+  // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 후 확인.
   let restMsgReceived = null;
   if (state.reqViewMode === "received" && !isAsk && needsResponse && r.offered) {
     const myPost = (state.myPosts || []).find(p => p.id === r.postId);
-    const rc = restCheckIncoming(r.offered, myPost ? (myPost.offered.days || []) : []);
-    restMsgReceived = restIssueMessage(rc);
+    const givenDays = myPost ? (myPost.offered.days || []) : [];
+    const rc = restCheckIncoming(r.offered, givenDays);
+    const mc = mogijiRestCheckIncoming(r.offered, givenDays);
+    restMsgReceived = restIssueMessage(rc) || mogijiIssueMessage(mc);
   }
 
   // 상호 수락 후 공개할 상대방 연락처
@@ -3447,6 +3519,7 @@ function bindEvents() {
           lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
           lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
           lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
+          hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),
           crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
         },
         wanted,
