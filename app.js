@@ -344,8 +344,11 @@ function createMockRequests() {
 
 function createMockAlerts() {
   return [
-    { kind:"announce", title:"📢 CrewSwap 사용 안내",
+    { id:"guide", kind:"announce", title:"📢 CrewSwap 사용 안내",
       body:"CrewSwap은 승무원 스케줄 스왑을 더 쉽게 찾고 요청할 수 있는 서비스입니다.\n\n내 근무 확인\n내 근무에서 스케줄을 확인하고, 바꾸고 싶은 근무를 선택할 수 있습니다.\n\n스왑 찾기\n스왑하기에서 다른 사용자가 올린 스왑 글을 확인하세요.\n\n요청하기\n원하는 스왑 글을 찾았다면 요청하기를 누르고, 내가 대신 줄 근무를 선택해 제안할 수 있습니다.\n\n요청 확인\n요청함에서 내가 보낸 요청과 받은 요청을 확인할 수 있습니다.\n\n수락 후 진행\n상대가 요청을 수락하면 상세 정보를 확인한 뒤 회사 절차에 따라 스케줄 변경을 진행하면 됩니다.\n\n현재 베타 기간에는 일부 기능이 변경될 수 있습니다.\n사용 중 불편한 점이나 오류가 있으면 언제든 피드백 부탁드립니다.",
+      time:"공지" },
+    { id:"qna", kind:"announce", title:"❓ 자주 묻는 질문 (Q&A)",
+      body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n그냥 삭제되지 않고, 상대방에게 \"관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다\"라는 양해 메세지가 자동 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청 1건당 1크레딧이 차감됩니다. 의향묻기는 크레딧이 들지 않습니다. 마감까지 매칭이 안 되면 사용한 크레딧의 50%가 자동 환급됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.",
       time:"공지" },
   ];
 }
@@ -3783,13 +3786,15 @@ function loadStateFromStorage() {
       if (state.alerts.some(a => a.title === "🎯 매칭 후보 등장" || a.title === "⏰ 마감 임박")) {
         state.alerts = createMockAlerts();
       }
-      // 공지 안내문 갱신 — 기존에 저장된 옛 공지 내용을 최신 안내문으로 교체
-      const latestAnnounce = createMockAlerts()[0];
-      if (state.alerts.some(a => a.kind === "announce")) {
-        state.alerts = state.alerts.map(a => a.kind === "announce" ? { ...a, ...latestAnnounce } : a);
-      } else {
-        state.alerts.push(latestAnnounce);
-      }
+      // 공지 안내문 갱신 — id로 매칭해 기존 공지는 최신 내용으로 교체, 없는 공지(신규 추가분)는 append
+      // 레거시 마이그레이션: id 없던 시절(공지 1개뿐)의 저장분은 "guide"로 간주
+      const legacyAnnounces = state.alerts.filter(a => a.kind === "announce" && !a.id);
+      if (legacyAnnounces.length === 1) legacyAnnounces[0].id = "guide";
+      createMockAlerts().forEach(latest => {
+        const idx = state.alerts.findIndex(a => a.kind === "announce" && a.id === latest.id);
+        if (idx >= 0) state.alerts[idx] = { ...state.alerts[idx], ...latest };
+        else state.alerts.push(latest);
+      });
     }
 
     // 복원된 currentMonth에 데이터가 없으면, 데이터 있는 월 중
