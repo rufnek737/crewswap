@@ -360,9 +360,6 @@
           <button type="button" class="swap-subtab is-active" data-swaptab="post">내 스왑 올리기</button>
         </div>
 
-        <!-- 내가 등록한 글 -->
-        <div id="myPostList" class="my-post-list"></div>
-
         <div class="bidirectional-form">
           <!-- 왼쪽: 내가 내놓을 것 -->
           <div class="form-side">
@@ -401,6 +398,12 @@
             <button id="submitPostButton" class="primary-button" disabled>등록하기 · 1크레딧</button>
             <button id="watchAdButton" class="secondary-button" style="width:100%;margin-top:8px;">📺 광고 보고 등록권 받기</button>
           </div>
+        </div>
+
+        <!-- 이미 올린 스케줄 (맨 아래) -->
+        <div id="myPostSection" class="my-post-section" hidden>
+          <h3 class="my-post-title">📋 이미 올린 스케줄</h3>
+          <div id="myPostList" class="my-post-list"></div>
         </div>
       </section>
 
@@ -543,11 +546,11 @@
     </nav>
 
     <!-- 알림 패널 -->
+    <div id="alertBackdrop" class="alert-backdrop" hidden></div>
     <aside id="alertPanel" class="alert-panel" hidden>
       <header class="alert-head">
         <h3>알림</h3>
         <button id="clearAllAlerts" class="alert-clear-all">모두 삭제</button>
-        <button id="closeAlerts" aria-label="닫기">×</button>
       </header>
       <div class="alert-filters">
         <button class="is-active" data-alert="all">전체</button>
@@ -625,7 +628,7 @@
             <div id="askTheirs" class="req-box"></div>
           </div>
         </div>
-        <p class="hint" style="margin:4px 0 0;">메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음</p>
+        <p id="askHint" class="hint" style="margin:4px 0 0;">메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음</p>
         <div class="dialog-actions" style="margin-top:14px;">
           <button class="secondary-button" id="askCancelButton">취소</button>
           <button class="primary-button" id="askSendButton">관심 보내기</button>

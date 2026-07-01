@@ -463,7 +463,17 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .req-arrow { display: grid; place-items: center; font-size: 20px; color: var(--primary); font-weight: 800; }
 .req-day-warn { margin-top: 6px; font-size: 11px; color: var(--c-fail); font-weight: 700; }
 .pending-action-bar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; margin: 0 -4px 12px; background: linear-gradient(135deg, #ff8a3d, #ff5d3d); color: #fff; border-radius: 12px; box-shadow: 0 6px 20px rgba(255,93,61,0.4); border: 2px solid #fff; animation: pendingBarPop 0.25s ease-out; }
-.pending-action-bar span { font-size: 13px; font-weight: 800; flex: 1; line-height: 1.3; }
+.pending-action-bar > span { font-size: 13px; font-weight: 800; flex: 1; line-height: 1.3; }
+.pending-target { display: block; background: rgba(255,255,255,0.2); border-radius: 8px; padding: 7px 10px; margin-bottom: 7px; }
+.pending-target-label { display: block; font-size: 10px; font-weight: 700; opacity: 0.9; }
+.pending-target-name { display: block; font-size: 13px; font-weight: 800; }
+.pending-target-sub { display: block; font-size: 11px; font-weight: 600; opacity: 0.92; }
+.pending-guide { display: block; }
+.my-post-section { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.my-post-title { margin: 0 0 12px; font-size: 15px; }
+.submit-owner { font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; line-height: 1.4; }
+.submit-owner.me { background: #e6f4ea; color: #1a7a3f; }
+.submit-owner.other { background: #fff4e5; color: #b06400; }
 .pending-action-buttons { display: flex; gap: 8px; flex-shrink: 0; }
 .pending-action-buttons button { padding: 8px 14px; font-size: 13px; font-weight: 800; }
 .pending-action-buttons .secondary-button { background: rgba(255,255,255,0.25); color: #fff; border: none; }
@@ -578,6 +588,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .tab.is-active { background: #243449; color: #fff; }
 
 /* ===== 알림 패널 ===== */
+.alert-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.28); z-index: 99; }
 .alert-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 90vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -16px 0 44px rgba(0,0,0,0.12); z-index: 100; display: flex; flex-direction: column; }
 .alert-head { display: flex; justify-content: space-between; align-items: center; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top)); border-bottom: 1px solid var(--line); gap: 8px; }
 .alert-head h3 { margin: 0; flex: 1; }

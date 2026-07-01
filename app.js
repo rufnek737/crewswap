@@ -706,9 +706,18 @@ function renderPendingBar() {
   if (!state.pendingRequestPostId) { bar.hidden = true; return; }
   const n = selectedSchedules().length;
   const label = state.pendingRequestType === "ask" ? "의향 표시" : "요청";
-  $("#pendingActionText").textContent = n > 0
+  // 내가 바꾸려던 상대 근무(대상 포스트)를 간단히 표시
+  const target = state.posts.find(p => p.id === state.pendingRequestPostId);
+  const targetHtml = target ? `
+    <span class="pending-target">
+      <span class="pending-target-label">🎯 바꾸려는 상대 근무</span>
+      <span class="pending-target-name">${escapeHtml(target.offered.patternName || "")}</span>
+      <span class="pending-target-sub">${escapeHtml(target.offered.summary || target.offered.type || "")} · ${(target.offered.days || []).length}일</span>
+    </span>` : "";
+  const guide = n > 0
     ? `${n}일 선택됨 — 다 고르면 다음을 누르세요 (${label})`
     : `바꿔줄 근무를 달력에서 선택하세요 (${label})`;
+  $("#pendingActionText").innerHTML = `${targetHtml}<span class="pending-guide">${guide}</span>`;
   $("#pendingActionNext").disabled = n === 0;
   bar.hidden = false;
 }
@@ -1142,13 +1151,14 @@ function checkRulesCabin(ss, rules) {
   const rsvStbySelected = ss.some(s => s.type === "RSV" || s.type === "STBY");
   const broadcastFail = noBroadcast && rsvStbySelected;
 
-  // 월/연 스왑 횟수
+  // 월/연 스왑 횟수 (운항승무원은 제한 없음)
+  const isPilotUser  = state.user.crewType !== "CABIN";
   const monthlyLimit = rules.swapLimitMonthly || 2;
   const yearlyLimit  = rules.swapLimitYearly  || 12;
   const monthlyUsed  = state.user.monthlySwapUsed || 0;
   const yearlyUsed   = state.user.yearlySwapUsed  || 0;
-  const monthlyFail  = monthlyUsed >= monthlyLimit;
-  const yearlyFail   = yearlyUsed  >= yearlyLimit;
+  const monthlyFail  = !isPilotUser && monthlyUsed >= monthlyLimit;
+  const yearlyFail   = !isPilotUser && yearlyUsed  >= yearlyLimit;
 
   // 노선 언어/성별 자격 안내
   const langs = state.user.languages || [];
@@ -1190,14 +1200,14 @@ function checkRulesCabin(ss, rules) {
       status: broadcastFail ? "FAIL" : "PASS",
       detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가 (규정 5.아)" : "해당 없음",
       ref: "객실 생활 백과사전 5.아 — 방송등급 미보유 승무원은 RSV(대기) 및 공항대기(STBY) 근무에 배정될 수 없으므로 해당 유형의 스왑 불가." },
-    { label:`월 스왑 횟수 (월 ${monthlyLimit}회)`,
-      status: monthlyFail ? "FAIL" : (monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
-      detail: `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용`,
-      ref: "Swap Guide p.47 — 스왑은 월 2회, 연 12회를 초과할 수 없습니다. 카운트는 스왑이 실제 성사(상호 수락)된 경우에만 증가합니다." },
-    { label:`연 스왑 횟수 (연 ${yearlyLimit}회)`,
-      status: yearlyFail ? "FAIL" : (yearlyUsed >= yearlyLimit - 2 ? "WARN" : "PASS"),
-      detail: `올해 ${yearlyUsed}/${yearlyLimit}회 사용`,
-      ref: "Swap Guide p.47 — 연간 스왑 총 횟수는 12회 한도. 월 한도(2회)와 별도로 적용됩니다." },
+    { label: isPilotUser ? "월 스왑 횟수 (무제한)" : `월 스왑 횟수 (월 ${monthlyLimit}회)`,
+      status: monthlyFail ? "FAIL" : (!isPilotUser && monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
+      detail: isPilotUser ? "운항승무원 — 제한 없음" : `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용`,
+      ref: isPilotUser ? null : "Swap Guide p.47 — 스왑은 월 2회, 연 12회를 초과할 수 없습니다. 카운트는 스왑이 실제 성사(상호 수락)된 경우에만 증가합니다." },
+    { label: isPilotUser ? "연 스왑 횟수 (무제한)" : `연 스왑 횟수 (연 ${yearlyLimit}회)`,
+      status: yearlyFail ? "FAIL" : (!isPilotUser && yearlyUsed >= yearlyLimit - 2 ? "WARN" : "PASS"),
+      detail: isPilotUser ? "운항승무원 — 제한 없음" : `올해 ${yearlyUsed}/${yearlyLimit}회 사용`,
+      ref: isPilotUser ? null : "Swap Guide p.47 — 연간 스왑 총 횟수는 12회 한도. 월 한도(2회)와 별도로 적용됩니다." },
     { label:"STBY/RSV 직급 조건",
       status: hasStby ? "WARN" : "PASS",
       detail: hasStby
@@ -1556,10 +1566,10 @@ function renderMetrics() {
     if (swapLabelEl) swapLabelEl.textContent = "월 SWAP 횟수";
     $("#swapText").textContent = `${monthlyUsed}/${monthlyLimit}회 · 연 ${yearlyUsed}/${yearlyLimit}`;
   } else {
-    const sPct = (state.user.monthlySwapUsed / state.user.monthlySwapLimit) * 100;
-    $("#swapBar").style.width = sPct + "%";
-    $("#swapBar").className = "metric-fill" + (sPct >= 100 ? " danger" : sPct >= 67 ? " warn" : "");
-    $("#swapText").textContent = `${state.user.monthlySwapUsed} / ${state.user.monthlySwapLimit}회`;
+    // 운항승무원 — 스왑 횟수 제한 없음
+    $("#swapBar").style.width = "0%";
+    $("#swapBar").className = "metric-fill";
+    $("#swapText").textContent = "무제한";
   }
 
   // 다음 마감 (이번 주 내 가장 가까운 패턴 시작일)
@@ -1696,10 +1706,18 @@ function renderSelection() {
   const checks = has ? checkRulesForSelection() : [];
   const failItems = checks.filter(c => c.status === "FAIL");
   const hasFail = failItems.length > 0;
-  $("#registerSelectionButton").disabled = !has || hasFail;
-  $("#registerSelectionButton").title = hasFail
-    ? `등록 불가: ${failItems.map(c => c.label).join(", ")}`
-    : "";
+  const regBtn = $("#registerSelectionButton");
+  const pending = !!state.pendingRequestPostId;
+  if (pending) {
+    // 의향묻기/요청하기로 진입한 상태 — 버튼이 '스왑 올리기'가 아니라 진행 버튼으로 바뀜
+    regBtn.textContent = state.pendingRequestType === "ask" ? "의향묻기로 진행 →" : "요청하기로 진행 →";
+    regBtn.disabled = !has;
+    regBtn.title = "";
+  } else {
+    regBtn.textContent = "이 근무로 스왑 올리기";
+    regBtn.disabled = !has || hasFail;
+    regBtn.title = hasFail ? `등록 불가: ${failItems.map(c => c.label).join(", ")}` : "";
+  }
   $("#clearSelectionButton").disabled = !has;
   if (!has) {
     $("#selectedSummary").className = "empty-state";
@@ -1909,10 +1927,13 @@ function wantedSummary(w) {
 function renderMyPosts() {
   const el = $("#myPostList");
   if (!el) return;
+  const section = $("#myPostSection");
   if (state.myPosts.length === 0) {
     el.innerHTML = "";
+    if (section) section.hidden = true;
     return;
   }
+  if (section) section.hidden = false;
   el.innerHTML = state.myPosts.map(p => {
     const rd = p.registeredAt;
     const rdDisplay = (rd && rd.includes('T'))
@@ -2190,12 +2211,29 @@ function openAskModal(postId) {
   const askD = document.getElementById("askDialog");
   askD._postId = postId;
   document.getElementById("askDialogTitle").textContent = `💬 ${p.ownerNick || "상대"} 님에게 의향 표시`;
+  const theirDays = (p.offered.days || []).length || 1;
+  const myDays = mine ? mine.days.length : 0;
+  const dayMismatch = mine && myDays !== theirDays;
   document.getElementById("askMine").innerHTML = mine
-    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>`
-    : `<span class="hint">내 근무에서 줄 근무를 선택하세요</span>`;
+    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>${dayMismatch ? `<div class="req-day-warn">⚠ ${myDays}일 선택됨 (상대는 ${theirDays}일)</div>` : ""}`
+    : `<span class="hint">내 근무에서 줄 근무를 선택하세요 (상대와 같은 ${theirDays}일)</span>`;
   document.getElementById("askTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
-  document.getElementById("askSendButton").disabled = !mine;
+  // 의향묻기도 요청하기와 동일하게 일수 일치 + 휴식시간 검증 적용
+  const rest = !dayMismatch && mine ? restCheckIncoming(p.offered, mine.days) : { ok: true };
+  const restMsg = restIssueMessage(rest);
+  const askHint = document.getElementById("askHint");
+  if (dayMismatch) {
+    askHint.innerHTML = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 의향을 보낼 수 없습니다.`;
+    askHint.style.color = "#e53e3e";
+  } else if (restMsg) {
+    askHint.innerHTML = `${restMsg}<br><small>휴식시간 기준 위반 — 스왑 불가 근무입니다.</small>`;
+    askHint.style.color = "#e53e3e";
+  } else {
+    askHint.textContent = "메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음";
+    askHint.style.color = "";
+  }
+  document.getElementById("askSendButton").disabled = !mine || dayMismatch || !rest.ok;
   openGenericModal("askDialog", "askOverlay");
 }
 
@@ -2206,6 +2244,15 @@ async function sendAskInterest() {
   if (!p) return;
   const mine = buildMyOfferedForRequest();
   if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
+  const theirDays = (p.offered.days || []).length || 1;
+  if (mine.days.length !== theirDays) {
+    showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
+    return;
+  }
+  if (!restCheckIncoming(p.offered, mine.days).ok) {
+    showToast("휴식시간 기준 위반 — 스왑 불가 근무입니다.");
+    return;
+  }
   try {
     const res = await fetch(`${API_BASE}/api/requests-create`, {
       method: "POST",
@@ -2406,6 +2453,22 @@ async function fetchRequests() {
       });
       showToast(`✓ ${r.toNick || "상대"} 님이 의향을 수락했습니다`);
     });
+    // 내가 보낸 정식 요청이 상호 수락됐을 때 알림 (받은 쪽만 알림 가던 문제 보완)
+    const seenReqAccepted = new Set(JSON.parse(localStorage.getItem("crewswap_seen_req_accepted") || "[]"));
+    sent.forEach(r => {
+      if (r.type === "ask" || (r.stage || 1) < 3 || seenReqAccepted.has(r.id)) return;
+      seenReqAccepted.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "✓ 스왑 요청 수락됨 (상호 수락)",
+        body: `${r.toNick || "상대"} 님이 요청을 수락했습니다 · ${r.postTitle || ""} — 회사 상신 단계로 진행하세요`,
+        time: "방금",
+        createdAt: r.acceptedAt || new Date().toISOString(),
+        viewMode: "sent",
+      });
+      showToast(`✓ ${r.toNick || "상대"} 님이 스왑 요청을 수락했습니다`);
+    });
+    localStorage.setItem("crewswap_seen_req_accepted", JSON.stringify([...seenReqAccepted].slice(-200)));
     // 내가 보낸 요청이 거절됐을 때 알림
     const seenDeclined = new Set(JSON.parse(localStorage.getItem("crewswap_seen_declined") || "[]"));
     sent.forEach(r => {
@@ -2471,6 +2534,31 @@ function renderRequests() {
   $$("#requestList .ask-accept-btn").forEach(b => b.onclick = () => acceptAsk(b.dataset.reqId));
   $$("#requestList .decline-req-btn").forEach(b => b.onclick = () => declineRequest(b.dataset.reqId));
   $$("#requestList .delete-req-btn").forEach(b => b.onclick = () => deleteRequest(b.dataset.reqId));
+  $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
+}
+
+// 상대가 내 양도 의향을 수락했을 때 — 다시 스케줄 고를 필요 없이 바로 정식 요청 모달로
+async function proceedToRequestFromAsk(reqId) {
+  const r = (state.requests.sent || []).find(x => x.id === reqId);
+  if (!r || !r.offered) { showToast("의향 정보를 찾을 수 없습니다."); return; }
+  if (state.credits < 1) { showToast("크레딧 부족 — 광고를 시청하면 요청권 1장이 지급됩니다."); return; }
+  let post = state.posts.find(p => p.id === r.postId);
+  if (!post) { await fetchPosts(); post = state.posts.find(p => p.id === r.postId); }
+  if (!post) { showToast("상대 글이 마감되었거나 삭제되었습니다."); return; }
+  // 내가 의향 표시했던 근무를 로스터에서 다시 선택
+  const days = r.offered.days || [];
+  state.selectedDays.clear();
+  state.schedules.forEach(s => {
+    if (days.includes(s.day) && scheduleInCurrentMonth(s)) state.selectedDays.add(dayKey(s.day, s.month));
+  });
+  if (state.selectedDays.size === 0) {
+    showToast("의향 표시했던 근무를 현재 로스터에서 찾지 못했습니다. 요청하기에서 직접 선택해주세요.");
+    switchTab("find");
+    return;
+  }
+  renderCalendar();
+  renderSelection();
+  openRequestModal(r.postId);
 }
 
 // 받은 의향 문의에 "관심 수락" — 자유 텍스트 답장 없이 구조화된 응답만 허용
@@ -2583,9 +2671,15 @@ function requestCard(r) {
         const menu = rules.submitMenu || "회사 시스템 → 스케줄 변경 신청";
         const contact = rules.submitContact || "회사 운항편조팀";
         const deadline = rules.deadline ? `D-${rules.deadline.businessDays}일 ${rules.deadline.hour}시까지` : "회사 마감 시각까지";
+        // 회사 상신 주체 = 글을 올린 사람(포스트 작성자). received 뷰 = 내가 작성자.
+        const iAmPoster = !isSent;
+        const submitterBanner = iAmPoster
+          ? `<div class="submit-owner me">📮 회사 상신은 <strong>내가(글 작성자)</strong> 진행합니다.</div>`
+          : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? r.nickname : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
         return `
         <div class="submit-guide">
           <h4>📋 회사 상신 방법 (${rules.label || "회사 시스템"})</h4>
+          ${submitterBanner}
           <ol>
             <li><strong>${menu}</strong> 메뉴 접속</li>
             <li>본인과 상대방 정보, 변경 일자/패턴 입력</li>
@@ -2604,6 +2698,7 @@ function requestCard(r) {
              <button class="primary-button ${isAsk ? "ask-accept-btn" : "accept-req-btn"}" data-req-id="${r.id}"${restMsgReceived ? " disabled" : ""}>${isAsk ? "✓ 관심 수락" : "✓ 상호 수락하기"}</button>
            </div>`
         : ""}
+      ${isSent && isAsk && r.askAccepted ? `<button class="primary-button proceed-request-btn" data-req-id="${r.id}" style="width:100%;margin-top:10px;">➡ 바로 요청하기 (정식 스왑 요청)</button>` : ""}
       <button class="link-button danger delete-req-btn" data-req-id="${r.id}">🗑 삭제</button>
     </article>
   `;
@@ -2634,10 +2729,46 @@ function alertTimeAgo(a) {
   return `${Math.round(mins / 1440)}일 전`;
 }
 
+// '전체' 탭에서 X로 임시 숨긴 알림 (세션 한정 · 저장 안 함 · 카테고리 탭엔 그대로 남음)
+const _hiddenInAll = new WeakSet();
+
+// 앱 아이콘 배지 — 미확인 알림(공지 제외) 수를 iOS/Android 아이콘 숫자로 표시.
+// 네이티브(Capacitor)에서만 동작하며, 앱이 실행/폴링 중일 때 갱신됨.
+function appBadgeCount() {
+  return (state.alerts || []).filter(a => a.kind !== "announce").length;
+}
+async function updateAppBadge() {
+  try {
+    const Badge = window.Capacitor?.Plugins?.Badge;
+    if (!Badge) return; // 웹 프리뷰 등 미지원 환경 — 조용히 무시
+    const count = appBadgeCount();
+    if (count > 0) await Badge.set({ count });
+    else await Badge.clear();
+  } catch (e) { /* 권한 없음/미지원 — 무시 */ }
+}
+async function initAppBadge() {
+  try {
+    const Badge = window.Capacitor?.Plugins?.Badge;
+    if (!Badge) return;
+    const perm = await Badge.checkPermissions();
+    if (perm.display !== "granted") await Badge.requestPermissions();
+    await updateAppBadge();
+  } catch (e) { /* 무시 */ }
+}
+
+function setAlertPanel(open) {
+  const panel = document.getElementById("alertPanel");
+  const backdrop = document.getElementById("alertBackdrop");
+  if (panel) panel.hidden = !open;
+  if (backdrop) backdrop.hidden = !open;
+}
+
 function renderAlerts() {
   const filter = state.alertFilter;
   const allIndexed = state.alerts.map((a, i) => ({ a, i }));
-  const items = filter === "all" ? allIndexed : allIndexed.filter(x => x.a.kind === filter);
+  const items = filter === "all"
+    ? allIndexed.filter(x => !_hiddenInAll.has(x.a))
+    : allIndexed.filter(x => x.a.kind === filter);
   $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => `
     <div class="alert-item ${a.kind}" data-alert-idx="${i}">
       <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
@@ -2649,8 +2780,15 @@ function renderAlerts() {
   $$("#alertList .alert-del-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      state.alerts.splice(parseInt(btn.dataset.alertIdx, 10), 1);
-      saveState();
+      const idx = parseInt(btn.dataset.alertIdx, 10);
+      if (state.alertFilter === "all") {
+        // 전체 탭: 화면에서만 임시 숨김 (매칭/마감/공지 메뉴엔 그대로 남음)
+        _hiddenInAll.add(state.alerts[idx]);
+      } else {
+        // 카테고리 탭(매칭/마감/공지): 영구 삭제
+        state.alerts.splice(idx, 1);
+        saveState();
+      }
       renderAlerts();
     });
   });
@@ -2662,11 +2800,12 @@ function renderAlerts() {
       state.reqViewMode = mode;
       $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
       switchTab("requests");
-      $("#alertPanel").hidden = true;
+      setAlertPanel(false);
     });
   });
   $("#bellBadge").textContent = state.alerts.length;
   $("#bellBadge").style.display = state.alerts.length ? "grid" : "none";
+  updateAppBadge();
 }
 
 /* ====== 9. 이벤트 ====== */
@@ -3140,7 +3279,11 @@ function bindEvents() {
     state.selectedDays.clear();
     renderCalendar(); renderSelection(); renderRuleCheck(); syncOfferedSlot();
   });
-  $("#registerSelectionButton").addEventListener("click", () => switchTab("post"));
+  $("#registerSelectionButton").addEventListener("click", () => {
+    // 의향묻기/요청하기로 진입한 상태면 진행, 아니면 스왑 올리기 화면으로
+    if (state.pendingRequestPostId) confirmPendingAction();
+    else switchTab("post");
+  });
 
   // 필터 접기/펼치기
   $("#filterToggle").addEventListener("click", () => {
@@ -3464,12 +3607,9 @@ function bindEvents() {
   $("#pendingActionCancel")?.addEventListener("click", () => cancelPendingAction());
   $("#pendingActionNext")?.addEventListener("click", () => confirmPendingAction());
 
-  $("#bellButton").addEventListener("click", () => {
-    $("#alertPanel").hidden = false;
-  });
-  $("#closeAlerts").addEventListener("click", () => {
-    $("#alertPanel").hidden = true;
-  });
+  $("#bellButton").addEventListener("click", () => setAlertPanel(true));
+  // 알림창 좌측 배경(backdrop) 클릭 시 닫힘 (우측 상단 X 대체)
+  $("#alertBackdrop")?.addEventListener("click", () => setAlertPanel(false));
   document.getElementById("clearAllAlerts")?.addEventListener("click", () => {
     if (!state.alerts.length) return;
     // 공지(사용 안내)는 모두 삭제에서 제외 — 매칭/마감 알림만 비움
@@ -3802,6 +3942,7 @@ fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
+initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");

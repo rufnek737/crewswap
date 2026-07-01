@@ -7,6 +7,7 @@
     "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
     "@capacitor/ios": "^8.4.0",
+    "@capawesome/capacitor-badge": "^8.0.2",
     "@netlify/blobs": "^8.1.0"
   },
   "devDependencies": {
