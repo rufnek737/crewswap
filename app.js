@@ -1379,6 +1379,7 @@ function matchScore(post) {
   // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
   if (state.user.crewType === "CABIN") {
     const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
+    if (dd.expired) return null; // 마감 지난 글은 스왑 찾기 목록에서 제외 (서버 정리 전 클라이언트 안전망)
     const breakdown = {
       roleMatch: 30,
       aircraftMatch: 20,
@@ -1415,6 +1416,7 @@ function matchScore(post) {
   };
   // 마감 임박 시 가중치
   const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
+  if (dd.expired) return null; // 마감 지난 글은 스왑 찾기 목록에서 제외 (서버 정리 전 클라이언트 안전망)
   if (!dd.expired) {
     if (dd.days <= 1) breakdown.deadlineUrgency = 10;
     else if (dd.days <= 3) breakdown.deadlineUrgency = 6;
@@ -2436,8 +2438,9 @@ async function fetchMyPosts() {
 }
 
 // 마감일이 지났는데 매칭되지 않은 내 스왑 글 → 사용 크레딧 50% 자동 환급
-function processExpiredRefunds() {
+async function processExpiredRefunds() {
   let refundTotal = 0, count = 0;
+  const newlyExpired = [];
   state.myPosts.forEach(p => {
     if (p.refunded || p.matched || p.status === "expired") return;
     const dd = dDayInfo(p.deadlineDay, postDeadlineMonth(p));
@@ -2448,6 +2451,7 @@ function processExpiredRefunds() {
       p.status = "expired";
       refundTotal += refund;
       count++;
+      newlyExpired.push(p);
     }
   });
   if (count > 0) {
@@ -2456,6 +2460,15 @@ function processExpiredRefunds() {
     renderCredits();
     renderMyPosts();
     showToast(`마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급(50%)`);
+    // 서버(KV)에서도 실제로 제거 — 안 하면 다른 사용자의 "스왑 찾기" 화면에 마감 지난 글이 계속 노출됨
+    newlyExpired.forEach(p => {
+      if (!p.deleteToken) return;
+      fetch(`${API_BASE}/api/posts-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
+      }).catch(e => console.warn("expired post 서버 삭제 실패:", e));
+    });
   }
 }
 
