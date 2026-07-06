@@ -117,6 +117,7 @@ const RULES = {
     active: true,
     deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
     positions: ["CC","AP","PS","SP","CP"], // CrewConnex AABB 코드 앞 2자리
+    monthlyHoursLimit: 100,        // 객실 승무시간 월 100h (FOM 2.1.5)
     swapLimitMonthly: 2,           // 한달 2회
     swapLimitYearly: 12,           // 연 12회
     dutyConsecLimit: 7,            // 7일 연속 근무 불가 (STBY 포함)
@@ -1606,14 +1607,15 @@ function renderCredits() {
 }
 
 function renderMetrics() {
-  const c = calcCumulative();
-  const hPct = Math.min(100, (c.totalHours / 90) * 100);
-  $("#hoursBar").style.width = hPct + "%";
-  $("#hoursBar").className = "metric-fill" + (hPct >= 95 ? " danger" : hPct >= 80 ? " warn" : "");
-  $("#hoursText").textContent = `${formatHM(c.totalHours * 60)} / 90:00`;
-
   const isCabinUser = state.user.crewType === "CABIN";
   const rules = currentRules();
+  const hoursLimit = rules.monthlyHoursLimit || 90; // 운항 90h / 객실 100h
+  const c = calcCumulative();
+  const hPct = Math.min(100, (c.totalHours / hoursLimit) * 100);
+  $("#hoursBar").style.width = hPct + "%";
+  $("#hoursBar").className = "metric-fill" + (hPct >= 95 ? " danger" : hPct >= 80 ? " warn" : "");
+  $("#hoursText").textContent = `${formatHM(c.totalHours * 60)} / ${hoursLimit}:00`;
+
   const consecLimit = rules.dutyConsecLimit || (isCabinUser ? 7 : 5);
   const cPct = Math.min(100, (c.maxConsec / consecLimit) * 100);
   $("#consecBar").style.width = cPct + "%";
@@ -2748,7 +2750,7 @@ function requestCard(r) {
       </div>` : ""}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
-        <div class="info-row"><span>직책/등급</span><strong>${ROLE_LABELS[r.postOwnerRole || r.requesterRole]}</strong></div>
+        <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"; })()}</strong></div>
         <div class="info-row"><span>기종/자격</span><strong>${r.aircraft} / ${r.quals}</strong></div>
         <div class="info-row"><span>베이스</span><strong>${r.base && r.base !== "비공개" ? r.base : "GMP"}</strong></div>
         <div class="info-row"><span>닉네임</span><strong>${r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)"}</strong></div>
