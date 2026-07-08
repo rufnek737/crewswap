@@ -61,7 +61,7 @@
           <p class="signup-bonus">🎁 가입 보너스 5크레딧 / 5 free credits</p>
         </div>
         <form id="signupForm" class="signup-form">
-          <label>닉네임 <input id="signupNickname" value="OrangeFlight" /></label>
+          <label>아이디 (표시 이름) <input id="signupNickname" placeholder="예) 스카이하준" autocomplete="username" /></label>
           <label>
             소속 항공사
             <select id="signupAirline">
@@ -91,6 +91,12 @@
               <button type="button" id="checkVerifyBtn" class="secondary-button">인증 확인</button>
             </div>
             <p id="verifyStatus" class="hint" style="margin:0;"></p>
+          </div>
+          <div>
+            <strong class="field-label">비밀번호 (로그인용 · 6자 이상)</strong>
+            <label>비밀번호 <input id="signupPassword" type="password" placeholder="비밀번호" autocomplete="new-password" /></label>
+            <label>비밀번호 확인 <input id="signupPassword2" type="password" placeholder="비밀번호 재입력" autocomplete="new-password" /></label>
+            <p class="hint" style="margin:2px 0 0;">다른 기기에서도 같은 이메일 + 비밀번호로 로그인하면 동일한 정보로 동기화됩니다.</p>
           </div>
           <label>
             직책/등급
@@ -162,6 +168,53 @@
             <label>연락처 <input id="signupPhone" type="tel" placeholder="010-0000-0000" autocomplete="tel" /></label>
           </div>
           <button class="primary-button" type="submit">가입 완료 / Sign up</button>
+          <button type="button" id="goToLoginBtn" class="link-button" style="width:100%;margin-top:4px;">이미 가입했어요 · 로그인 →</button>
+        </form>
+      </div>
+
+      <!-- ===================== 로그인 (모달) ===================== -->
+      <div id="loginOverlay" class="signup-overlay" hidden></div>
+      <div id="loginPanel" class="signup-dialog" hidden>
+        <div class="signup-head">
+          <p class="eyebrow">로그인 / Log in</p>
+          <h2>CrewSwap</h2>
+          <p>가입한 회사 이메일과 비밀번호로 로그인하세요.</p>
+        </div>
+        <form id="loginForm" class="signup-form">
+          <label>회사 이메일 <input id="loginEmail" type="email" placeholder="ID@jejuair.net" autocomplete="email" /></label>
+          <label>비밀번호 <input id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password" /></label>
+          <p id="loginStatus" class="hint" style="margin:0;"></p>
+          <button class="primary-button" type="submit">로그인 / Log in</button>
+          <button type="button" id="goToSignupBtn" class="link-button" style="width:100%;margin-top:4px;">계정이 없어요 · 회원가입 →</button>
+          <button type="button" id="goToResetBtn" class="link-button" style="width:100%;">비밀번호를 잊었어요</button>
+        </form>
+      </div>
+
+      <!-- ===================== 비밀번호 재설정 (모달) ===================== -->
+      <div id="resetOverlay" class="signup-overlay" hidden></div>
+      <div id="resetPanel" class="signup-dialog" hidden>
+        <div class="signup-head">
+          <p class="eyebrow">비밀번호 재설정</p>
+          <h2>CrewSwap</h2>
+          <p>가입한 회사 이메일로 인증 후 새 비밀번호를 설정합니다.</p>
+        </div>
+        <form id="resetForm" class="signup-form">
+          <div class="signup-verify-block">
+            <strong class="field-label">회사 이메일 인증</strong>
+            <div class="verify-email-row">
+              <input id="resetEmail" type="email" placeholder="ID@jejuair.net" autocomplete="email" />
+              <button type="button" id="resetSendBtn" class="secondary-button">코드 발송</button>
+            </div>
+            <div id="resetCodeRow" class="verify-email-row" hidden>
+              <input id="resetCodeInput" type="text" inputmode="numeric" maxlength="6" placeholder="6자리 인증 코드" />
+              <button type="button" id="resetCheckBtn" class="secondary-button">인증 확인</button>
+            </div>
+            <p id="resetStatus" class="hint" style="margin:0;"></p>
+          </div>
+          <label>새 비밀번호 <input id="resetPassword" type="password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" /></label>
+          <label>새 비밀번호 확인 <input id="resetPassword2" type="password" placeholder="새 비밀번호 재입력" autocomplete="new-password" /></label>
+          <button class="primary-button" type="submit">비밀번호 재설정</button>
+          <button type="button" id="resetBackBtn" class="link-button" style="width:100%;margin-top:4px;">← 로그인으로 돌아가기</button>
         </form>
       </div>
 
@@ -532,8 +585,9 @@
         </div>
 
         <div class="withdraw-zone">
+          <button id="logoutButton" class="secondary-button" style="width:100%;margin-bottom:10px;">로그아웃</button>
           <button id="withdrawButton" class="withdraw-button">회원 탈퇴</button>
-          <p class="hint" style="text-align:center;margin-top:6px;font-size:11px;">탈퇴 시 스케줄·크레딧·등록된 스왑 글이 모두 삭제됩니다.</p>
+          <p class="hint" style="text-align:center;margin-top:6px;font-size:11px;">로그아웃 시 이 기기에서만 로그아웃됩니다 (계정·정보는 유지). 탈퇴 시 스케줄·크레딧·등록된 스왑 글이 모두 삭제됩니다.</p>
         </div>
       </section>
     </main>

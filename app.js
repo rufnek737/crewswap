@@ -2573,6 +2573,40 @@ async function fetchRequests() {
       showToast(`💔 ${r.toNick || "상대"} 님이 요청을 거절했습니다`);
     });
     localStorage.setItem("crewswap_seen_declined", JSON.stringify([...seenDeclined].slice(-200)));
+    // #4-a: 글작성자(received)에게 요청자의 회사 상신 독촉 알림
+    const seenNudge = new Set(JSON.parse(localStorage.getItem("crewswap_seen_nudge") || "[]"));
+    received.forEach(r => {
+      if (!r.submitNudgeCount || r.submitted) return;
+      const key = `${r.id}:${r.submitNudgeCount}`;
+      if (seenNudge.has(key)) return;
+      seenNudge.add(key); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "🔔 회사 상신 독촉 도착",
+        body: `${r.fromNick || "상대"} 님이 회사 상신을 기다리고 있습니다 · ${r.postTitle || ""} — '회사 상신 완료로 표시'를 눌러주세요`,
+        time: "방금",
+        createdAt: r.submitNudgedAt || new Date().toISOString(),
+        viewMode: "received",
+      });
+      showToast(`🔔 ${r.fromNick || "상대"} 님이 회사 상신을 독촉했습니다`);
+    });
+    localStorage.setItem("crewswap_seen_nudge", JSON.stringify([...seenNudge].slice(-200)));
+    // #4-b: 요청자(sent)에게 글작성자의 회사 상신 완료 알림
+    const seenSubmitted = new Set(JSON.parse(localStorage.getItem("crewswap_seen_submitted") || "[]"));
+    sent.forEach(r => {
+      if (!r.submitted || seenSubmitted.has(r.id)) return;
+      seenSubmitted.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "✅ 회사 상신 완료됨",
+        body: `${r.toNick || "상대"} 님이 회사에 스왑을 상신했습니다 · ${r.postTitle || ""}`,
+        time: "방금",
+        createdAt: r.submittedAt || new Date().toISOString(),
+        viewMode: "sent",
+      });
+      showToast(`✅ ${r.toNick || "상대"} 님이 회사 상신을 완료했습니다`);
+    });
+    localStorage.setItem("crewswap_seen_submitted", JSON.stringify([...seenSubmitted].slice(-200)));
     if (changed) { saveAlertedReqIds(alerted); saveSeenAskAcceptedIds(seenAccepted); saveState(); renderAlerts(); }
     state.requests.received = received;
     renderRequests();
@@ -2623,6 +2657,39 @@ function renderRequests() {
   $$("#requestList .decline-req-btn").forEach(b => b.onclick = () => declineRequest(b.dataset.reqId));
   $$("#requestList .delete-req-btn").forEach(b => b.onclick = () => deleteRequest(b.dataset.reqId));
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
+  $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
+  $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
+}
+
+// 요청자 → 글작성자에게 회사 상신 독촉
+async function nudgeSubmit(reqId) {
+  if (!state.user.email) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-submit-nudge`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "독촉 전송 실패"); return; }
+    showToast("🔔 상신 독촉을 보냈습니다.");
+    fetchRequests();
+  } catch (e) { showToast("독촉 전송 실패 — 네트워크 오류"); }
+}
+
+// 글작성자가 회사 상신 완료 표시 → 상대에게 알림
+async function markSubmitDone(reqId) {
+  if (!state.user.email) return;
+  if (!confirm("회사에 상신을 완료하셨나요? 완료로 표시하면 상대방에게 알림이 전송됩니다.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-submit-done`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "처리 실패"); return; }
+    showToast("✅ 회사 상신 완료로 표시했습니다.");
+    fetchRequests();
+  } catch (e) { showToast("처리 실패 — 네트워크 오류"); }
 }
 
 // 상대가 내 양도 의향을 수락했을 때 — 다시 스케줄 고를 필요 없이 바로 정식 요청 모달로
@@ -2763,9 +2830,23 @@ function requestCard(r) {
         const deadline = rules.deadline ? `D-${rules.deadline.businessDays}일 ${rules.deadline.hour}시까지` : "회사 마감 시각까지";
         // 회사 상신 주체 = 글을 올린 사람(포스트 작성자). received 뷰 = 내가 작성자.
         const iAmPoster = !isSent;
+        const myId = state.user.nickname || "나";
+        const submitted = !!r.submitted;
         const submitterBanner = iAmPoster
-          ? `<div class="submit-owner me">📮 회사 상신은 <strong>내가(글 작성자)</strong> 진행합니다.</div>`
-          : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? r.nickname : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
+          ? `<div class="submit-owner me">📮 회사 상신은 <strong>${escapeHtml(myId)}(글 작성자)</strong>님이 진행합니다.</div>`
+          : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? escapeHtml(r.nickname) : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
+        // 상신 진행 상태 + 독촉/완료 버튼
+        let submitAction = "";
+        if (submitted) {
+          submitAction = iAmPoster
+            ? `<div class="submit-status done">✅ 회사 상신 완료 표시함 — 상대에게 알림이 전송되었습니다.</div>`
+            : `<div class="submit-status done">✅ 글 작성자가 회사 상신을 완료했습니다.</div>`;
+        } else if (iAmPoster) {
+          const nudged = r.submitNudgeCount ? `<div class="submit-status nudged">🔔 상대가 회사 상신을 기다리고 있습니다 (독촉 ${r.submitNudgeCount}회).</div>` : "";
+          submitAction = `${nudged}<button class="primary-button submit-done-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">✅ 회사 상신 완료로 표시</button>`;
+        } else {
+          submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">🔔 상신 독촉하기</button>`;
+        }
         return `
         <div class="submit-guide">
           <h4>📋 회사 상신 방법 (${rules.label || "회사 시스템"})</h4>
@@ -2777,6 +2858,7 @@ function requestCard(r) {
             <li>승인/반려 여부는 회사 시스템 알림으로 확인</li>
           </ol>
           <p class="hint">📞 문의: ${contact}</p>
+          ${submitAction}
         </div>`;
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
@@ -3032,6 +3114,7 @@ function bindEvents() {
   // ── 이메일 인증 ──────────────────────────────────────────────
   let _verifyToken = null;   // send-verify 에서 받은 토큰
   let _verifyEmail = null;   // 인증 완료된 이메일 (null = 미완료)
+  let _verifyCode  = null;   // 인증 완료된 코드 (user-signup 서버 재검증용)
   let _verifyCooldown = null; // 재발송 쿨다운 타이머 ID
 
   function setVerifyStatus(msg, type) {
@@ -3144,6 +3227,12 @@ function bindEvents() {
         return;
       }
       _verifyEmail = email;
+      _verifyCode = code;
+      if (data.registered) {
+        setVerifyStatus("이미 가입된 이메일입니다 — 로그인해주세요.", "err");
+        openLoginModal(email);
+        return;
+      }
       setVerifyStatus("✓ 이메일 인증 완료!", "ok");
       $("#verifyCodeRow").hidden = true;
       if (_verifyCooldown) { clearInterval(_verifyCooldown); _verifyCooldown = null; }
@@ -3158,57 +3247,163 @@ function bindEvents() {
     }
   });
 
-  // ── 가입 폼 제출 ──────────────────────────────────────────────
-  $("#signupForm").addEventListener("submit", e => {
+  // ── 가입 폼 제출 (서버 계정 생성) ──────────────────────────────
+  $("#signupForm").addEventListener("submit", async e => {
     e.preventDefault();
     if (!_verifyEmail) {
       setVerifyStatus("회사 이메일 인증을 완료해주세요.", "err");
       $("#signupEmail").focus();
       return;
     }
-    state.user.airline = $("#signupAirline").value;
-    state.user.crewType = $("#signupCrewType").value;
-    state.user.nickname = $("#signupNickname").value;
-    state.user.roleType = $("#signupRole").value;
-    state.user.aircraft = $("#signupAircraft").value;
-    state.user.base     = $("#signupBase").value;
-    state.user.edto     = $("#signupEdto").checked;
-    state.user.cat2     = $("#signupCat2").checked;
-    state.user.cat3     = $("#signupCat3").checked;
-    // 객실 전용
-    if (state.user.crewType === "CABIN") {
-      state.user.gender = $("#signupGender").value;
-      state.user.hasBroadcastRating = $("#signupBroadcast")?.checked || false;
-      state.user.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
+    const username = ($("#signupNickname").value || "").trim();
+    const pw  = $("#signupPassword").value || "";
+    const pw2 = $("#signupPassword2").value || "";
+    if (!username) { setVerifyStatus("아이디(표시 이름)를 입력해주세요.", "err"); $("#signupNickname").focus(); return; }
+    if (pw.length < 6) { setVerifyStatus("비밀번호는 6자 이상이어야 합니다.", "err"); $("#signupPassword").focus(); return; }
+    if (pw !== pw2) { setVerifyStatus("비밀번호가 일치하지 않습니다.", "err"); $("#signupPassword2").focus(); return; }
+
+    // 프로필 값 수집
+    const crewType = $("#signupCrewType").value;
+    const profile = {
+      airline: $("#signupAirline").value, crewType,
+      nickname: username,
+      roleType: $("#signupRole").value,
+      aircraft: $("#signupAircraft").value,
+      base: $("#signupBase").value,
+      edto: $("#signupEdto").checked, cat2: $("#signupCat2").checked, cat3: $("#signupCat3").checked,
+      realName: $("#signupRealName").value.trim(),
+      employeeId: $("#signupEmployeeId").value.trim(),
+      phone: $("#signupPhone").value.trim(),
+    };
+    if (crewType === "CABIN") {
+      profile.gender = $("#signupGender").value;
+      profile.hasBroadcastRating = $("#signupBroadcast")?.checked || false;
+      profile.languages = ["Japanese","Chinese","Ann_JA","Ann_CA"]
         .filter(k => document.getElementById(`signup${k === "Japanese" ? "LangJP" : k === "Chinese" ? "LangCN" : k === "Ann_JA" ? "AnnJA" : "AnnCA"}`)?.checked);
     }
-    state.user.realName    = $("#signupRealName").value.trim();
-    state.user.employeeId  = $("#signupEmployeeId").value.trim();
-    state.user.phone       = $("#signupPhone").value.trim();
-    state.user.email    = _verifyEmail;   // 인증된 이메일 저장
-    state.user.hasSignedUp = true;
-    // 가입 시 데모용 가짜 스케줄 제거 — 본인 CrewConnex를 불러와야 함
-    state.schedules = [];
-    state.selectedDays.clear();
-    // 프로필 폼 동기화 (crewType 포함)
-    $("#nicknameInput").value = state.user.nickname;
-    const crewTypeInputEl = document.getElementById("crewTypeInput");
-    if (crewTypeInputEl) {
-      crewTypeInputEl.value = state.user.crewType;
-      updateRoleSelectForCrewType("crewTypeInput", "roleTypeInput", "aircraftInputLabel", state.user.roleType);
+
+    const btn = e.submitter || $("#signupForm button[type=submit]");
+    if (btn) btn.disabled = true;
+    setVerifyStatus("계정을 생성하는 중…", "hint");
+    try {
+      const res = await fetch(`${API_BASE}/api/user-signup`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: _verifyEmail, code: _verifyCode, token: _verifyToken, username, password: pw, profile }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setVerifyStatus("❌ " + (data.error || "가입 실패"), "err");
+        if (res.status === 409) openLoginModal(_verifyEmail); // 이미 가입 → 로그인 유도
+        return;
+      }
+      applyLoggedInProfile(_verifyEmail, data.profile || profile);
+      closeSignupModal();
+      showToast("가입 완료 · 크레딧 5장 지급! '📥 CrewConnex 불러오기'로 내 스케줄을 가져오세요.");
+    } catch (err) {
+      setVerifyStatus("네트워크 오류 — 잠시 후 다시 시도해주세요.", "err");
+    } finally {
+      if (btn) btn.disabled = false;
     }
-    $("#roleTypeInput").value = state.user.roleType;
-    $("#aircraftInput").value = state.user.aircraft;
-    $("#baseInput").value     = state.user.base;
-    $("#edtoInput").checked   = state.user.edto;
-    $("#cat2Input").checked   = state.user.cat2;
-    $("#cat3Input").checked   = state.user.cat3;
-    const sp = document.getElementById("signupPanel");
-    closeSignupModal();
-    saveState();
-    renderAll();
-    showToast("가입 완료 · 크레딧 5장 지급! '📥 CrewConnex 불러오기'로 내 스케줄을 가져오세요.");
   });
+
+  // ── 로그인 ────────────────────────────────────────────────────
+  $("#loginForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = ($("#loginEmail").value || "").trim().toLowerCase();
+    const pw = $("#loginPassword").value || "";
+    const st = $("#loginStatus");
+    const setSt = (m, ok) => { if (st) { st.textContent = m; st.style.color = ok ? "var(--c-pass)" : "var(--c-fail)"; } };
+    if (!email || !pw) { setSt("이메일과 비밀번호를 입력해주세요.", false); return; }
+    const btn = e.submitter;
+    if (btn) btn.disabled = true;
+    setSt("로그인 중…", true);
+    if (st) st.style.color = "var(--muted)";
+    try {
+      const res = await fetch(`${API_BASE}/api/user-login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setSt("❌ " + (data.error || "로그인 실패"), false); return; }
+      $("#loginPassword").value = "";
+      applyLoggedInProfile(data.email || email, data.profile);
+      closeLoginModal();
+      showToast(`${data.username || "님"} 로그인 완료`);
+    } catch (err) {
+      setSt("네트워크 오류 — 잠시 후 다시 시도해주세요.", false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+  $("#goToLoginBtn")?.addEventListener("click", () => openLoginModal($("#signupEmail")?.value || ""));
+  $("#goToSignupBtn")?.addEventListener("click", () => { closeLoginModal(); openSignupModal(); });
+  $("#goToResetBtn")?.addEventListener("click", () => openResetModal());
+  $("#resetBackBtn")?.addEventListener("click", () => { closeResetModal(); openLoginModal(); });
+
+  // ── 비밀번호 재설정 ───────────────────────────────────────────
+  let _resetToken = null, _resetVerified = null, _resetCode = null;
+  const setResetStatus = (m, type) => {
+    const el = $("#resetStatus"); if (!el) return;
+    el.textContent = m;
+    el.style.color = type === "ok" ? "var(--c-pass)" : type === "err" ? "var(--c-fail)" : "var(--muted)";
+  };
+  $("#resetSendBtn")?.addEventListener("click", async () => {
+    const email = ($("#resetEmail").value || "").trim().toLowerCase();
+    const btn = $("#resetSendBtn");
+    if (!email.endsWith("@jejuair.net")) { setResetStatus("제주항공 이메일(@jejuair.net)을 입력해주세요.", "err"); return; }
+    btn.disabled = true; btn.textContent = "발송 중…";
+    try {
+      const res = await fetch(`${API_BASE}/api/send-verify`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setResetStatus(data.error || "발송 실패", "err"); btn.disabled = false; btn.textContent = "코드 발송"; return; }
+      _resetToken = data.token; _resetVerified = null;
+      $("#resetCodeRow").hidden = false;
+      if (data.testMode && data.code) { $("#resetCodeInput").value = data.code; setResetStatus("테스트 모드 — 코드 자동 입력됨. '인증 확인'을 눌러주세요.", "hint"); }
+      else setResetStatus(`${email} 으로 코드를 발송했습니다.`, "hint");
+      btn.textContent = "재발송";
+      setTimeout(() => { btn.disabled = false; }, 3000);
+    } catch (e) { setResetStatus("네트워크 오류", "err"); btn.disabled = false; btn.textContent = "코드 발송"; }
+  });
+  $("#resetCheckBtn")?.addEventListener("click", async () => {
+    const email = ($("#resetEmail").value || "").trim().toLowerCase();
+    const code = ($("#resetCodeInput").value || "").trim();
+    if (!_resetToken) { setResetStatus("먼저 코드를 발송해주세요.", "err"); return; }
+    try {
+      const res = await fetch(`${API_BASE}/api/check-verify`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code, token: _resetToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setResetStatus(data.error || "인증 실패", "err"); return; }
+      if (!data.registered) { setResetStatus("가입되지 않은 이메일입니다. 회원가입을 진행해주세요.", "err"); return; }
+      _resetVerified = email; _resetCode = code;
+      setResetStatus("✓ 인증 완료 — 새 비밀번호를 설정하세요.", "ok");
+      $("#resetCodeRow").hidden = true;
+    } catch (e) { setResetStatus("네트워크 오류", "err"); }
+  });
+  $("#resetForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!_resetVerified) { setResetStatus("이메일 인증을 완료해주세요.", "err"); return; }
+    const pw = $("#resetPassword").value || "", pw2 = $("#resetPassword2").value || "";
+    if (pw.length < 6) { setResetStatus("비밀번호는 6자 이상이어야 합니다.", "err"); return; }
+    if (pw !== pw2) { setResetStatus("비밀번호가 일치하지 않습니다.", "err"); return; }
+    const btn = e.submitter; if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(`${API_BASE}/api/user-reset-password`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: _resetVerified, code: _resetCode, token: _resetToken, password: pw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setResetStatus("❌ " + (data.error || "재설정 실패"), "err"); return; }
+      showToast("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.");
+      closeResetModal(); openLoginModal(_resetVerified);
+    } catch (err) { setResetStatus("네트워크 오류", "err"); }
+    finally { if (btn) btn.disabled = false; }
+  });
+
+  // ── 로그아웃 ──────────────────────────────────────────────────
+  $("#logoutButton")?.addEventListener("click", () => logout());
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
 
@@ -3685,6 +3880,8 @@ function bindEvents() {
     saveState();
     renderAll();
     showToast("내 정보 저장 — 검색 결과가 새 조건으로 갱신됩니다.");
+    // 서버 계정에도 반영 (다른 기기 로그인 시 동기화)
+    syncProfileToServer();
   });
 
   // 알림
@@ -3766,7 +3963,7 @@ const STORAGE_KEY = "jjswap_v1";
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      v: 3,
+      v: 4,
       savedAt: new Date().toISOString(),
       schedules: state.schedules,
       user: state.user,
@@ -3786,7 +3983,7 @@ function loadStateFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const d = JSON.parse(raw);
-    if (d.v !== 3) return null;  // v1/v2는 스왑 카운트 오염 가능 — 무효화
+    if (d.v !== 4) return null;  // v3 이하는 서버 계정 도입 전 로컬-only 세션 — 무효화(재로그인 유도)
     if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
     if (d.user) Object.assign(state.user, d.user);
     if (typeof d.credits === "number") state.credits = d.credits;
@@ -3866,7 +4063,9 @@ function closeGenericModal(dialogId, overlayId) {
 function openSignupModal() {
   const sp = document.getElementById("signupPanel");
   const ov = document.getElementById("signupOverlay");
-  if (!sp || state.user.hasSignedUp) return;
+  if (!sp || state.user.serverAuthed) return; // 이미 서버 로그인된 사용자만 차단 (마이그레이션 중엔 허용)
+  closeLoginModal();
+  closeResetModal();
   sp.hidden = false;
   if (ov) ov.hidden = false;
   document.body.classList.add("no-scroll");
@@ -3880,8 +4079,81 @@ function closeSignupModal() {
   document.body.classList.remove("no-scroll");
 }
 
+// 로그인/재설정 모달 표시 헬퍼
+function toggleModal(panelId, overlayId, show) {
+  const p = document.getElementById(panelId), o = document.getElementById(overlayId);
+  if (p) p.hidden = !show;
+  if (o) o.hidden = !show;
+  document.body.classList.toggle("no-scroll", show);
+}
+function openLoginModal(prefillEmail) {
+  closeSignupModal();
+  toggleModal("resetPanel", "resetOverlay", false);
+  if (prefillEmail) { const el = document.getElementById("loginEmail"); if (el) el.value = prefillEmail; }
+  toggleModal("loginPanel", "loginOverlay", true);
+}
+function closeLoginModal() { toggleModal("loginPanel", "loginOverlay", false); }
+function openResetModal() { closeLoginModal(); toggleModal("resetPanel", "resetOverlay", true); }
+function closeResetModal() { toggleModal("resetPanel", "resetOverlay", false); }
+
+// 서버 프로필을 state.user에 반영하고 로그인 상태로 전환 (가입/로그인 공통)
+function applyLoggedInProfile(email, profile) {
+  const p = profile || {};
+  Object.assign(state.user, {
+    email,
+    hasSignedUp: true,
+    serverAuthed: true,   // 서버 계정으로 인증됨 (구버전 로컬-only 세션과 구분)
+    nickname: p.nickname || p.username || state.user.nickname,
+    airline: p.airline || state.user.airline,
+    crewType: p.crewType || state.user.crewType,
+    roleType: p.roleType || state.user.roleType,
+    aircraft: p.aircraft || state.user.aircraft,
+    base: p.base || state.user.base,
+    edto: p.edto ?? state.user.edto,
+    cat2: p.cat2 ?? state.user.cat2,
+    cat3: p.cat3 ?? state.user.cat3,
+    gender: p.gender ?? state.user.gender,
+    languages: p.languages ?? state.user.languages,
+    hasBroadcastRating: p.hasBroadcastRating ?? state.user.hasBroadcastRating,
+    realName: p.realName ?? state.user.realName,
+    employeeId: p.employeeId ?? state.user.employeeId,
+    phone: p.phone ?? state.user.phone,
+  });
+  // 다른 계정으로 로그인했을 수 있으니 기기 로컬 스케줄/선택 초기화
+  state.schedules = [];
+  state.selectedDays.clear();
+  syncFormsFromState();
+  saveState();
+  renderAll();
+  fetchRequests();
+}
+
+// 내 정보 변경을 서버 계정에 반영 (실패해도 로컬은 이미 저장됨)
+function syncProfileToServer() {
+  if (!state.user.email || !state.user.serverAuthed) return;
+  const u = state.user;
+  const profile = {
+    nickname: u.nickname, airline: u.airline, crewType: u.crewType, roleType: u.roleType,
+    aircraft: u.aircraft, base: u.base, edto: u.edto, cat2: u.cat2, cat3: u.cat3,
+    gender: u.gender, languages: u.languages, hasBroadcastRating: u.hasBroadcastRating,
+    realName: u.realName, employeeId: u.employeeId, phone: u.phone,
+  };
+  fetch(`${API_BASE}/api/user-update`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: u.email, profile }),
+  }).catch(e => console.warn("프로필 서버 동기화 실패:", e));
+}
+
+// 로그아웃 — 이 기기 로컬 세션만 종료 (서버 계정·정보는 유지)
+function logout() {
+  if (!confirm("로그아웃할까요? 이 기기에서만 로그아웃되며 계정 정보는 유지됩니다.")) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  location.reload();
+}
+
 function maybeAutoShowSignup() {
-  if (!state.user.hasSignedUp) openSignupModal();
+  // 서버 계정 인증 안 된 상태면 로그인 화면부터 (구버전 로컬-only 세션은 재로그인 유도)
+  if (!state.user.hasSignedUp || !state.user.serverAuthed) openLoginModal(state.user.email || "");
 }
 
 // 모든 dialog 닫힐 때 스크롤 잠금 해제
@@ -3907,31 +4179,20 @@ if (!document.getElementById("splashScreen")) {
     }, 400);
   }
 
-  // 이미 가입된 사용자 — 새로고침/재방문 시 스플래시 없이 바로 현재 화면 유지
-  if (state.user.hasSignedUp) {
+  // 이미 로그인된(서버 계정 인증된) 사용자 — 스플래시 없이 바로 현재 화면 유지
+  if (state.user.hasSignedUp && state.user.serverAuthed) {
     hideSplash();
     return;
   }
 
   const loginBtn = document.getElementById("splashLoginBtn");
   if (loginBtn) loginBtn.addEventListener("click", () => {
-    hideSplash(() => {
-      if (!state.user.hasSignedUp) {
-        showToast("가입 기록이 없습니다 — 회원가입을 진행해주세요.");
-        maybeAutoShowSignup();
-      }
-    });
+    hideSplash(() => openLoginModal(state.user.email || ""));
   });
 
   const signupBtn = document.getElementById("splashSignupBtn");
   if (signupBtn) signupBtn.addEventListener("click", () => {
-    hideSplash(() => {
-      if (state.user.hasSignedUp) {
-        showToast("이미 가입된 회원입니다 — 자동으로 로그인됩니다.");
-      } else {
-        maybeAutoShowSignup();
-      }
-    });
+    hideSplash(() => openSignupModal());
   });
 })();
 

@@ -474,6 +474,9 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .submit-owner { font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; line-height: 1.4; }
 .submit-owner.me { background: #e6f4ea; color: #1a7a3f; }
 .submit-owner.other { background: #fff4e5; color: #b06400; }
+.submit-status { font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 8px; margin-top: 8px; line-height: 1.4; }
+.submit-status.done { background: #e6f4ea; color: #1a7a3f; }
+.submit-status.nudged { background: #fff4e5; color: #b06400; }
 .pending-action-buttons { display: flex; gap: 8px; flex-shrink: 0; }
 .pending-action-buttons button { padding: 8px 14px; font-size: 13px; font-weight: 800; }
 .pending-action-buttons .secondary-button { background: rgba(255,255,255,0.25); color: #fff; border: none; }
