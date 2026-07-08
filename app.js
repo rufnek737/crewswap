@@ -2906,8 +2906,18 @@ const _hiddenInAll = new WeakSet();
 
 // 앱 아이콘 배지 — 미확인 알림(공지 제외) 수를 iOS/Android 아이콘 숫자로 표시.
 // 네이티브(Capacitor)에서만 동작하며, 앱이 실행/폴링 중일 때 갱신됨.
+// 배지·벨에 표시할 미읽음 알림 수 (공지 제외). 클릭해서 전체 내용을 확인하면 read=true.
 function appBadgeCount() {
-  return (state.alerts || []).filter(a => a.kind !== "announce").length;
+  return (state.alerts || []).filter(a => a.kind !== "announce" && !a.read).length;
+}
+
+// 알림을 읽음 처리 (배지 숫자 감소). 이미 읽음이면 무시.
+function markAlertRead(a) {
+  if (!a || a.read) return;
+  a.read = true;
+  saveState();
+  updateBellBadge();
+  updateAppBadge();
 }
 async function updateAppBadge() {
   try {
@@ -2941,14 +2951,16 @@ function renderAlerts() {
   const items = filter === "all"
     ? allIndexed.filter(x => !_hiddenInAll.has(x.a))
     : allIndexed.filter(x => x.a.kind === filter);
-  $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => `
-    <div class="alert-item ${a.kind}" data-alert-idx="${i}">
+  $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => {
+    const unread = a.kind !== "announce" && !a.read;
+    return `
+    <div class="alert-item ${a.kind}${unread ? " is-unread" : ""}" data-alert-idx="${i}">
       <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
-      <strong>${escapeHtml(a.title)}</strong>
-      <p>${escapeHtml(a.body)}</p>
+      <strong>${unread ? '<span class="unread-dot"></span>' : ""}${escapeHtml(a.title)}</strong>
+      <p class="alert-body">${escapeHtml(a.body)}</p>
       <span class="time">${alertTimeAgo(a)}</span>
-    </div>
-  `).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
+    </div>`;
+  }).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
   $$("#alertList .alert-del-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2964,20 +2976,37 @@ function renderAlerts() {
       renderAlerts();
     });
   });
-  // 매칭 알림(받은 요청/의향 도착) 클릭 시 요청함 받은 탭으로 이동 — 원본은 그대로 유지, 알림만 닫힘
-  $$("#alertList .alert-item.match").forEach(el => {
+  // 알림 클릭 = 전체 내용 확인(읽음 처리 → 배지 감소). 매칭 알림은 요청함으로 이동, 그 외는 펼치기.
+  $$("#alertList .alert-item").forEach(el => {
     el.addEventListener("click", () => {
       const a = state.alerts[parseInt(el.dataset.alertIdx, 10)];
-      const mode = (a && a.viewMode) || "received";
-      state.reqViewMode = mode;
-      $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
-      switchTab("requests");
-      setAlertPanel(false);
+      if (!a) return;
+      markAlertRead(a);
+      if (a.kind === "match") {
+        const mode = a.viewMode || "received";
+        state.reqViewMode = mode;
+        $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
+        switchTab("requests");
+        setAlertPanel(false);
+      } else {
+        // 공지·마감 등: 제자리에서 전체 내용 펼치기/접기
+        el.classList.toggle("is-expanded");
+        el.classList.remove("is-unread");
+        const dot = el.querySelector(".unread-dot"); if (dot) dot.remove();
+      }
     });
   });
-  $("#bellBadge").textContent = state.alerts.length;
-  $("#bellBadge").style.display = state.alerts.length ? "grid" : "none";
+  updateBellBadge();
   updateAppBadge();
+}
+
+// 벨 배지 = 미읽음 알림 수 (공지 제외)
+function updateBellBadge() {
+  const n = appBadgeCount();
+  const el = $("#bellBadge");
+  if (!el) return;
+  el.textContent = n;
+  el.style.display = n ? "grid" : "none";
 }
 
 /* ====== 9. 이벤트 ====== */

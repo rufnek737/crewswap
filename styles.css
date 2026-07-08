@@ -602,10 +602,16 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .alert-filters button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 600; }
 .alert-filters button.is-active { background: #243449; color: #fff; border-color: #243449; }
 .alert-list { overflow-y: auto; padding: 12px; display: grid; gap: 8px; }
-.alert-item { position: relative; padding: 12px 36px 12px 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 6px; }
+.alert-item { position: relative; padding: 12px 36px 12px 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 6px; cursor: pointer; }
 .alert-item strong { display: block; font-size: 13px; margin-bottom: 4px; }
-.alert-item p { font-size: 12px; margin-bottom: 6px; color: var(--text); white-space: pre-line; }
+/* 기본: 본문 2줄로 축약. 클릭(is-expanded)하면 전체 표시 */
+.alert-item .alert-body { font-size: 12px; margin-bottom: 6px; color: var(--text); white-space: pre-line;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.alert-item.is-expanded .alert-body { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .alert-item .time { font-size: 11px; color: var(--muted); }
+/* 미읽음 표시: 굵은 제목 + 주황 점 */
+.alert-item.is-unread strong { font-weight: 800; }
+.unread-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff5d3d; margin-right: 6px; vertical-align: middle; }
 .alert-item.match { border-left-color: var(--c-pass); background: var(--green-soft); cursor: pointer; }
 .alert-item.urgent { border-left-color: var(--c-fail); background: #fdecea; }
 .alert-item.announce { border-left-color: var(--c-dom); background: var(--blue-soft); }
