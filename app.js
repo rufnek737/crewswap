@@ -2582,13 +2582,13 @@ async function fetchRequests() {
       seenNudge.add(key); changed = true;
       state.alerts.unshift({
         kind: "match",
-        title: "🔔 회사 상신 독촉 도착",
-        body: `${r.fromNick || "상대"} 님이 회사 상신을 기다리고 있습니다 · ${r.postTitle || ""} — '회사 상신 완료로 표시'를 눌러주세요`,
+        title: "🔔 회사 상신 확인 요청 도착",
+        body: `${r.fromNick || "상대"} 님이 회사 상신 여부를 확인하고 있습니다 · ${r.postTitle || ""} — '회사 상신 완료로 표시'를 눌러주세요`,
         time: "방금",
         createdAt: r.submitNudgedAt || new Date().toISOString(),
         viewMode: "received",
       });
-      showToast(`🔔 ${r.fromNick || "상대"} 님이 회사 상신을 독촉했습니다`);
+      showToast(`🔔 ${r.fromNick || "상대"} 님이 회사 상신 여부를 확인했습니다`);
     });
     localStorage.setItem("crewswap_seen_nudge", JSON.stringify([...seenNudge].slice(-200)));
     // #4-b: 요청자(sent)에게 글작성자의 회사 상신 완료 알림
@@ -2661,7 +2661,7 @@ function renderRequests() {
   $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
 }
 
-// 요청자 → 글작성자에게 회사 상신 독촉
+// 요청자 → 글작성자에게 회사 상신 확인 메세지
 async function nudgeSubmit(reqId) {
   if (!state.user.email) return;
   try {
@@ -2670,10 +2670,10 @@ async function nudgeSubmit(reqId) {
       body: JSON.stringify({ id: reqId, email: state.user.email }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { showToast(data.error || "독촉 전송 실패"); return; }
-    showToast("🔔 상신 독촉을 보냈습니다.");
+    if (!res.ok) { showToast(data.error || "전송 실패"); return; }
+    showToast("🔔 상신 확인 메세지를 보냈습니다.");
     fetchRequests();
-  } catch (e) { showToast("독촉 전송 실패 — 네트워크 오류"); }
+  } catch (e) { showToast("전송 실패 — 네트워크 오류"); }
 }
 
 // 글작성자가 회사 상신 완료 표시 → 상대에게 알림
@@ -2842,10 +2842,10 @@ function requestCard(r) {
             ? `<div class="submit-status done">✅ 회사 상신 완료 표시함 — 상대에게 알림이 전송되었습니다.</div>`
             : `<div class="submit-status done">✅ 글 작성자가 회사 상신을 완료했습니다.</div>`;
         } else if (iAmPoster) {
-          const nudged = r.submitNudgeCount ? `<div class="submit-status nudged">🔔 상대가 회사 상신을 기다리고 있습니다 (독촉 ${r.submitNudgeCount}회).</div>` : "";
+          const nudged = r.submitNudgeCount ? `<div class="submit-status nudged">🔔 상대가 회사 상신 여부를 확인하고 있습니다 (${r.submitNudgeCount}회).</div>` : "";
           submitAction = `${nudged}<button class="primary-button submit-done-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">✅ 회사 상신 완료로 표시</button>`;
         } else {
-          submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">🔔 상신 독촉하기</button>`;
+          submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">📩 상신 확인 메세지 보내기</button>`;
         }
         return `
         <div class="submit-guide">

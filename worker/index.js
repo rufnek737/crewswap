@@ -469,8 +469,8 @@ async function handleRequestsSubmitNudge(request, env) {
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.fromEmail !== email) return json({ error: '독촉 권한이 없습니다' }, 403); // 요청 보낸 사람만
-    if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 독촉할 수 있습니다' }, 400);
+    if (rec.fromEmail !== email) return json({ error: '확인 메세지 권한이 없습니다' }, 403); // 요청 보낸 사람만
+    if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 확인 메세지를 보낼 수 있습니다' }, 400);
     if (rec.submitted) return json({ error: '이미 상신 완료된 건입니다' }, 400);
     rec.submitNudgedAt = new Date().toISOString();
     rec.submitNudgeCount = (rec.submitNudgeCount || 0) + 1;
