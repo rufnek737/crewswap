@@ -173,7 +173,7 @@ const state = {
     airline: "JEJU",        // JEJU | KOREAN | ASIANA | TWAY | AIRBUSAN | JINAIR
     crewType: "PILOT",      // PILOT | CABIN
     nickname:"OrangeFlight",
-    roleType:"FO_B",
+    roleType:"FO_C",
     aircraft:"NG_MAX",   // "NG" | "NG_MAX"
     edto:true, cat2:false, cat3:true,
     base:"GMP",
@@ -3576,7 +3576,7 @@ function bindEvents() {
     state.credits = 5;
     state.user = {
       hasSignedUp: false, airline: "JEJU", crewType: "PILOT",
-      nickname: "OrangeFlight", roleType: "FO_B", aircraft: "NG_MAX",
+      nickname: "OrangeFlight", roleType: "FO_C", aircraft: "NG_MAX",
       edto: true, cat2: false, cat3: true, base: "GMP", rating: 4.8,
       monthlySwapUsed: 0, monthlySwapLimit: 3, yearlySwapUsed: 0,
     };
