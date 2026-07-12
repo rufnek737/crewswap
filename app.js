@@ -2442,11 +2442,14 @@ async function fetchMyPosts() {
 // 마감일이 지났는데 매칭되지 않은 내 스왑 글 → 사용 크레딧 50% 자동 환급
 async function processExpiredRefunds() {
   let refundTotal = 0, count = 0;
-  const newlyExpired = [];
+  const newlyExpired = [];   // 이번에 새로 환급된 글 (서버 삭제 대상)
+  const toAlert = [];        // '마감' 알림을 아직 안 띄운 만료 글 (소급 포함)
   state.myPosts.forEach(p => {
-    if (p.refunded || p.matched || p.status === "expired") return;
+    if (p.matched) return;
     const dd = dDayInfo(p.deadlineDay, postDeadlineMonth(p));
-    if (dd.expired) {
+    if (!dd.expired) return;
+    // 아직 환급 안 됐으면 환급 처리
+    if (!p.refunded && p.status !== "expired") {
       const refund = (p.creditSpent || 1) * 0.5;
       state.credits += refund;
       p.refunded = true;
@@ -2455,13 +2458,28 @@ async function processExpiredRefunds() {
       count++;
       newlyExpired.push(p);
     }
+    // 마감 알림을 아직 안 띄운 글이면 알림 큐에 (이 수정 이전에 환급된 글도 1회 소급)
+    if (!p.expiredAlerted) toAlert.push(p);
   });
-  if (count > 0) {
-    state.credits = Math.round(state.credits * 10) / 10;
+  if (toAlert.length > 0) {
+    if (count > 0) state.credits = Math.round(state.credits * 10) / 10;
+    // 만료된 글마다 '마감' 알림(urgent) 추가 — 벨의 마감 탭에 남고 배지에 집계됨
+    toAlert.forEach(p => {
+      const refund = (p.creditSpent || 1) * 0.5;
+      p.expiredAlerted = true;
+      state.alerts.unshift({
+        kind: "urgent",
+        title: "⏰ 스왑 마감 · 크레딧 환급",
+        body: `내가 올린 '${p.offered?.patternName || "스왑"}'이 매칭 없이 마감되어 ${refund}크레딧(50%)이 환급되었습니다.`,
+        time: "방금",
+        createdAt: new Date().toISOString(),
+      });
+    });
     saveState();
     renderCredits();
     renderMyPosts();
-    showToast(`마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급(50%)`);
+    renderAlerts();
+    if (count > 0) showToast(`마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급(50%)`);
     // 서버(KV)에서도 실제로 제거 — 안 하면 다른 사용자의 "스왑 찾기" 화면에 마감 지난 글이 계속 노출됨
     newlyExpired.forEach(p => {
       if (!p.deleteToken) return;
