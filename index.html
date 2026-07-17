@@ -456,13 +456,12 @@
         <!-- 등록 전 요약 -->
         <div class="post-footer">
           <div class="preview-stats" id="previewStats">
-            <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>또는 광고 1회</small></div>
+            <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>하루 1개 자동 충전</small></div>
           </div>
           <div class="rule-check-summary" id="postRuleCheck"></div>
           <div class="post-footer-btns">
             <button id="saveDraftButton" class="secondary-button" disabled>임시 저장</button>
             <button id="submitPostButton" class="primary-button" disabled>등록하기 · 1크레딧</button>
-            <button id="watchAdButton" class="secondary-button" style="width:100%;margin-top:8px;">📺 광고 보고 등록권 받기</button>
           </div>
         </div>
 
@@ -591,9 +590,8 @@
           <div class="profile-card">
             <h3>크레딧</h3>
             <div class="credit-balance"><strong id="profileCredits">5</strong> 크레딧</div>
-            <div class="beta-credit-notice">🎁 베타 기간 동안 무료 제공</div>
-            <button id="watchAdButtonProfile" class="secondary-button" style="width:100%;margin:10px 0 6px;">📺 광고 보고 등록권 받기</button>
-            <p class="hint" style="margin-top:8px;">💡 등록한 스왑이 <strong>마감일까지 매칭되지 않으면</strong> 사용한 크레딧의 <strong>50%가 자동 환급</strong>됩니다.</p>
+            <p id="creditRegenHint" class="hint" style="margin:6px 0 0;"></p>
+            <p class="hint" style="margin-top:8px;">💡 크레딧은 <strong>하루에 1개씩 자동 충전</strong>(최대 5개)됩니다. 요청·등록에 1개씩 쓰이고, 등록한 스왑이 <strong>마감일까지 매칭되지 않으면 50%가 자동 환급</strong>됩니다.</p>
           </div>
         </div>
 
