@@ -305,6 +305,19 @@
           <button type="button" class="swap-subtab is-active" data-swaptab="find">가능한 스왑 보기</button>
           <button type="button" class="swap-subtab" data-swaptab="post">내 스왑 올리기</button>
         </div>
+
+        <!-- 🔔 스왑 알림 (저장검색) — 조건 저장 시 맞는 스왑 올라오면 알림 -->
+        <div class="saved-search-box">
+          <button type="button" class="saved-search-head" id="savedSearchToggle" aria-expanded="false">
+            <span>🔔 스왑 알림 — 원하는 조건 뜨면 알려드려요</span>
+            <span id="savedSearchArrow">▾</span>
+          </button>
+          <div id="savedSearchBody" hidden>
+            <div id="savedList" class="saved-list"></div>
+            <div id="savedAddForm" class="saved-add-form"></div>
+          </div>
+        </div>
+
         <div class="find-actions" style="margin-bottom:14px;">
           <button type="button" id="refreshFindBtn" class="secondary-button">↻ 새로고침</button>
           <select id="sortSelect" aria-label="정렬 기준" style="flex:1;">

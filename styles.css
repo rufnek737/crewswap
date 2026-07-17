@@ -385,6 +385,12 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .saved-item strong { font-size: 13px; margin-bottom: 2px; }
 .saved-item .saved-meta { color: var(--muted); font-size: 11px; }
 .saved-item .saved-del { position: absolute; top: 4px; right: 6px; background: transparent; border: 0; color: var(--muted); font-size: 14px; }
+/* 🔔 스왑 알림(저장검색) 박스 */
+.saved-search-box { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; background: var(--panel); }
+.saved-search-head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; background: transparent; border: 0; font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer; }
+#savedSearchBody { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.saved-add-form { display: flex; flex-direction: column; gap: 8px; }
+.saved-add-form input { width: 100%; }
 
 /* ===== 필터 ===== */
 .filter-panel { display: grid; gap: 0; margin-bottom: 14px; }

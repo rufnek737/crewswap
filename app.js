@@ -355,11 +355,7 @@ function createMockAlerts() {
 }
 
 function createMockSavedSearches() {
-  return [
-    { id:"S1", title:"6/13 7C1551 → OFF", meta:"활성 · 알림 1회 받음" },
-    { id:"S2", title:"주말 LAYOV → 평일 국내선", meta:"활성 · 알림 0회" },
-    { id:"S3", title:"RSV → OFF (날짜 무관)", meta:"활성 · 알림 2회 받음" },
-  ];
+  return []; // 실제 저장검색은 사용자가 직접 추가
 }
 
 /* ====== 4. 유틸 ====== */
@@ -2200,6 +2196,54 @@ function renderMatches() {
 }
 
 /* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
+/* ====== 프리미엄 (구독) ======
+ * 베타 기간엔 전원 프리미엄으로 열어 기능을 검증. 정식 출시 시 BETA_ALL_PREMIUM=false +
+ * 실제 결제(IAP/Stripe)로 state.user.isPremium를 세팅. */
+const BETA_ALL_PREMIUM = true;
+function isPremiumUser() { return BETA_ALL_PREMIUM || !!state.user.isPremium; }
+const FREE_SAVED_SEARCH_LIMIT = 1; // 무료: 저장검색 1개, 프리미엄: 무제한
+
+/* ====== 저장검색(스왑 알림) ======
+ * 원하는 조건(키워드·유형)을 저장해두면, 조건에 맞는 스왑 글이 올라올 때 알림.
+ * "보홀(DPS) 가는 스케줄 뜨면 알림" 같은 용도 — 매일 안 봐도 앱이 대신 찾아줌. */
+function postMatchesSavedSearch(post, s) {
+  const o = post.offered || {};
+  if (s.types && s.types.length && !s.types.includes(o.type)) return false;
+  if (s.keyword && s.keyword.trim()) {
+    const hay = `${o.patternName || ""} ${o.summary || ""} ${o.region || ""} ${o.type || ""}`.toUpperCase();
+    const toks = s.keyword.toUpperCase().split(/[\s,]+/).filter(Boolean);
+    if (toks.length && !toks.some(t => hay.includes(t))) return false;
+  }
+  return true;
+}
+
+// 새로 불러온 글들을 저장검색과 대조 → 조건 맞는 '새' 글이면 알림 (내가 실제 스왑 가능한 글만)
+function scanSavedSearches() {
+  if (!state.savedSearches || !state.savedSearches.length) return;
+  let changed = false;
+  state.savedSearches.forEach(s => {
+    if (!s.notified) s.notified = [];
+    state.posts.forEach(post => {
+      if (s.notified.includes(post.id)) return;
+      if (matchScore(post) === null) return; // 내 직군/자격으로 스왑 불가한 글은 제외
+      if (!postMatchesSavedSearch(post, s)) return;
+      s.notified.push(post.id);
+      changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        goTo: "find",
+        title: "🔔 관심 스왑 등장",
+        body: `저장한 조건 '${s.label}'에 맞는 스왑이 올라왔습니다 · ${post.offered?.patternName || ""} (${post.offered?.summary || post.offered?.type || ""})`,
+        time: "방금",
+        createdAt: new Date().toISOString(),
+      });
+      showToast(`🔔 관심 스왑 등장 — ${s.label}`);
+    });
+    if (s.notified.length > 300) s.notified = s.notified.slice(-300);
+  });
+  if (changed) { saveState(); renderAlerts(); }
+}
+
 async function fetchPosts() {
   try {
     const res = await fetch(`${API_BASE}/api/posts-get`);
@@ -2216,6 +2260,7 @@ async function fetchPosts() {
           : 0,
       }));
     renderMatches();
+    scanSavedSearches();
   } catch (e) {
     console.warn("fetchPosts error:", e);
   }
@@ -2651,18 +2696,55 @@ function renderReqTabBadge() {
   else { badge.hidden = true; }
 }
 
+const SAVED_TYPE_OPTIONS = ["OFF", "국내선", "국제선", "LAYOV", "RSV", "STBY"];
 function renderSavedSearches() {
-  $("#savedList").innerHTML = state.savedSearches.length
-    ? state.savedSearches.map(s => `
+  const listEl = document.getElementById("savedList");
+  if (!listEl) return;
+  const searches = state.savedSearches || [];
+  const premium = isPremiumUser();
+  const atLimit = !premium && searches.length >= FREE_SAVED_SEARCH_LIMIT;
+
+  listEl.innerHTML = searches.length
+    ? searches.map(s => `
         <div class="saved-item">
           <button class="saved-del" data-id="${s.id}" title="삭제">×</button>
-          <strong>${s.title}</strong>
-          <span class="saved-meta">${s.meta}</span>
+          <strong>🔔 ${escapeHtml(s.label)}</strong>
+          <span class="saved-meta">${s.keyword ? `키워드: ${escapeHtml(s.keyword)}` : "키워드 없음"}${s.types && s.types.length ? ` · ${s.types.join("/")}` : ""} · 알림 ${(s.notified || []).length}건</span>
         </div>
       `).join("")
-    : `<span class="hint">저장된 검색 없음 — 자주 찾는 조건을 저장하면 새 글 알림을 받습니다.</span>`;
-  $$(".saved-del").forEach(b => b.onclick = () => {
+    : `<span class="hint">저장한 알림 조건이 없습니다. 원하는 조건(예: 보홀 DPS, OFF)을 저장하면 맞는 스왑이 올라올 때 알려드립니다.</span>`;
+
+  const addEl = document.getElementById("savedAddForm");
+  if (addEl) {
+    if (atLimit) {
+      addEl.innerHTML = `<div class="hint" style="text-align:center;padding:6px;">무료는 알림 조건 ${FREE_SAVED_SEARCH_LIMIT}개까지 · <strong>프리미엄에서 무제한</strong></div>`;
+    } else {
+      addEl.innerHTML = `
+        <input id="savedKeyword" placeholder="키워드 (예: DPS, 보홀, CXR)" />
+        <div class="chip-row" id="savedTypeChips">
+          ${SAVED_TYPE_OPTIONS.map(t => `<button type="button" class="filter-chip" data-stype="${t}">${t}</button>`).join("")}
+        </div>
+        <button type="button" id="savedAddBtn" class="primary-button" style="width:100%;">+ 이 조건으로 알림받기</button>`;
+      let picked = new Set();
+      document.getElementById("savedTypeChips").querySelectorAll("[data-stype]").forEach(b => {
+        b.onclick = () => { const t = b.dataset.stype; if (picked.has(t)) { picked.delete(t); b.classList.remove("is-active"); } else { picked.add(t); b.classList.add("is-active"); } };
+      });
+      document.getElementById("savedAddBtn").onclick = () => {
+        const kw = (document.getElementById("savedKeyword").value || "").trim();
+        const types = [...picked];
+        if (!kw && types.length === 0) { showToast("키워드나 유형을 하나 이상 지정해주세요."); return; }
+        const label = kw ? (types.length ? `${kw} · ${types.join("/")}` : kw) : types.join("/");
+        state.savedSearches.push({ id: "SS-" + Date.now(), label, keyword: kw, types, notified: [], createdAt: new Date().toISOString() });
+        saveState();
+        renderSavedSearches();
+        showToast(`🔔 '${label}' 알림 등록 — 조건에 맞는 스왑이 올라오면 알려드립니다.`);
+      };
+    }
+  }
+
+  listEl.querySelectorAll(".saved-del").forEach(b => b.onclick = () => {
     state.savedSearches = state.savedSearches.filter(s => s.id !== b.dataset.id);
+    saveState();
     renderSavedSearches();
   });
 }
@@ -3001,7 +3083,11 @@ function renderAlerts() {
       const a = state.alerts[parseInt(el.dataset.alertIdx, 10)];
       if (!a) return;
       markAlertRead(a);
-      if (a.kind === "match") {
+      if (a.goTo === "find") {
+        // 저장검색(관심 스왑) 알림 → 스왑 찾기 탭으로
+        switchTab("find");
+        setAlertPanel(false);
+      } else if (a.kind === "match") {
         const mode = a.viewMode || "received";
         state.reqViewMode = mode;
         $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
@@ -3037,7 +3123,7 @@ function switchTab(name) {
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   // 스왑하기 서브탭 상태 동기화
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
-  if (name === "find") fetchPosts();
+  if (name === "find") { fetchPosts(); renderSavedSearches(); }
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
   history.replaceState(null, "", "#" + name);
@@ -3138,6 +3224,16 @@ function bindEvents() {
   $$(".swap-subtab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.swaptab)));
   // 스왑 찾기 새로고침
   $("#refreshFindBtn")?.addEventListener("click", () => { fetchPosts(); showToast("최신 글을 불러왔습니다."); });
+  // 🔔 스왑 알림(저장검색) 섹션 펼치기/접기
+  $("#savedSearchToggle")?.addEventListener("click", () => {
+    const body = document.getElementById("savedSearchBody");
+    const arrow = document.getElementById("savedSearchArrow");
+    const open = body.hidden;
+    body.hidden = !open;
+    if (arrow) arrow.textContent = open ? "▴" : "▾";
+    $("#savedSearchToggle").setAttribute("aria-expanded", String(open));
+    if (open) renderSavedSearches();
+  });
 
   // 직군 변경 → 직책 옵션 동적 전환 (가입 팝업 + 프로필 탭)
   const signupCT = $("#signupCrewType");
