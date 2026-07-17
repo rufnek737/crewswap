@@ -391,6 +391,12 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 #savedSearchBody { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .saved-add-form { display: flex; flex-direction: column; gap: 8px; }
 .saved-add-form input { width: 100%; }
+.saved-field-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+/* 프리미엄(PRO) 표시 */
+.pro-badge { display: inline-block; background: linear-gradient(135deg, #ffb02e, #ff7a00); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 6px; margin: 0 4px; vertical-align: middle; letter-spacing: .5px; }
+.saved-search-box.premium-feature { border-color: #ffcf8a; background: linear-gradient(180deg, #fffaf2, var(--panel)); }
+.premium-note { font-size: 11.5px; color: #9a6300; background: #fff4e0; border: 1px solid #ffe0b0; border-radius: 8px; padding: 8px 10px; margin: 0; line-height: 1.5; }
+.premium-lock { text-align: center; padding: 12px; font-size: 12px; color: #9a6300; background: #fff4e0; border: 1px dashed #ffcf8a; border-radius: 8px; line-height: 1.6; }
 
 /* ===== 필터 ===== */
 .filter-panel { display: grid; gap: 0; margin-bottom: 14px; }
