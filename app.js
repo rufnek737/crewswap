@@ -4009,6 +4009,9 @@ function bindEvents() {
         watchers: 0,
         offered: {
           patternName: patternTitleFor(ss),
+          dateKeys: keyGroup,
+          startDate: keyGroup[0],
+          endDate: keyGroup[keyGroup.length - 1],
           days: keyGroup.map(k => parseDayKey(k).day),
           summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
           type: ss[0].type,
@@ -4079,9 +4082,9 @@ function bindEvents() {
   $("#submitPostButton").addEventListener("click", () => {
     if (state.editingPostId) { doUpdatePost(); return; }
     if (state.credits < 1) { showToast("크레딧 부족"); return; }
-    // 중복 등록 방지: 선택한 날짜가 이미 내 게시글에 있는지 확인
-    const selectedDayNums = [...state.selectedDays].map(k => parseDayKey(k).day);
-    const dupPost = state.myPosts.find(p => p.offered.days.some(d => selectedDayNums.includes(d)));
+    // 중복 등록 방지: 일(day) 숫자가 아닌 YYYY-MM-DD 전체 날짜로 활성 글만 비교한다.
+    // 구버전 글은 patternName(예: 7/23~7/25)에서 날짜를 복원한다.
+    const dupPost = window.CrewSwapPostDates.findDuplicatePost(state.myPosts, [...state.selectedDays]);
     if (dupPost) {
       showToast(`이미 같은 날짜로 등록된 글이 있습니다 (${dupPost.offered.patternName})`);
       return;

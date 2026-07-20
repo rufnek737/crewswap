@@ -426,7 +426,7 @@ const POST_FIELDS = [
   'id', 'deleteToken', 'registeredAt',
   'airline', 'crewType', 'ownerRole', 'ownerNick', 'ownerRating', 'ownerBase', 'ownerEmail',
   'offered', 'wanted',
-  'deadlineDay', 'watchers', 'status', 'creditSpent',
+  'deadlineDay', 'deadlineMonth', 'watchers', 'status', 'creditSpent',
 ];
 
 async function handlePostsCreate(request, env, ctx) {
