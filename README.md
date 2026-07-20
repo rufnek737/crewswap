@@ -56,7 +56,7 @@ npm install
 
 # www/ 폴더 생성 (gitignore라 클론 시 없음)
 mkdir www
-cp index.html styles.css app.js sw.js manifest.json \
+cp index.html styles.css post-dates.js app.js sw.js manifest.json \
    icon-192.png icon-512.png splash.mp4 splash-poster.jpg www/
 ```
 
@@ -84,7 +84,7 @@ sips -z 1024 1024 icon-512.png \
 
 ### 코드 수정 후 매번
 ```bash
-cp index.html styles.css app.js www/   # 수정한 파일만
+cp index.html styles.css post-dates.js app.js sw.js www/   # 수정한 파일만
 
 # Android
 npx cap sync android   # Android Studio ▶ Run
@@ -92,6 +92,12 @@ npx cap sync android   # Android Studio ▶ Run
 # iOS
 npx cap sync ios       # Xcode ▶ Run
 ```
+
+### Codex 작업 완료 규칙
+
+- CrewSwap 수정은 사용자와 사전 확인 후 진행한다.
+- 완료 시 자동검사, `www`·Capacitor 동기화, 필요한 Worker 배포, GitHub 커밋·푸시, README Work Log 기록까지 한 번에 처리한다.
+- `Kay phone`이 연결되어 있으면 최신 iOS 빌드를 생성해 기존 앱 위에 재설치하고 실행 확인까지 같은 작업에 포함한다. 기기가 오프라인이면 연결 요청 후 이어서 완료한다.
 
 ### Cloudflare Workers (백엔드 수정 시)
 ```bash
@@ -133,6 +139,7 @@ netlify dev          # http://localhost:8889
 - `deadlineMonth`도 Worker 허용 필드에 추가해 서버 동기화 뒤 월 정보가 사라지지 않도록 보완. Worker Version `6ea7583c-0da2-42c4-8d79-ccb4ff10b136` 배포 완료.
 - 월이 다른 같은 일자 허용, 실제 날짜 중복 차단, 마감 글 제외, 연말·연초 범위 복원 자동 테스트를 추가. 전체 자동 테스트 7개 통과.
 - Service Worker 캐시를 `v68`로 갱신하고 웹·iOS·Android 프로젝트에 동기화.
+- GitHub 커밋 `db9fabd` 배포 후 최신 iOS Debug 빌드를 개인 개발팀으로 서명해 `Kay phone`에 재설치하고 앱 실행까지 확인. 이후 CrewSwap 수정 완료 절차에 아이폰 재설치를 기본 포함하도록 개발 규칙에 기록.
 
 ### 2026-07-20 — PRO 저장조건 백그라운드 알림 기반
 
