@@ -1,6 +1,12 @@
 name = "crewswap-api"
 main = "index.js"
 compatibility_date = "2025-06-17"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# 베타에서는 모든 테스터가 PRO 저장조건·푸시 흐름을 검증한다.
+# 정식 결제 출시 전에 false로 바꾸고 user:<email>.premiumUntil을 결제 서버가 관리한다.
+BETA_ALL_PREMIUM = "true"
 
 # KV 네임스페이스: 아래 id는 `npx wrangler kv namespace create POSTS` 실행 후 교체
 [[kv_namespaces]]

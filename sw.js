@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v66';
-const SHELL = ['/index.html', '/styles.css', '/app.js', '/manifest.json'];
+const CACHE = 'crewswap-v67';
+const SHELL = ['./index.html', './styles.css', './app.js', './manifest.json'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {
@@ -47,4 +47,31 @@ self.addEventListener('fetch', e => {
       });
     })
   );
+});
+
+// PRO 저장조건 백그라운드 알림 — 탭이 닫혀 있어도 Push API가 이 이벤트를 전달한다.
+self.addEventListener('push', event => {
+  if (!event.data) return;
+  let data = {};
+  try { data = event.data.json(); } catch { data = { body: event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'CrewSwap', {
+    body: data.body || '조건에 맞는 새 스왑이 올라왔습니다.',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: data.tag || 'crewswap-premium-alert',
+    data: data.data || { url: './#find' },
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = event.notification.data?.url || './#find';
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+    const existing = clients.find(client => client.url.startsWith(self.location.origin));
+    if (existing) {
+      if ('navigate' in existing) existing.navigate(target);
+      return existing.focus();
+    }
+    return self.clients.openWindow(target);
+  }));
 });

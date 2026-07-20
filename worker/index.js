@@ -1,3 +1,10 @@
+import webpush from 'web-push';
+import {
+  matchingSearches,
+  sanitizeSavedSearches,
+  subscriberCanUsePost,
+} from './premium-alerts.mjs';
+
 // CrewSwap API — Cloudflare Workers
 // 라우팅: /api/send-verify, /api/check-verify, /api/posts-get,
 //          /api/posts-create, /api/posts-delete, /api/crewconnex
@@ -263,6 +270,128 @@ async function updateRequestsIndexEntry(env, updated) {
   await saveRequestsIndex(env, idx);
 }
 
+/* ── PRO 저장조건·백그라운드 Web Push ────────────────────────────
+   베타에서는 BETA_ALL_PREMIUM=true로 모든 테스터가 PRO 흐름을 검증한다.
+   정식 출시에서는 false로 바꾸고 결제 서버가 user:<email>.premiumUntil을 갱신한다. ── */
+
+const PREMIUM_ALERT_INDEX_KEY = 'idx:premium-alert-subscribers';
+
+function webPushConfigured(env) {
+  return !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT);
+}
+
+async function isPremiumAccount(env, email) {
+  if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true') return true;
+  const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
+  const premiumUntil = Date.parse(user?.premiumUntil || '');
+  return Number.isFinite(premiumUntil) && premiumUntil > Date.now();
+}
+
+async function getPremiumAlertIndex(env) {
+  const value = await env.POSTS.get(PREMIUM_ALERT_INDEX_KEY, { type: 'json' });
+  return Array.isArray(value) ? value : [];
+}
+
+async function savePremiumAlertIndex(env, records) {
+  await env.POSTS.put(PREMIUM_ALERT_INDEX_KEY, JSON.stringify(records));
+}
+
+function sanitizePushSubscription(value) {
+  const endpoint = String(value?.endpoint || '').trim();
+  const p256dh = String(value?.keys?.p256dh || '').trim();
+  const auth = String(value?.keys?.auth || '').trim();
+  if (!endpoint.startsWith('https://') || !p256dh || !auth) return null;
+  return { endpoint: endpoint.slice(0, 2048), expirationTime: value?.expirationTime || null, keys: { p256dh, auth } };
+}
+
+async function handlePremiumAlertConfig(env) {
+  return json({
+    enabled: webPushConfigured(env),
+    vapidPublicKey: env.VAPID_PUBLIC_KEY || '',
+    betaAllPremium: String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true',
+  });
+}
+
+async function handlePremiumAlertSync(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const email = String(body?.email || '').trim().toLowerCase();
+  if (!email.endsWith('@jejuair.net')) return json({ error: '제주항공 계정이 필요합니다' }, 400);
+  const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
+  if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
+  if (!(await isPremiumAccount(env, email))) return json({ error: 'PRO 구독 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+
+  const searches = sanitizeSavedSearches(body?.searches);
+  const subscription = sanitizePushSubscription(body?.subscription);
+  const profile = pickProfile(user.profile || {});
+  const records = await getPremiumAlertIndex(env);
+  const index = records.findIndex(record => record.email === email);
+  const previous = index >= 0 ? records[index] : { email, subscriptions: [], notifiedPostIds: [] };
+  const subscriptions = Array.isArray(previous.subscriptions) ? previous.subscriptions : [];
+
+  if (subscription && !subscriptions.some(item => item.endpoint === subscription.endpoint)) {
+    subscriptions.push(subscription);
+  }
+
+  const next = {
+    ...previous,
+    email,
+    profile,
+    searches,
+    subscriptions: subscriptions.slice(-5),
+    notifiedPostIds: Array.isArray(previous.notifiedPostIds) ? previous.notifiedPostIds.slice(-300) : [],
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (index >= 0) records[index] = next; else records.push(next);
+  await savePremiumAlertIndex(env, records);
+  return json({ ok: true, searches: searches.length, devices: next.subscriptions.length, pushEnabled: webPushConfigured(env) });
+}
+
+async function notifyPremiumSubscribers(env, post) {
+  if (!webPushConfigured(env)) return;
+  const records = await getPremiumAlertIndex(env);
+  if (!records.length) return;
+
+  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  let changed = false;
+
+  for (const record of records) {
+    if (!record?.email || record.email === post.ownerEmail) continue;
+    if (!(await isPremiumAccount(env, record.email))) continue;
+    if (!subscriberCanUsePost(record.profile, post)) continue;
+    if ((record.notifiedPostIds || []).includes(post.id)) continue;
+
+    const matched = matchingSearches(post, record.searches);
+    if (!matched.length) continue;
+    const label = matched.map(search => search.label).filter(Boolean).slice(0, 2).join(', ') || '저장한 조건';
+    const body = `${label} · ${post.offered?.patternName || post.offered?.summary || post.offered?.type || '새 스왑'}`;
+    const payload = JSON.stringify({
+      title: '🔔 조건에 맞는 새 스왑',
+      body,
+      tag: `crewswap-${post.id}`,
+      data: { url: './#find', postId: post.id },
+    });
+
+    const alive = [];
+    for (const subscription of record.subscriptions || []) {
+      try {
+        await webpush.sendNotification(subscription, payload, { TTL: 3600, urgency: 'high', topic: String(post.id).slice(-32) });
+        alive.push(subscription);
+      } catch (error) {
+        const status = error?.statusCode || error?.status || 0;
+        if (status !== 404 && status !== 410) alive.push(subscription);
+      }
+    }
+
+    record.subscriptions = alive;
+    record.notifiedPostIds = [...(record.notifiedPostIds || []), post.id].slice(-300);
+    changed = true;
+  }
+
+  if (changed) await savePremiumAlertIndex(env, records);
+}
+
 /* ── posts-get ──────────────────────────────────────────────── */
 
 async function handlePostsGet(env) {
@@ -300,7 +429,7 @@ const POST_FIELDS = [
   'deadlineDay', 'watchers', 'status', 'creditSpent',
 ];
 
-async function handlePostsCreate(request, env) {
+async function handlePostsCreate(request, env, ctx) {
   let post;
   try { post = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!post.id || !post.deleteToken || !post.offered || !post.wanted)
@@ -316,6 +445,7 @@ async function handlePostsCreate(request, env) {
     const idx = await getPostsIndex(env);
     idx.push(clean);
     await savePostsIndex(env, idx);
+    if (ctx) ctx.waitUntil(notifyPremiumSubscribers(env, clean));
     return json({ id: clean.id });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -967,7 +1097,7 @@ async function handleCrewConnex(request) {
 /* ── 메인 라우터 ─────────────────────────────────────────────── */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     const path = new URL(request.url).pathname;
     if (path === '/api/send-verify')  return handleSendVerify(request, env);
@@ -978,7 +1108,7 @@ export default {
     if (path === '/api/user-reset-password') return handleUserResetPassword(request, env);
     if (path === '/api/posts-get')    return handlePostsGet(env);
     if (path === '/api/posts-get-mine') return handlePostsGetMine(request, env);
-    if (path === '/api/posts-create') return handlePostsCreate(request, env);
+    if (path === '/api/posts-create') return handlePostsCreate(request, env, ctx);
     if (path === '/api/posts-delete') return handlePostsDelete(request, env);
     if (path === '/api/posts-update') return handlePostsUpdate(request, env);
     if (path === '/api/requests-create') return handleRequestsCreate(request, env);
@@ -989,6 +1119,8 @@ export default {
     if (path === '/api/requests-submit-nudge') return handleRequestsSubmitNudge(request, env);
     if (path === '/api/requests-submit-done') return handleRequestsSubmitDone(request, env);
     if (path === '/api/requests-delete') return handleRequestsDelete(request, env);
+    if (path === '/api/premium-alert-config') return handlePremiumAlertConfig(env);
+    if (path === '/api/premium-alert-sync') return handlePremiumAlertSync(request, env);
     if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
     return new Response('Not Found', { status: 404 });
   },

@@ -309,11 +309,11 @@
         <!-- 🔔 스왑 알림 (저장검색) — 프리미엄 기능 -->
         <div class="saved-search-box premium-feature">
           <button type="button" class="saved-search-head" id="savedSearchToggle" aria-expanded="false">
-            <span>🔔 스왑 알림 <span class="pro-badge">PRO</span> — 원하는 조건 뜨면 알려드려요</span>
+            <span>🔔 자동 스왑 알림 <span class="pro-badge">PRO</span> — 앱을 열지 않아도 새 글 알림</span>
             <span id="savedSearchArrow">▾</span>
           </button>
           <div id="savedSearchBody" hidden>
-            <p class="premium-note">👑 프리미엄 기능 · <strong>베타 기간 무료</strong> — 목적지·유형·박수 조건을 저장하면 맞는 스왑이 올라올 때 알려드려요.</p>
+            <p class="premium-note">👑 <strong>유료 구독 전용 기능</strong> — 목적지·유형·박수 조건을 서버에 저장하고, 조건에 맞는 새 스왑이 올라오면 백그라운드 푸시로 알려드립니다. 베타에서는 PRO 기능을 무료로 미리 검증합니다.</p>
             <div id="savedList" class="saved-list"></div>
             <div id="savedAddForm" class="saved-add-form"></div>
           </div>
@@ -736,10 +736,9 @@
             regs.forEach(r => r.unregister());
           });
         } else {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
         }
       }
     </script>
   </body>
 </html>
-
