@@ -3184,7 +3184,7 @@ async function initAppBadge() {
     await updateAppBadge();
   } catch (e) { /* 무시 */ }
   // 앱을 백그라운드로 보내거나 다시 열 때마다 배지를 현재 미읽음 수로 재설정.
-  // (iOS는 백그라운드 진입 시점에 배지를 세팅해야 홈 화면에 안정적으로 표시됨)
+  // (iOS는 백그라운드 진입 시점에 세팅해야 홈 화면에 안정적으로 표시됨)
   document.addEventListener("visibilitychange", () => { updateAppBadge(); });
 }
 
