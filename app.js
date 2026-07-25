@@ -2058,10 +2058,12 @@ function renderMyPosts() {
           <div><dt>희망 조건</dt><dd>${wantedSummary(p.wanted)}</dd></div>
         </dl>
       </details>
-      <div class="my-post-btn-row">
+      ${(p.status === "expired" || p.refunded)
+        ? `<p class="hint" style="margin:8px 0 0;">이미 마감되어 크레딧이 환급된 글입니다. 수정·취소할 수 없습니다.</p>`
+        : `<div class="my-post-btn-row">
         <button class="secondary-button edit-post-button" data-my-post-id="${p.id}">희망 조건 수정</button>
         <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
-      </div>
+      </div>`}
     </div>
   `;
   }).join("");
@@ -2073,6 +2075,12 @@ function renderMyPosts() {
       const pid = b.dataset.myPostId;
       const post = state.myPosts.find(x => x.id === pid);
       if (!post) return;
+      // 방어: 이미 마감/환급된 글은 취소 재환급 불가 (중복 환급 차단)
+      if (post.status === "expired" || post.refunded) {
+        showToast("이미 마감되어 환급된 글입니다.");
+        renderMyPosts();
+        return;
+      }
       if (!confirm(`"${post.offered.patternName}" 등록을 취소하고 ${post.creditSpent}크레딧을 환급받겠습니까?`)) return;
       if (post.deleteToken) {
         try {
