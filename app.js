@@ -2244,16 +2244,33 @@ function isPremiumUser() { return BETA_ALL_PREMIUM || !!state.user.isPremium; }
  * PRO 구독자가 원하는 조건을 서버에 저장하면 새 글 등록 시 서버가 대조해 푸시한다.
  * 베타에서는 전원을 PRO로 취급하고 웹/PWA 백그라운드 푸시를 먼저 검증한다. */
 // 글의 박수(nights) 추정: 0=퀵턴(당일), 1=1박, 2+=장박, null=박수 개념 없음(OFF/RSV 등)
+// 홈(퇴근 가능) 공항 — 여기서 밤을 보내는 건 '박'으로 치지 않음
+function homeAirports() {
+  return state.user.base === "PUS" ? ["PUS"] : ["GMP", "ICN"];
+}
+// 실제 오버나이트(박) 수 추정: 0=퀵턴, 1=1박, 2+=장박, null=박수 개념 없음(OFF/RSV 등)
 function postNights(post) {
   const o = post.offered || {};
-  const m = /(\d+)\s*박/.exec(o.summary || o.patternName || "");
+  const text = `${o.summary || ""} ${o.patternName || ""}`;
+  const m = /(\d+)\s*박/.exec(text);            // ① 요약에 'N박' 명시가 있으면 그대로
   if (m) return parseInt(m[1], 10);
-  if (o.type === "LAYOV" || o.layoverAirport) return Math.max(1, (o.days || []).length - 2); // 기존 컨벤션
-  if (o.type === "국제선" || o.type === "국내선") {
-    const d = (o.days || []).length;
-    return d <= 1 ? 0 : Math.max(0, d - 1); // 당일 왕복=퀵턴(0박)
+  // ② 라우트 기반: 연속 근무일이 같은 '비(非)홈' 공항에서 이어지면 그날 그 공항에서 1박
+  const home = homeAirports();
+  const segs = (o.summary || "").split("·").map(s => s.trim()).filter(Boolean);
+  const airportsOf = seg => (seg.match(/[A-Z]{3}/g) || []);
+  let nights = 0;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const a = airportsOf(segs[i]), b = airportsOf(segs[i + 1]);
+    if (!a.length || !b.length) continue;
+    const last = a[a.length - 1], first = b[0];
+    if (last === first && !home.includes(last)) nights++; // 같은 외지 공항에서 이어짐 = 오버나이트
   }
-  return null;
+  const layovCount = (text.match(/LAYOV/gi) || []).length; // ③ LAYOV 표기 수도 참고
+  nights = Math.max(nights, layovCount);
+  if (nights > 0) return nights;
+  if (o.type === "LAYOV" || o.layoverAirport) return 1;   // LAYOV인데 위에서 못 잡으면 최소 1박
+  if (o.type === "국제선" || o.type === "국내선") return 0; // 박 근거 없으면 퀵턴/무박
+  return null; // OFF/RSV/STBY 등
 }
 // 박수 → 버킷 라벨
 function nightsBucket(n) { return n == null ? null : n === 0 ? "quick" : n === 1 ? "1" : "2plus"; }
@@ -2287,11 +2304,12 @@ function scanSavedSearches() {
       if (!postMatchesSavedSearch(post, s)) return;
       s.notified.push(post.id);
       changed = true;
+      const sLabel = s.label || s.keyword || (s.types && s.types.join("/")) || (s.nights && s.nights.join("/")) || "저장한 조건";
       state.alerts.unshift({
         kind: "match",
         goTo: "find",
         title: "🔔 관심 스왑 등장",
-        body: `저장한 조건 '${s.label}'에 맞는 스왑이 올라왔습니다 · ${post.offered?.patternName || ""} (${post.offered?.summary || post.offered?.type || ""})`,
+        body: `저장한 조건 '${sLabel}'에 맞는 스왑이 올라왔습니다 · ${post.offered?.patternName || ""} (${post.offered?.summary || post.offered?.type || ""})`,
         time: "방금",
         createdAt: new Date().toISOString(),
       });
