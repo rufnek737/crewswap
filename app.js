@@ -8,6 +8,7 @@
 // Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
 // Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
 const API_BASE = "https://crewswap-api.tae26001.workers.dev";
+const POLICY_VERSION = "2026-07-28";
 const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
   FO_C: "C등급 부기장",   FO_B: "B등급 부기장",   FO_A: "A등급 부기장",
@@ -3559,9 +3560,11 @@ function bindEvents() {
     const username = ($("#signupNickname").value || "").trim();
     const pw  = $("#signupPassword").value || "";
     const pw2 = $("#signupPassword2").value || "";
+    const policyAgreed = $("#signupPolicyAgree")?.checked;
     if (!username) { setVerifyStatus("아이디(표시 이름)를 입력해주세요.", "err"); $("#signupNickname").focus(); return; }
     if (pw.length < 6) { setVerifyStatus("비밀번호는 6자 이상이어야 합니다.", "err"); $("#signupPassword").focus(); return; }
     if (pw !== pw2) { setVerifyStatus("비밀번호가 일치하지 않습니다.", "err"); $("#signupPassword2").focus(); return; }
+    if (!policyAgreed) { setVerifyStatus("이용약관과 개인정보처리방침에 동의해주세요.", "err"); $("#signupPolicyAgree")?.focus(); return; }
 
     // 프로필 값 수집
     const crewType = $("#signupCrewType").value;
@@ -3589,7 +3592,10 @@ function bindEvents() {
     try {
       const res = await fetch(`${API_BASE}/api/user-signup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: _verifyEmail, code: _verifyCode, token: _verifyToken, username, password: pw, profile }),
+        body: JSON.stringify({
+          email: _verifyEmail, code: _verifyCode, token: _verifyToken, username, password: pw, profile,
+          policyConsent: { privacyVersion: POLICY_VERSION, termsVersion: POLICY_VERSION },
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -3828,37 +3834,55 @@ function bindEvents() {
     showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
   });
 
-  document.getElementById("withdrawButton")?.addEventListener("click", async () => {
-    if (!confirm("탈퇴하면 스케줄·크레딧·등록된 스왑 글이 모두 삭제됩니다.\n정말 탈퇴하시겠습니까?")) return;
-    // 서버에 올린 내 포스트 모두 삭제
-    const toDelete = state.myPosts.filter(p => p.deleteToken);
-    await Promise.allSettled(
-      toDelete.map(p => fetch(`${API_BASE}/api/posts-delete`, {
+  document.getElementById("withdrawButton")?.addEventListener("click", () => {
+    const password = document.getElementById("withdrawPassword");
+    const status = document.getElementById("withdrawStatus");
+    if (password) password.value = "";
+    if (status) { status.textContent = ""; status.style.color = "var(--muted)"; }
+    openGenericModal("withdrawDialog", "withdrawOverlay");
+    setTimeout(() => password?.focus(), 50);
+  });
+  document.getElementById("withdrawCancelButton")?.addEventListener("click", () =>
+    closeGenericModal("withdrawDialog", "withdrawOverlay"));
+  document.getElementById("withdrawForm")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const password = document.getElementById("withdrawPassword")?.value || "";
+    const status = document.getElementById("withdrawStatus");
+    const button = document.getElementById("withdrawConfirmButton");
+    const setStatus = (message, error = false) => {
+      if (!status) return;
+      status.textContent = message;
+      status.style.color = error ? "var(--c-fail)" : "var(--muted)";
+    };
+    if (!state.user.email || !state.user.serverAuthed) { setStatus("로그인된 계정을 확인할 수 없습니다.", true); return; }
+    if (!password) { setStatus("현재 비밀번호를 입력해주세요.", true); return; }
+    if (!confirm("계정과 연결된 모든 정보를 삭제합니다. 이 작업은 되돌릴 수 없습니다.\n정말 탈퇴하시겠습니까?")) return;
+
+    if (button) button.disabled = true;
+    setStatus("서버와 기기에서 계정 정보를 삭제하고 있습니다…");
+    try {
+      const response = await fetch(`${API_BASE}/api/user-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
-      }).catch(e => console.warn("posts-delete failed:", e)))
-    );
-    // 로컬 초기화
-    state.selectedDays.clear();
-    state.schedules = [];
-    state.myPosts = [];
-    state.requests = { sent: [], received: [] };
-    state.alerts = createMockAlerts();
-    state.credits = 5;
-    state.user = {
-      hasSignedUp: false, airline: "JEJU", crewType: "PILOT",
-      nickname: "OrangeFlight", roleType: "FO_C", aircraft: "NG_MAX",
-      edto: true, cat2: false, cat3: true, base: "GMP", rating: 4.8,
-      monthlySwapUsed: 0, monthlySwapLimit: 3, yearlySwapUsed: 0,
-    };
-    clearStorage();
-    resetVerifyUI(); // 인증 상태 초기화 (재가입 시 "이미 인증 완료" 방지)
-    renderAll();
-    // 가입 팝업 다시 표시
-    const sp = document.getElementById("signupPanel");
-    openSignupModal();
-    showToast("탈퇴 처리가 완료됐습니다.");
+        body: JSON.stringify({ email: state.user.email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setStatus(data.error || "탈퇴 처리에 실패했습니다.", true); return; }
+
+      const crewSwapKeys = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key === STORAGE_KEY || key === "jjswap_lang" || key?.startsWith("crewswap_")) crewSwapKeys.push(key);
+      }
+      crewSwapKeys.forEach(key => localStorage.removeItem(key));
+      closeGenericModal("withdrawDialog", "withdrawOverlay");
+      alert("회원 탈퇴가 완료되었습니다. 서버와 이 기기의 CrewSwap 정보가 삭제되었습니다.");
+      location.reload();
+    } catch (error) {
+      setStatus("네트워크 오류로 탈퇴를 완료하지 못했습니다. 다시 시도해주세요.", true);
+    } finally {
+      if (button) button.disabled = false;
+    }
   });
 
   $("#clearSelectionButton").addEventListener("click", () => {

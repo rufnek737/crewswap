@@ -4,6 +4,7 @@ import {
   sanitizeSavedSearches,
   subscriberCanUsePost,
 } from './premium-alerts.mjs';
+import { buildAccountDeletionPlan } from './account-delete.mjs';
 
 // CrewSwap API — Cloudflare Workers
 // 라우팅: /api/send-verify, /api/check-verify, /api/posts-get,
@@ -14,6 +15,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 };
+
+const POLICY_VERSION = '2026-07-28';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: CORS });
@@ -106,10 +109,12 @@ function pickProfile(src) {
 async function handleUserSignup(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const { email: rawEmail, code, token, username, password, profile } = body || {};
+  const { email: rawEmail, code, token, username, password, profile, policyConsent } = body || {};
   const email = (rawEmail || '').trim().toLowerCase();
   if (!email || !username || !password) return json({ error: '이메일·아이디·비밀번호를 모두 입력해주세요' }, 400);
   if (password.length < 6) return json({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
+  if (policyConsent?.privacyVersion !== POLICY_VERSION || policyConsent?.termsVersion !== POLICY_VERSION)
+    return json({ error: '개인정보처리방침과 이용약관에 동의해주세요' }, 400);
   const v = await verifyEmailToken(env, email, code, token);
   if (!v.ok) return json({ error: v.error }, 400);
   const existing = await env.POSTS.get(`user:${email}`, { type: 'json' });
@@ -119,6 +124,11 @@ async function handleUserSignup(request, env) {
     email, username: username.trim(), salt, hash,
     createdAt: new Date().toISOString(),
     profile: { ...pickProfile(profile), nickname: username.trim() },
+    policyConsent: {
+      privacyVersion: POLICY_VERSION,
+      termsVersion: POLICY_VERSION,
+      acceptedAt: new Date().toISOString(),
+    },
   };
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   return json({ ok: true, username: rec.username, profile: rec.profile });
@@ -164,6 +174,53 @@ async function handleUserResetPassword(request, env) {
   rec.salt = salt; rec.hash = hash;
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   return json({ ok: true });
+}
+
+/* ── user-delete ──────────────────────────────────────────────
+   비밀번호를 다시 확인한 뒤 계정과 연결된 글·요청·PRO 푸시정보를
+   서버에서 함께 삭제한다. 클라이언트의 로컬 데이터 삭제는 성공 응답 후 수행한다. ── */
+async function handleUserDelete(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const email = String(body?.email || '').trim().toLowerCase();
+  const password = String(body?.password || '');
+  if (!email || !password) return json({ error: '이메일과 비밀번호를 입력해주세요' }, 400);
+
+  const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
+  if (!user) return json({ error: '계정을 찾을 수 없습니다' }, 404);
+  if (!(await verifyPassword(password, user.salt, user.hash)))
+    return json({ error: '비밀번호가 올바르지 않습니다' }, 401);
+
+  try {
+    const [posts, requests, premiumRecords] = await Promise.all([
+      getPostsIndex(env),
+      getRequestsIndex(env),
+      getPremiumAlertIndex(env),
+    ]);
+    const plan = buildAccountDeletionPlan(email, posts, requests, premiumRecords);
+
+    await Promise.all([
+      ...plan.postsToDelete.map(post => env.POSTS.delete(`post:${post.id}`)),
+      ...plan.requestsToDelete.map(req => env.POSTS.delete(`req:${req.id}`)),
+    ]);
+    await Promise.all([
+      savePostsIndex(env, plan.remainingPosts),
+      saveRequestsIndex(env, plan.remainingRequests),
+      savePremiumAlertIndex(env, plan.remainingPremiumRecords),
+    ]);
+    await env.POSTS.delete(`user:${email}`);
+
+    return json({
+      ok: true,
+      deleted: {
+        posts: plan.postsToDelete.length,
+        requests: plan.requestsToDelete.length,
+        premiumAlerts: plan.removedPremiumRecords,
+      },
+    });
+  } catch (error) {
+    return json({ error: `탈퇴 처리 중 오류: ${error.message}` }, 500);
+  }
 }
 
 /* ── send-verify ────────────────────────────────────────────── */
@@ -1106,6 +1163,7 @@ export default {
     if (path === '/api/user-login')   return handleUserLogin(request, env);
     if (path === '/api/user-update')  return handleUserUpdate(request, env);
     if (path === '/api/user-reset-password') return handleUserResetPassword(request, env);
+    if (path === '/api/user-delete') return handleUserDelete(request, env);
     if (path === '/api/posts-get')    return handlePostsGet(env);
     if (path === '/api/posts-get-mine') return handlePostsGetMine(request, env);
     if (path === '/api/posts-create') return handlePostsCreate(request, env, ctx);

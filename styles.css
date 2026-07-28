@@ -119,6 +119,9 @@ p { color: var(--muted); }
 .eyebrow { margin-bottom: 6px; color: var(--primary); font-size: 12px; font-weight: 800; letter-spacing: 0.5px; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .field-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+.policy-consent { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; font-size: 12px; line-height: 1.55; }
+.policy-consent input { width: auto; min-height: auto; margin-top: 3px; flex: 0 0 auto; }
+.policy-consent a, .policy-links a { color: var(--primary-dark); font-weight: 700; }
 
 /* ===== 패널 공통 ===== */
 .signup-panel, .calendar-panel, .side-panel, .form-panel, .filter-panel, .profile-form, .profile-card, .match-card, .request-card, .saved-searches, .bidirectional-form, .post-footer {
@@ -639,6 +642,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .withdraw-zone { padding: 24px 16px 12px; text-align: center; border-top: 1px solid var(--line); margin-top: 16px; }
 .withdraw-button { background: transparent; border: 1px solid var(--c-fail); color: var(--c-fail); border-radius: 8px; padding: 10px 28px; font-size: 13px; cursor: pointer; }
 .withdraw-button:hover { background: #fdecea; }
+.policy-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; font-size: 12px; color: var(--muted); }
+.warning-note { margin: 0; padding: 12px; border: 1px solid #f3b5ac; border-radius: 8px; background: #fff4f2; color: #8d2f24; font-size: 12px; line-height: 1.6; }
 
 /* ===== 다이얼로그 ===== */
 dialog { width: min(520px, calc(100vw - 28px)); border: 0; border-radius: 12px; box-shadow: var(--shadow); padding: 0; }

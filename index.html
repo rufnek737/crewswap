@@ -167,6 +167,10 @@
             <label>사번 <input id="signupEmployeeId" type="text" placeholder="예) A12345" /></label>
             <label>연락처 <input id="signupPhone" type="tel" placeholder="010-0000-0000" autocomplete="tel" /></label>
           </div>
+          <label class="policy-consent">
+            <input id="signupPolicyAgree" type="checkbox" required />
+            <span><a href="terms.html" target="_blank" rel="noopener">이용약관</a>과 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>을 확인했으며 이에 동의합니다. <strong>(필수)</strong></span>
+          </label>
           <button class="primary-button" type="submit">가입 완료 / Sign up</button>
           <button type="button" id="goToLoginBtn" class="link-button" style="width:100%;margin-top:4px;">이미 가입했어요 · 로그인 →</button>
         </form>
@@ -597,9 +601,16 @@
         </div>
 
         <div class="withdraw-zone">
+          <div class="policy-links" aria-label="서비스 정책">
+            <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>
+            <span>·</span>
+            <a href="terms.html" target="_blank" rel="noopener">이용약관</a>
+            <span>·</span>
+            <a href="mailto:rufnek737@gmail.com">문의하기</a>
+          </div>
           <button id="logoutButton" class="secondary-button" style="width:100%;margin-bottom:10px;">로그아웃</button>
           <button id="withdrawButton" class="withdraw-button">회원 탈퇴</button>
-          <p class="hint" style="text-align:center;margin-top:6px;font-size:11px;">로그아웃 시 이 기기에서만 로그아웃됩니다 (계정·정보는 유지). 탈퇴 시 스케줄·크레딧·등록된 스왑 글이 모두 삭제됩니다.</p>
+          <p class="hint" style="text-align:center;margin-top:6px;font-size:11px;">로그아웃은 이 기기에서만 적용됩니다. 회원 탈퇴 시 서버 계정·프로필·글·요청·PRO 알림정보와 이 기기의 스케줄·크레딧이 삭제됩니다.</p>
         </div>
       </section>
     </main>
@@ -658,6 +669,23 @@
           <button type="button" class="secondary-button" id="crewCloseButton">닫기</button>
         </div>
       </div>
+    </div>
+
+    <!-- 회원 탈퇴 비밀번호 재확인 -->
+    <div id="withdrawOverlay" class="generic-modal-overlay" hidden></div>
+    <div id="withdrawDialog" class="generic-modal" hidden role="dialog" aria-modal="true" aria-labelledby="withdrawDialogTitle">
+      <form id="withdrawForm" class="dialog-body">
+        <h3 id="withdrawDialogTitle">회원 탈퇴</h3>
+        <p class="warning-note">탈퇴하면 서버 계정, 프로필, 연락처, 등록 글, 보낸·받은 요청, PRO 알림정보와 이 기기의 스케줄·크레딧이 삭제되며 복구할 수 없습니다.</p>
+        <label>현재 비밀번호
+          <input id="withdrawPassword" type="password" autocomplete="current-password" placeholder="비밀번호를 입력하세요" required />
+        </label>
+        <p id="withdrawStatus" class="hint" style="margin:0;"></p>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-button" id="withdrawCancelButton">취소</button>
+          <button type="submit" class="withdraw-button" id="withdrawConfirmButton">모든 정보 삭제 후 탈퇴</button>
+        </div>
+      </form>
     </div>
 
     <!-- WARN 항목 확인 다이얼로그 -->
