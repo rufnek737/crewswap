@@ -57,7 +57,7 @@ npm install
 
 # www/ 폴더 생성 (gitignore라 클론 시 없음)
 mkdir www
-cp index.html styles.css post-dates.js app.js sw.js manifest.json \
+cp index.html styles.css credit-policy.js post-dates.js app.js sw.js manifest.json \
    icon-192.png icon-512.png splash.mp4 splash-poster.jpg www/
 ```
 
@@ -85,7 +85,7 @@ sips -z 1024 1024 icon-512.png \
 
 ### 코드 수정 후 매번
 ```bash
-cp index.html styles.css post-dates.js app.js sw.js www/   # 수정한 파일만
+cp index.html styles.css credit-policy.js post-dates.js app.js sw.js www/   # 수정한 파일만
 
 # Android
 npx cap sync android   # Android Studio ▶ Run
@@ -131,6 +131,23 @@ netlify dev          # http://localhost:8889
 ---
 
 ## Work Log
+
+### 2026-07-29 — 단계별 스왑 흐름·비교 달력·월 단위 크레딧 정책
+
+#### 처음 사용자를 위한 단계별 스왑 흐름
+- 가입·스케줄 불러오기 후 `스왑 스케줄 올리기`와 `스왑 스케줄 찾기` 중 목적을 먼저 선택하고, 이후 화면 안내를 따라가면 등록 또는 검색 결과까지 도달하는 단계별 흐름을 추가.
+- 스왑 올리기는 내 달력에서 근무 선택 → 희망 조건 작성 → 검토·등록 순서로 진행하고, 스왑 찾기는 유형·날짜/시간·지역 조건 → 결과 확인 순서로 구성. 기존 상세 기능은 고급 화면으로 계속 사용할 수 있게 유지.
+- 양도 의향/요청 시 요청자의 공개 가능한 전체 스케줄을 상대에게 전달하되, 요청자가 선택한 잠금 일정은 제외. 글 작성자는 비교 달력에서 상대 일정과 내 일정을 함께 보며 교환 대상을 선택하도록 개선.
+- 글 작성자의 일정 선택만으로 확정되지 않고 요청자의 최종 승인 후 상호 수락되도록 서버 요청 단계를 보완. 선택 조합 거절 후 다른 날짜를 다시 요청하는 흐름도 유지.
+- 관련 자동 테스트를 추가하고 Cloudflare Worker 배포, Netlify 운영 배포, 웹·iOS·Android 동기화와 Kay phone 재설치·실행 완료. GitHub 커밋 `c56bd36`.
+
+#### 월 3개 기본 크레딧과 광고 추가 지급
+- 기존 `하루 1개·최대 5개` 자동 충전을 제거하고, 매월 첫 실행 시 잔액을 기본 3개로 재설정하도록 변경. 남은 기본 크레딧과 광고 보상 크레딧은 다음 달로 이월되지 않음.
+- 신규 가입 지급량을 5개에서 3개로 변경하고, 기존 사용자의 구버전 잔액이 3개를 초과하면 새 정책 최초 적용 시 3개로 조정하는 마이그레이션 추가.
+- 등록 취소와 미매칭 마감 환급은 현재 잔액을 기본 상한 3개까지만 복원하도록 변경해 환급으로 3개를 넘겨 쌓을 수 없게 함.
+- 실제 광고 SDK 연결 전 검증용 5초 보상형 광고 화면을 추가. 끝까지 시청할 때마다 1개가 지급되며 광고 횟수 제한은 없지만, 지급분은 해당 월에만 사용 가능. 실제 AdMob 연결은 정식 배포 준비 단계에서 진행 예정.
+- 월 변경·구버전 마이그레이션·광고 반복 지급·환급 상한 테스트를 추가해 전체 16개 자동 테스트 통과. 아이폰 크기에서 `3 → 광고 완료 후 4`와 월 내 시청 횟수 표시 확인.
+- PWA 캐시 `crewswap-v75 → v76`, Netlify 운영 주소 반영, Android 빌드 성공, iOS 서명 빌드 후 Kay phone 재설치·실행 완료. GitHub 커밋 `bcc454e`.
 
 ### 2026-07-28 — 개인정보처리방침·이용약관·실제 회원 탈퇴
 
