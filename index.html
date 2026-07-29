@@ -224,6 +224,20 @@
 
       <!-- ===================== 내 스케줄 ===================== -->
       <section id="schedule" class="view is-active">
+        <div id="postGuideSchedule" class="flow-guide-banner" hidden>
+          <div class="flow-stepper" aria-label="스왑 올리기 진행 단계">
+            <span class="is-active"><b>1</b> 내 근무 선택</span>
+            <span><b>2</b> 희망 조건</span>
+            <span><b>3</b> 확인·등록</span>
+          </div>
+          <div class="flow-guide-copy">
+            <div>
+              <strong>먼저 바꾸고 싶은 내 근무를 선택하세요</strong>
+              <p>달력에서 날짜를 누른 뒤 아래의 ‘다음’ 버튼으로 진행합니다.</p>
+            </div>
+            <button type="button" class="link-button flow-exit-btn">단계별 진행 종료</button>
+          </div>
+        </div>
         <div class="section-head">
           <div>
             <h2>내 근무</h2>
@@ -303,11 +317,119 @@
         </div>
       </section>
 
+      <!-- ===================== 스왑하기: 단계별 시작 ===================== -->
+      <section id="swapGuide" class="view">
+        <div class="flow-home">
+          <div class="flow-home-head">
+            <span class="flow-kicker">STEP BY STEP</span>
+            <h2>무엇을 하고 싶으세요?</h2>
+            <p>하나씩 선택하면 필요한 화면만 순서대로 안내합니다.</p>
+          </div>
+          <div class="flow-choice-grid">
+            <button type="button" id="startPostFlow" class="flow-choice-card">
+              <span class="flow-choice-icon">📤</span>
+              <span>
+                <strong>내 스왑 올리기</strong>
+                <small>내 근무 선택 → 희망 조건 → 확인·등록</small>
+              </span>
+              <b>시작 →</b>
+            </button>
+            <button type="button" id="startFindFlow" class="flow-choice-card">
+              <span class="flow-choice-icon">🔎</span>
+              <span>
+                <strong>원하는 스왑 찾기</strong>
+                <small>원하는 종류 → 세부 조건 → 결과 비교</small>
+              </span>
+              <b>시작 →</b>
+            </button>
+          </div>
+          <div id="flowScheduleNotice" class="flow-schedule-notice"></div>
+          <button type="button" id="openAdvancedFind" class="secondary-button flow-advanced-btn">전체 글·고급 필터 바로 보기</button>
+        </div>
+      </section>
+
       <!-- ===================== 스왑하기: 가능한 스왑 보기 ===================== -->
       <section id="find" class="view">
         <div class="swap-subtabs">
           <button type="button" class="swap-subtab is-active" data-swaptab="find">가능한 스왑 보기</button>
           <button type="button" class="swap-subtab" data-swaptab="post">내 스왑 올리기</button>
+        </div>
+
+        <div id="findGuide" class="find-guide" hidden>
+          <div class="flow-stepper" aria-label="스왑 찾기 진행 단계">
+            <span data-find-step-dot="1" class="is-active"><b>1</b> 원하는 종류</span>
+            <span data-find-step-dot="2"><b>2</b> 세부 조건</span>
+            <span data-find-step-dot="3"><b>3</b> 결과 비교</span>
+          </div>
+          <div class="find-guide-card" data-find-step-panel="1">
+            <span class="flow-kicker">1단계</span>
+            <h3>어떤 스케줄을 찾으세요?</h3>
+            <p>여러 종류를 함께 선택할 수 있습니다.</p>
+            <div class="guide-chip-grid" id="guideTypeChips">
+              <button type="button" data-guide-type="OFF">쉬는 날 (OFF)</button>
+              <button type="button" data-guide-type="국내선">국내선</button>
+              <button type="button" data-guide-type="국제선">국제선</button>
+              <button type="button" data-guide-type="LAYOV">레이오버</button>
+              <button type="button" data-guide-type="RSV">RSV</button>
+              <button type="button" data-guide-type="STBY">STBY</button>
+            </div>
+            <div class="flow-actions">
+              <button type="button" class="secondary-button find-guide-cancel">처음으로</button>
+              <button type="button" id="findGuideNext1" class="primary-button">다음: 조건 좁히기 →</button>
+            </div>
+          </div>
+          <div class="find-guide-card" data-find-step-panel="2" hidden>
+            <span class="flow-kicker">2단계</span>
+            <h3>원하는 조건을 골라주세요</h3>
+            <p>모르는 조건은 ‘전체’로 두어도 됩니다.</p>
+            <div class="guide-field-grid">
+              <label>날짜
+                <select id="guideDate">
+                  <option value="all">전체</option>
+                  <option value="thisMonth">이번 달</option>
+                  <option value="weekend">주말만</option>
+                  <option value="weekday">평일만</option>
+                  <option value="d7">D-7 이내</option>
+                </select>
+              </label>
+              <label>출근 시간
+                <select id="guideTime">
+                  <option value="all">전체</option>
+                  <option value="AM">오전 출근</option>
+                  <option value="PM">오후 출근</option>
+                  <option value="NIGHT">야간 출근</option>
+                </select>
+              </label>
+              <label>권역
+                <select id="guideRegion">
+                  <option value="all">전체</option>
+                  <option value="DOMESTIC">국내선</option>
+                  <option value="JAPAN">일본</option>
+                  <option value="SEA">동남아</option>
+                  <option value="CHINA">중국</option>
+                  <option value="exCHINA">중국 제외</option>
+                </select>
+              </label>
+              <label>공항
+                <input id="guideAirports" placeholder="예: KIX, DPS" />
+              </label>
+            </div>
+            <div class="flow-actions">
+              <button type="button" id="findGuideBack1" class="secondary-button">← 이전</button>
+              <button type="button" id="findGuideNext2" class="primary-button">결과 보기 →</button>
+            </div>
+          </div>
+          <div class="find-guide-card find-guide-result-head" data-find-step-panel="3" hidden>
+            <div>
+              <span class="flow-kicker">3단계</span>
+              <h3>조건에 맞는 스왑을 비교하세요</h3>
+              <p id="findGuideSummary"></p>
+            </div>
+            <div class="flow-result-actions">
+              <button type="button" id="findGuideEdit" class="secondary-button">조건 수정</button>
+              <button type="button" class="secondary-button find-guide-cancel">처음으로</button>
+            </div>
+          </div>
         </div>
 
         <!-- 🔔 스왑 알림 (저장검색) — 프리미엄 기능 -->
@@ -429,6 +551,21 @@
         <div class="swap-subtabs">
           <button type="button" class="swap-subtab" data-swaptab="find">가능한 스왑 보기</button>
           <button type="button" class="swap-subtab is-active" data-swaptab="post">내 스왑 올리기</button>
+        </div>
+
+        <div id="postGuideDetails" class="flow-guide-banner" hidden>
+          <div class="flow-stepper" aria-label="스왑 올리기 진행 단계">
+            <span class="is-done"><b>✓</b> 내 근무 선택</span>
+            <span class="is-active"><b>2</b> 희망 조건</span>
+            <span><b>3</b> 확인·등록</span>
+          </div>
+          <div class="flow-guide-copy">
+            <div>
+              <strong>상대에게 보여줄 희망 조건을 적어주세요</strong>
+              <p>입력 후 아래 규정 확인을 거쳐 등록하면 완료됩니다.</p>
+            </div>
+            <button type="button" class="link-button flow-exit-btn">단계별 진행 종료</button>
+          </div>
         </div>
 
         <div class="bidirectional-form">
@@ -617,7 +754,7 @@
 
     <nav class="bottom-tabs" aria-label="메인 메뉴">
       <button class="tab is-active" data-tab="schedule">내 근무</button>
-      <button class="tab" data-tab="find">스왑하기</button>
+      <button class="tab" data-tab="swapGuide">스왑하기</button>
       <button class="tab" data-tab="requests">요청<span id="reqTabBadge" class="tab-badge" hidden>0</span></button>
       <button class="tab" data-tab="profile">내 정보</button>
     </nav>

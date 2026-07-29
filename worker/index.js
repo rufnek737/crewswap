@@ -604,7 +604,7 @@ async function handleRequestsAccept(request, env) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
-/* ── requests-poster-select (글작성자가 상대 공개 로스터에서 바꿀 날을 골라 확정) ── */
+/* ── requests-poster-select (글작성자가 상대 공개 로스터에서 바꿀 날을 골라 승인 요청) ── */
 
 async function handleRequestsPosterSelect(request, env) {
   let id, email, offered, realName, employeeId, phone;
@@ -615,19 +615,67 @@ async function handleRequestsPosterSelect(request, env) {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
     if (rec.toEmail !== email) return json({ error: '선택 권한이 없습니다 (글 작성자만)' }, 403);
+    if ((rec.stage || 1) >= 3) return json({ error: '이미 상호 수락된 요청입니다' }, 409);
     // 공개 로스터에 없는 날을 고르는 부정 방지
     const openDays = new Set((rec.openRoster || []).map(r => r.day));
     if (rec.openRoster && !offered.days.every(d => openDays.has(d)))
       return json({ error: '공개된 근무가 아닙니다' }, 400);
-    rec.offered = offered;                  // 확정된 '요청자가 줄 근무'
-    rec.stage = 3;
-    rec.status = '상호 수락 — 회사 상신 필요';
-    rec.acceptedAt = new Date().toISOString();
+    rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
+    rec.stage = 2;
+    rec.status = '요청자 최종 승인 대기';
+    rec.posterSelectedAt = new Date().toISOString();
     rec.posterSelected = true;
     // 글작성자(받는 사람=상신 주체) 연락처 저장
     rec.toRealName = realName || '';
     rec.toEmployeeId = employeeId || '';
     rec.toPhone = phone || '';
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-requester-accept (요청자가 글작성자의 날짜 선택을 최종 승인) ── */
+
+async function handleRequestsRequesterAccept(request, env) {
+  let id, email, realName, employeeId, phone;
+  try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
+    if (rec.fromEmail !== email) return json({ error: '최종 승인 권한이 없습니다 (요청자만)' }, 403);
+    if (!rec.posterSelected || !rec.offered || (rec.stage || 1) !== 2)
+      return json({ error: '최종 승인할 일정 선택이 없습니다' }, 409);
+    rec.stage = 3;
+    rec.status = '상호 수락 — 회사 상신 필요';
+    rec.acceptedAt = new Date().toISOString();
+    rec.fromRealName = realName || rec.fromRealName || '';
+    rec.fromEmployeeId = employeeId || rec.fromEmployeeId || '';
+    rec.fromPhone = phone || rec.fromPhone || '';
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-requester-decline (선택 조합만 거절하고 글작성자가 다시 고르게 함) ── */
+
+async function handleRequestsRequesterDecline(request, env) {
+  let id, email;
+  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
+    if (rec.fromEmail !== email) return json({ error: '거절 권한이 없습니다 (요청자만)' }, 403);
+    if (!rec.posterSelected || (rec.stage || 1) !== 2)
+      return json({ error: '거절할 일정 선택이 없습니다' }, 409);
+    rec.offered = null;
+    rec.posterSelected = false;
+    rec.stage = 1;
+    rec.status = '다른 날짜 선택 요청 — 글작성자가 다시 고르는 중';
+    rec.posterSelectionDeclinedAt = new Date().toISOString();
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     return json({ ok: true });
@@ -1199,6 +1247,8 @@ export default {
     if (path === '/api/requests-get')    return handleRequestsGet(request, env);
     if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
     if (path === '/api/requests-poster-select') return handleRequestsPosterSelect(request, env);
+    if (path === '/api/requests-requester-accept') return handleRequestsRequesterAccept(request, env);
+    if (path === '/api/requests-requester-decline') return handleRequestsRequesterDecline(request, env);
     if (path === '/api/requests-ask-accept') return handleRequestsAskAccept(request, env);
     if (path === '/api/requests-decline') return handleRequestsDecline(request, env);
     if (path === '/api/requests-submit-nudge') return handleRequestsSubmitNudge(request, env);

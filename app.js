@@ -160,6 +160,8 @@ const state = {
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
   pendingRequestType: null,   // "request" | "ask"
+  guideFlow: null,       // null | "post" | "find" — 단계별 스왑 진행
+  findGuideStep: 1,
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
   alerts: [],
@@ -789,7 +791,7 @@ function cancelPendingAction() {
 function confirmPendingAction() {
   const pid = state.pendingRequestPostId;
   const type = state.pendingRequestType;
-  if (!pid || selectedSchedules().length === 0) return;
+  if (!pid) return;
   state.pendingRequestPostId = null;
   state.pendingRequestType = null;
   renderPendingBar();
@@ -1567,6 +1569,133 @@ function renderAll() {
   renderRequests();
   renderAlerts();
   renderCredits();
+  renderFlowUi();
+}
+
+function renderFlowUi() {
+  const postFlow = state.guideFlow === "post";
+  const findFlow = state.guideFlow === "find";
+  const schedGuide = document.getElementById("postGuideSchedule");
+  const postGuide = document.getElementById("postGuideDetails");
+  const findGuide = document.getElementById("findGuide");
+  const findView = document.getElementById("find");
+  if (schedGuide) schedGuide.hidden = !postFlow;
+  if (postGuide) postGuide.hidden = !postFlow;
+  if (findGuide) findGuide.hidden = !findFlow;
+  if (findView) findView.classList.toggle("is-guided", findFlow);
+
+  const notice = document.getElementById("flowScheduleNotice");
+  if (notice) {
+    const months = availableMonths();
+    notice.innerHTML = state.schedules.length
+      ? `<span>✓</span><div><strong>내 스케줄 준비됨</strong><small>${state.schedules.length}건 · ${months.length || 1}개월</small></div>`
+      : `<span>!</span><div><strong>먼저 CrewConnex 스케줄이 필요합니다</strong><small>‘내 스왑 올리기’를 누르면 불러오기부터 안내합니다.</small></div>`;
+    notice.classList.toggle("is-ready", state.schedules.length > 0);
+  }
+  if (findFlow) setFindGuideStep(state.findGuideStep || 1, false);
+}
+
+function exitGuideFlow(target = "swapGuide") {
+  state.guideFlow = null;
+  state.findGuideStep = 1;
+  renderFlowUi();
+  switchTab(target);
+}
+
+function startPostGuide() {
+  if (!state.schedules.length) {
+    state.guideFlow = "post";
+    showToast("먼저 CrewConnex 스케줄을 불러와주세요.");
+    openGenericModal("crewDialog", "crewOverlay");
+    return;
+  }
+  state.guideFlow = "post";
+  state.selectedDays.clear();
+  state.pendingRequestPostId = null;
+  state.pendingRequestType = null;
+  renderAll();
+  switchTab("schedule");
+}
+
+function startFindGuide() {
+  state.guideFlow = "find";
+  state.findGuideStep = 1;
+  state.filters.types = [];
+  renderFlowUi();
+  switchTab("find");
+}
+
+function syncGuideTypeChips() {
+  document.querySelectorAll("#guideTypeChips [data-guide-type]").forEach(button => {
+    button.classList.toggle("is-active", state.filters.types.includes(button.dataset.guideType));
+  });
+}
+
+function syncMainFilterControls() {
+  const allChip = document.querySelector("#typeFilters [data-filter='all']");
+  document.querySelectorAll("#typeFilters [data-filter]").forEach(button => {
+    button.classList.toggle("is-active",
+      button.dataset.filter === "all"
+        ? state.filters.types.length === 0
+        : state.filters.types.includes(button.dataset.filter));
+  });
+  if (allChip && state.filters.types.length === 0) allChip.classList.add("is-active");
+  const values = {
+    dateFilter: state.filters.date,
+    timeFilter: state.filters.time,
+    regionFilter: state.filters.region,
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || "all";
+  });
+  const airport = document.getElementById("airportSearchFilter");
+  if (airport) airport.value = (state.filters.airports || []).join(", ");
+}
+
+function findGuideSummaryText() {
+  const typeText = state.filters.types.length ? state.filters.types.join(" · ") : "모든 종류";
+  const dateLabels = { all:"날짜 전체", thisMonth:"이번 달", weekend:"주말", weekday:"평일", d7:"D-7 이내" };
+  const timeLabels = { all:"시간 전체", AM:"오전 출근", PM:"오후 출근", NIGHT:"야간 출근" };
+  const regionLabels = { all:"권역 전체", DOMESTIC:"국내선", JAPAN:"일본", SEA:"동남아", CHINA:"중국", exCHINA:"중국 제외" };
+  return [
+    typeText,
+    dateLabels[state.filters.date] || "날짜 전체",
+    timeLabels[state.filters.time] || "시간 전체",
+    regionLabels[state.filters.region] || "권역 전체",
+    (state.filters.airports || []).length ? `공항 ${(state.filters.airports || []).join(", ")}` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+function setFindGuideStep(step, scroll = true) {
+  state.findGuideStep = Math.max(1, Math.min(3, step));
+  document.getElementById("find")?.classList.toggle("show-guide-results", state.findGuideStep === 3);
+  document.querySelectorAll("[data-find-step-panel]").forEach(panel => {
+    panel.hidden = Number(panel.dataset.findStepPanel) !== state.findGuideStep;
+  });
+  document.querySelectorAll("[data-find-step-dot]").forEach(dot => {
+    const n = Number(dot.dataset.findStepDot);
+    dot.classList.toggle("is-active", n === state.findGuideStep);
+    dot.classList.toggle("is-done", n < state.findGuideStep);
+  });
+  syncGuideTypeChips();
+  if (state.findGuideStep === 2) {
+    const values = {
+      guideDate: state.filters.date,
+      guideTime: state.filters.time,
+      guideRegion: state.filters.region,
+    };
+    Object.entries(values).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value || "all";
+    });
+    const airport = document.getElementById("guideAirports");
+    if (airport) airport.value = (state.filters.airports || []).join(", ");
+  }
+  const summary = document.getElementById("findGuideSummary");
+  if (summary) summary.textContent = findGuideSummaryText();
+  if (state.findGuideStep === 3) renderMatches();
+  if (scroll) document.getElementById("findGuide")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function updateBadges() {
@@ -1810,7 +1939,7 @@ function renderSelection() {
     regBtn.disabled = !has;
     regBtn.title = "";
   } else {
-    regBtn.textContent = "이 근무로 스왑 올리기";
+    regBtn.textContent = state.guideFlow === "post" ? "다음: 희망 조건 입력 →" : "이 근무로 스왑 올리기";
     regBtn.disabled = !has || hasFail;
     regBtn.title = hasFail ? `등록 불가: ${failItems.map(c => c.label).join(", ")}` : "";
   }
@@ -2728,6 +2857,22 @@ async function fetchRequests() {
       });
       showToast(`✓ ${r.toNick || "상대"} 님이 의향을 수락했습니다`);
     });
+    // 글작성자가 내 공개 로스터에서 날짜를 골랐을 때 — 요청자의 최종 승인 필요
+    const seenPosterPick = new Set(JSON.parse(localStorage.getItem("crewswap_seen_poster_pick") || "[]"));
+    sent.forEach(r => {
+      if (!r.posterSelected || !r.offered || (r.stage || 1) !== 2 || seenPosterPick.has(r.id)) return;
+      seenPosterPick.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "🔔 스왑 최종 승인 필요",
+        body: `${r.toNick || "상대"} 님이 내 공개 스케줄에서 ${(r.offered.days || []).map(d => d + "일").join(", ")}을 선택했습니다 · 교환 내용을 확인해주세요`,
+        time: "방금",
+        createdAt: r.posterSelectedAt || new Date().toISOString(),
+        viewMode: "sent",
+      });
+      showToast(`🔔 ${r.toNick || "상대"} 님의 일정 선택 — 최종 승인이 필요합니다`);
+    });
+    localStorage.setItem("crewswap_seen_poster_pick", JSON.stringify([...seenPosterPick].slice(-200)));
     // 내가 보낸 정식 요청이 상호 수락됐을 때 알림 (받은 쪽만 알림 가던 문제 보완)
     const seenReqAccepted = new Set(JSON.parse(localStorage.getItem("crewswap_seen_req_accepted") || "[]"));
     sent.forEach(r => {
@@ -2747,6 +2892,23 @@ async function fetchRequests() {
       showToast(`✓ ${r.toNick || "상대"} 님이 스왑을 확정했습니다`);
     });
     localStorage.setItem("crewswap_seen_req_accepted", JSON.stringify([...seenReqAccepted].slice(-200)));
+    // 글작성자에게 요청자의 최종 승인 완료 알림 + 스왑 횟수 1회 반영
+    const seenPosterAccepted = new Set(JSON.parse(localStorage.getItem("crewswap_seen_poster_accepted") || "[]"));
+    received.forEach(r => {
+      if (!r.posterSelected || (r.stage || 1) < 3 || seenPosterAccepted.has(r.id)) return;
+      seenPosterAccepted.add(r.id); changed = true;
+      recordSwapMatch();
+      state.alerts.unshift({
+        kind: "match",
+        title: "✓ 상대가 스왑을 최종 승인했습니다",
+        body: `${r.fromNick || "상대"} 님이 선택한 교환 일정을 승인했습니다 · ${r.postTitle || ""} — 회사 상신을 진행해주세요`,
+        time: "방금",
+        createdAt: r.acceptedAt || new Date().toISOString(),
+        viewMode: "received",
+      });
+      showToast(`✓ ${r.fromNick || "상대"} 님이 스왑을 최종 승인했습니다`);
+    });
+    localStorage.setItem("crewswap_seen_poster_accepted", JSON.stringify([...seenPosterAccepted].slice(-200)));
     // 내가 보낸 요청이 거절됐을 때 알림
     const seenDeclined = new Set(JSON.parse(localStorage.getItem("crewswap_seen_declined") || "[]"));
     sent.forEach(r => {
@@ -2819,7 +2981,10 @@ function startRequestPolling() {
 function renderReqTabBadge() {
   const badge = document.getElementById("reqTabBadge");
   if (!badge) return;
-  const pending = (state.requests.received || []).filter(r => (r.stage || 1) < 3).length;
+  const pendingReceived = (state.requests.received || []).filter(r => (r.stage || 1) < 3).length;
+  const pendingSentApproval = (state.requests.sent || []).filter(r =>
+    !!r.posterSelected && !!r.offered && (r.stage || 1) === 2).length;
+  const pending = pendingReceived + pendingSentApproval;
   if (pending > 0) { badge.textContent = pending; badge.hidden = false; }
   else { badge.hidden = true; }
 }
@@ -2920,9 +3085,11 @@ function renderRequests() {
     updatePosterPickMsg(reqId);
   });
   $$("#requestList .poster-select-btn").forEach(b => b.onclick = () => posterSelectDays(b.dataset.reqId));
+  $$("#requestList .requester-approve-btn").forEach(b => b.onclick = () => approvePosterSelection(b.dataset.reqId));
+  $$("#requestList .requester-repick-btn").forEach(b => b.onclick = () => rejectPosterSelection(b.dataset.reqId));
 }
 
-// 상대의 열린 로스터를 '달력'으로 렌더 + 각 날짜에 내(글작성자) 근무를 겹쳐 비교
+// 같은 달을 기준으로 내 로스터와 상대의 공개 로스터를 나란히 렌더한다.
 function renderCompareCalendar(r) {
   const roster = r.openRoster || [];
   const month = (roster[0] && roster[0].month) || state.currentMonth;
@@ -2930,29 +3097,54 @@ function renderCompareCalendar(r) {
   const daysInMonth = new Date(y, m, 0).getDate();
   const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 월=0
   const openByDay = {}; roster.forEach(s => { openByDay[s.day] = s; });
+  const lockedDays = new Set(r.lockedDays || []);
   const picked = _posterPick[r.id] || new Set();
+  const myPost = (state.myPosts || []).find(p => p.id === r.postId);
+  const postedDays = new Set(myPost?.offered?.days || []);
   const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t;
-  let cells = "";
-  for (let i = 0; i < offset; i++) cells += `<div class="cmp-cell empty"></div>`;
+  const weekday = `<div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>`;
+  let myCells = "";
+  let requestCells = "";
+  for (let i = 0; i < offset; i++) {
+    myCells += `<div class="cmp-cell empty"></div>`;
+    requestCells += `<div class="cmp-cell empty"></div>`;
+  }
   for (let d = 1; d <= daysInMonth; d++) {
     const req = openByDay[d];
     const mine = state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
-    const mineHtml = mine ? `<span class="cmp-mine">내 ${escapeHtml(dutyShort(mine.type))}</span>` : "";
+    const isPosted = postedDays.has(d);
+    myCells += `<div class="cmp-cell cmp-own-cell${isPosted ? " is-posted" : ""}">
+      <span class="cmp-day">${d}</span>
+      ${mine ? `<span class="cmp-own-duty">${escapeHtml(dutyShort(mine.type))}</span>
+        ${mine.routeSummary ? `<em>${escapeHtml(mine.routeSummary)}</em>` : ""}` : ""}
+      ${isPosted ? `<small>내가 내놓음</small>` : ""}
+    </div>`;
     if (req) {
       const on = picked.has(d) ? " is-picked" : "";
       const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
-      cells += `<button type="button" class="cmp-cell has-req${on}" data-req="${r.id}" data-day="${d}">
+      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}" data-req="${r.id}" data-day="${d}">
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
-        ${mineHtml}
       </button>`;
     } else {
-      cells += `<div class="cmp-cell"><span class="cmp-day muted">${d}</span>${mineHtml}</div>`;
+      const locked = lockedDays.has(d);
+      requestCells += `<div class="cmp-cell cmp-request-cell is-closed${locked ? " is-locked" : ""}"><span class="cmp-day muted">${d}</span>${locked ? `<small>🔒 비공개</small>` : ""}</div>`;
     }
   }
-  return `<div class="cmp-cal">
-    <div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
-    <div class="cmp-grid">${cells}</div>
+  return `<div class="compare-month-head"><strong>${y}년 ${m}월</strong><span>두 달력은 같은 날짜 기준입니다</span></div>
+  <div class="compare-calendars">
+    <section class="cmp-cal cmp-own-cal">
+      <h5><span class="cmp-owner-dot mine"></span> 내 스케줄</h5>
+      <p>주황색은 내가 스왑 글에 올린 근무입니다.</p>
+      ${weekday}
+      <div class="cmp-grid">${myCells}</div>
+    </section>
+    <section class="cmp-cal cmp-request-cal">
+      <h5><span class="cmp-owner-dot take"></span> 상대가 공개한 스케줄</h5>
+      <p>교환받고 싶은 날짜를 누르세요.</p>
+      ${weekday}
+      <div class="cmp-grid">${requestCells}</div>
+    </section>
   </div>`;
 }
 
@@ -2973,9 +3165,19 @@ function updatePosterPickMsg(reqId) {
   const el = document.getElementById(`rosterMsg-${reqId}`);
   if (!el) return;
   const { offered, msg } = posterPickRestCheck(reqId);
-  if (!offered) { el.textContent = ""; return; }
+  if (!offered) {
+    el.innerHTML = `<span>상대 달력에서 받을 근무를 선택하면 교환 내용이 여기에 표시됩니다.</span>`;
+    return;
+  }
+  const r = (state.requests.received || []).find(x => x.id === reqId);
+  const myPost = (state.myPosts || []).find(p => p.id === r?.postId);
+  const exchange = `<div class="compare-exchange-summary">
+    <span><small>내가 줄 근무</small><strong>${escapeHtml(myPost?.offered?.patternName || r?.postTitle || "-")}</strong></span>
+    <b>⇄</b>
+    <span><small>상대에게 받을 근무</small><strong>${escapeHtml(offered.patternName || "-")}</strong></span>
+  </div>`;
   if (msg) { el.innerHTML = `<span style="color:#c53030;">${msg}<br><small>이 조합은 휴식 기준 위반 — 다른 날을 고르세요.</small></span>`; }
-  else { el.innerHTML = `<span style="color:#1a7a3f;">✓ ${offered.days.map(d=>d+"일").join(", ")} 선택됨 — 휴식 기준 통과</span>`; }
+  else { el.innerHTML = `${exchange}<span style="color:#1a7a3f;">✓ ${offered.days.map(d=>d+"일").join(", ")} 선택됨 — 휴식 기준 통과</span>`; }
 }
 
 async function posterSelectDays(reqId) {
@@ -2994,8 +3196,41 @@ async function posterSelectDays(reqId) {
     if (!res.ok) { showToast(data.error || "확정 실패 — 다시 시도해주세요."); return; }
   } catch (e) { showToast("확정 실패 — 네트워크 오류"); return; }
   delete _posterPick[reqId];
+  showToast("선택한 일정으로 최종 승인을 요청했습니다.");
+  fetchRequests();
+}
+
+async function approvePosterSelection(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  if (!confirm("상대가 선택한 일정으로 스왑을 최종 승인할까요? 승인 후 서로의 연락처가 공개됩니다.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-requester-accept`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: reqId, email: state.user.email,
+        realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "",
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "최종 승인 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("최종 승인 실패 — 네트워크 오류"); return; }
   recordSwapMatch();
-  showToast("스왑 확정 — 상호 수락되었습니다. 회사 상신 단계로 진행하세요.");
+  showToast("상호 수락 완료 — 회사 상신 단계로 진행하세요.");
+  fetchRequests();
+}
+
+async function rejectPosterSelection(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  if (!confirm("이 조합은 거절하고 상대에게 다른 날짜를 골라달라고 할까요?")) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-requester-decline`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "처리 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("처리 실패 — 네트워크 오류"); return; }
+  showToast("상대에게 다른 날짜를 선택해달라고 전달했습니다.");
   fetchRequests();
 }
 
@@ -3115,8 +3350,10 @@ function requestCard(r) {
   // 새 모델: 요청자가 로스터만 열고 offered 미확정 → 받는 사람(글작성자)이 날짜를 골라야 함
   const isOpenPending = state.reqViewMode === "received" && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
   const isWaitingSent = isSentV && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  const needsRequesterApproval = isSentV && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
+  const posterWaitingApproval = state.reqViewMode === "received" && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
   // 구버전(offered 즉시 첨부) 수락 버튼 경로 — offered가 있을 때만
-  const needsResponse = state.reqViewMode === "received" && !!r.offered && (isAsk ? !r.askAccepted : !accepted);
+  const needsResponse = state.reqViewMode === "received" && !!r.offered && !r.posterSelected && (isAsk ? !r.askAccepted : !accepted);
 
   // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
   // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 후 확인.
@@ -3149,7 +3386,7 @@ function requestCard(r) {
           <h3>${r.postTitle}</h3>
           <p>${isSent?"내가 보냄":"내가 받음"} · ${r.sentAgo}</p>
         </div>
-        <span class="badge ${badgeCls}">${r.status || (isOpenPending ? "바꿀 날 고르기" : isWaitingSent ? "상대가 고르는 중" : "진행 중")}</span>
+        <span class="badge ${badgeCls}">${r.status || (isOpenPending ? "바꿀 날 고르기" : isWaitingSent ? "상대가 고르는 중" : needsRequesterApproval ? "내 최종 승인 필요" : "진행 중")}</span>
       </div>
       ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
       ${r.declined && r.declineMsg ? `<div class="notice" style="margin-bottom:10px;border-color:#e53e3e;background:#fff5f5;">💔 ${escapeHtml(r.declineMsg)}</div>` : ""}
@@ -3160,12 +3397,14 @@ function requestCard(r) {
       </div>` : ""}
       ${isOpenPending ? `
       <div class="open-roster-pick">
-        <h4>📅 상대가 전체 스케줄을 열었습니다 — 달력에서 바꿀 날을 고르세요</h4>
-        <p class="cmp-legend"><span class="cmp-swatch take"></span> 파란칸 = 상대 근무(받을 것, 탭하여 선택) · <span class="cmp-swatch mine"></span> 아래 회색 = 그날 내 근무(비교용)</p>
+        <h4>📅 내 일정과 상대 일정을 같은 화면에서 비교하세요</h4>
+        <p class="cmp-legend">왼쪽(모바일에서는 위)은 내 일정, 오른쪽(아래)은 상대가 공개한 일정입니다.</p>
         ${renderCompareCalendar(r)}
-        <div class="roster-pick-msg" id="rosterMsg-${r.id}"></div>
+        <div class="roster-pick-msg" id="rosterMsg-${r.id}">상대 달력에서 받을 근무를 선택하면 교환 내용이 여기에 표시됩니다.</div>
       </div>` : ""}
       ${isWaitingSent ? `<div class="notice" style="margin-bottom:10px;">⏳ 내 스케줄을 열어 보냈습니다. 상대(글 작성자)가 바꿀 날을 고르는 중입니다.${(r.lockedDays && r.lockedDays.length) ? ` (🔒 ${r.lockedDays.length}일 잠금 제외)` : ""}</div>` : ""}
+      ${needsRequesterApproval ? `<div class="approval-notice">🔔 글 작성자가 위 일정을 선택했습니다. 교환 내용을 확인하고 최종 승인해주세요.</div>` : ""}
+      ${posterWaitingApproval ? `<div class="approval-notice waiting">⏳ 선택한 일정을 상대에게 보냈습니다. 상대의 최종 승인을 기다리는 중입니다.</div>` : ""}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
         <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"; })()}</strong></div>
@@ -3218,7 +3457,13 @@ function requestCard(r) {
       ${isOpenPending
         ? `<div class="req-respond-buttons">
              <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
-             <button class="primary-button poster-select-btn" data-req-id="${r.id}">✓ 이 날짜로 스왑 확정</button>
+             <button class="primary-button poster-select-btn" data-req-id="${r.id}">이 일정으로 승인 요청</button>
+           </div>`
+        : ""}
+      ${needsRequesterApproval
+        ? `<div class="req-respond-buttons">
+             <button class="secondary-button requester-repick-btn" data-req-id="${r.id}">다른 날짜 요청</button>
+             <button class="primary-button requester-approve-btn" data-req-id="${r.id}">✓ 최종 승인</button>
            </div>`
         : ""}
       ${needsResponse
@@ -3377,8 +3622,8 @@ function updateBellBadge() {
 /* ====== 9. 이벤트 ====== */
 function switchTab(name) {
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
-  const SWAP_VIEWS = ["find", "post"];
-  const bottomActive = SWAP_VIEWS.includes(name) ? "find" : name;
+  const SWAP_VIEWS = ["swapGuide", "find", "post"];
+  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   // 스왑하기 서브탭 상태 동기화
@@ -3386,6 +3631,7 @@ function switchTab(name) {
   if (name === "find") { fetchPosts(); renderSavedSearches(); }
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
+  renderFlowUi();
   history.replaceState(null, "", "#" + name);
   // 탭 전환 시 항상 맨 위에서 시작 (이전 탭 스크롤 위치 잔존 방지)
   const appEl = document.querySelector(".app");
@@ -3480,6 +3726,29 @@ function initPullToRefresh() {
 
 function bindEvents() {
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  $("#startPostFlow")?.addEventListener("click", startPostGuide);
+  $("#startFindFlow")?.addEventListener("click", startFindGuide);
+  $("#openAdvancedFind")?.addEventListener("click", () => exitGuideFlow("find"));
+  $$(".flow-exit-btn").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
+  $$(".find-guide-cancel").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
+  $$("#guideTypeChips [data-guide-type]").forEach(button => button.addEventListener("click", () => {
+    const type = button.dataset.guideType;
+    const index = state.filters.types.indexOf(type);
+    if (index >= 0) state.filters.types.splice(index, 1);
+    else state.filters.types.push(type);
+    syncGuideTypeChips();
+  }));
+  $("#findGuideNext1")?.addEventListener("click", () => setFindGuideStep(2));
+  $("#findGuideBack1")?.addEventListener("click", () => setFindGuideStep(1));
+  $("#findGuideEdit")?.addEventListener("click", () => setFindGuideStep(2));
+  $("#findGuideNext2")?.addEventListener("click", () => {
+    state.filters.date = $("#guideDate")?.value || "all";
+    state.filters.time = $("#guideTime")?.value || "all";
+    state.filters.region = $("#guideRegion")?.value || "all";
+    state.filters.airports = parseAirportList($("#guideAirports")?.value || "");
+    syncMainFilterControls();
+    setFindGuideStep(3);
+  });
   // 스왑하기 서브탭 (바꿀 근무 찾기 / 스왑 요청 올리기)
   $$(".swap-subtab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.swaptab)));
   // 스왑 찾기 새로고침
@@ -3931,6 +4200,7 @@ function bindEvents() {
     saveState();
     closeGenericModal("crewDialog", "crewOverlay");
     renderAll();
+    if (state.guideFlow === "post") switchTab("schedule");
     const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
     const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
     showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
@@ -4193,6 +4463,10 @@ function bindEvents() {
     showToast(needed > 1
       ? `스왑 글 ${needed}건 등록 완료 — ${needed}크레딧 차감됨`
       : "스왑 글 등록 완료 — 스왑 등록 탭에서 확인하고 취소할 수 있습니다.");
+    if (state.guideFlow === "post") {
+      state.guideFlow = null;
+      switchTab("swapGuide");
+    }
   }
 
   // 기존 글의 희망 조건만 수정 (오퍼/크레딧 변경 없음)
@@ -4685,7 +4959,7 @@ state.lang = localStorage.getItem("jjswap_lang") || "KO";
 function applyLang() {
   const t = I18N[state.lang] || I18N.KO;
   // 하단 탭 라벨
-  const tabMap = { schedule:"탭.스케줄", find:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
+  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
   document.querySelectorAll(".tab[data-tab]").forEach(b => {
     const k = tabMap[b.dataset.tab];
     if (k && t[k]) b.textContent = t[k];
@@ -4725,7 +4999,7 @@ initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");
-const _validTabs = ["schedule", "find", "post", "requests", "profile"];
+const _validTabs = ["schedule", "swapGuide", "find", "post", "requests", "profile"];
 if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
 
 document.getElementById("langToggle")?.addEventListener("click", () => {
