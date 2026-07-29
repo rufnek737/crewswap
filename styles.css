@@ -379,6 +379,16 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .link-button.danger { color: var(--c-fail); margin-top: 10px; }
 .req-respond-buttons { display: flex; gap: 8px; margin-top: 12px; }
 .req-respond-buttons button { flex: 1; }
+/* 열린 로스터 날짜 선택 (글작성자가 바꿀 날 고르기) */
+.open-roster-pick { margin: 10px 0; padding: 10px 12px; border: 1px solid #c8d6ef; border-radius: 8px; background: var(--blue-soft); }
+.open-roster-pick h4 { margin: 0 0 8px; font-size: 12.5px; color: #1d3a7a; }
+.roster-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.roster-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1.25; }
+.roster-chip em { font-style: normal; font-weight: 600; font-size: 10px; color: var(--muted); }
+.roster-chip small { font-size: 10px; color: var(--muted); font-weight: 400; }
+.roster-chip.is-active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.roster-chip.is-active em, .roster-chip.is-active small { color: rgba(255,255,255,0.85); }
+.roster-pick-msg { margin-top: 8px; font-size: 12px; font-weight: 600; }
 
 /* ===== 저장 검색 ===== */
 .saved-searches { padding: 14px 18px; margin-bottom: 14px; }

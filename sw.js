@@ -1,5 +1,5 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v72';
+const CACHE = 'crewswap-v73';
 const SHELL = ['./index.html', './styles.css', './post-dates.js', './app.js', './manifest.json', './privacy.html', './terms.html'];
 
 // 설치 — 앱 쉘 캐시

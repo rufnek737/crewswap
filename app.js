@@ -762,7 +762,7 @@ function renderPendingBar() {
   const bar = $("#pendingActionBar");
   if (!bar) return;
   if (!state.pendingRequestPostId) { bar.hidden = true; return; }
-  const n = selectedSchedules().length;
+  const n = selectedSchedules().length; // 이제 '잠금할 근무' 수
   const label = state.pendingRequestType === "ask" ? "의향 표시" : "요청";
   // 내가 바꾸려던 상대 근무(대상 포스트)를 간단히 표시
   const target = state.posts.find(p => p.id === state.pendingRequestPostId);
@@ -773,10 +773,10 @@ function renderPendingBar() {
       <span class="pending-target-sub">${escapeHtml(target.offered.summary || target.offered.type || "")} · ${(target.offered.days || []).length}일</span>
     </span>` : "";
   const guide = n > 0
-    ? `${n}일 선택됨 — 다 고르면 다음을 누르세요 (${label})`
-    : `바꿔줄 근무를 달력에서 선택하세요 (${label})`;
+    ? `🔒 ${n}일 잠금(비공개) — 나머지 전체가 상대에게 열립니다. 다음을 누르세요 (${label})`
+    : `내 스케줄 전체가 상대에게 열립니다. 열기 싫은 근무만 달력에서 '잠금' 후 다음 (${label})`;
   $("#pendingActionText").innerHTML = `${targetHtml}<span class="pending-guide">${guide}</span>`;
-  $("#pendingActionNext").disabled = n === 0;
+  $("#pendingActionNext").disabled = false; // 잠금 0개(전체 공개)도 진행 가능
   bar.hidden = false;
 }
 
@@ -2426,12 +2426,34 @@ function recordSwapMatch() {
 }
 
 // 선택된 내 근무를 요청용 offered(X) 객체로 요약
-function buildMyOfferedForRequest() {
-  const ss = selectedSchedules();
-  if (ss.length === 0) return null;
-  const routes = ss.map(s => s.routeSummary || (s.dep&&s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : s.type)).join(" · ");
+
+// 잠금(선택)한 날을 제외한 '해당 월 전체 로스터'를 상대에게 공개용으로 요약
+function buildOpenRoster() {
+  const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
+  return currentMonthSchedules()
+    .filter(s => !locked.has(dayKey(s.day)))
+    .sort((a, b) => a.day - b.day)
+    .map(s => ({
+      day: s.day,
+      month: s.month || state.currentMonth,
+      type: s.type,
+      title: s.title,
+      dep: s.dep || null, arr: s.arr || null, layoverAirport: s.layoverAirport || null,
+      routeSummary: s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : null),
+      reportTime: s.reportTime || null, releaseTime: s.releaseTime || null, arrivalTime: s.arrivalTime || null,
+      aircraft: s.aircraft || null,
+      requiresEdto: !!s.requiresEdto, requiresCat3: !!s.requiresCat3,
+    }));
+}
+
+// 공개 로스터 항목 배열 → offered 요약 객체 (상대가 고른 날들로 만듦; 휴식/표시용)
+function offeredFromRosterDays(rosterEntries) {
+  const ss = [...rosterEntries].sort((a, b) => a.day - b.day);
+  if (!ss.length) return null;
+  const dLabel = ss.map(s => `${schedMonthNumFromEntry(s)}/${s.day}`).join(",");
+  const routes = ss.map(s => s.routeSummary || s.type).join(" · ");
   return {
-    patternName: patternTitleFor(ss),
+    patternName: `${dLabel} · ${ss[0].type} 패턴`,
     summary: routes,
     type: ss[0].type,
     days: ss.map(s => s.day),
@@ -2441,11 +2463,12 @@ function buildMyOfferedForRequest() {
     lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
     lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
     lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
-    hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"), // 모기지 이탈(오버나이트) 트립 여부 — 노조 협약 모기지 휴식일수 판정용
+    hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),
   };
 }
+function schedMonthNumFromEntry(s) { return parseInt((s.month || state.currentMonth).split("-")[1], 10); }
 
-// 요청하기 진입 — 줄 근무가 선택돼 있으면 확인 모달, 없으면 내 근무에서 고르게
+// 요청하기 진입 — 내 스케줄 전체를 열고(잠금만 선택) 상대가 고르게 함
 function requestSwap(postId) {
   if (state.credits < 1) { showToast("크레딧 부족 — 하루에 1개씩 자동 충전됩니다 (최대 5개)."); return; }
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
@@ -2469,37 +2492,30 @@ function askAboutPost(postId) {
   renderPendingBar();
 }
 
+// 공개 로스터 요약 HTML (모달에서 '내가 여는 것' 표시)
+function openRosterSummaryHtml(roster, lockedCount) {
+  const n = roster.length;
+  const preview = roster.slice(0, 6).map(s => `${schedMonthNumFromEntry(s)}/${s.day} ${s.type}`).join(" · ");
+  return `<strong>📂 내 스케줄 전체 공개 (${n}일)</strong>
+    <div>${escapeHtml(preview)}${n > 6 ? " …" : ""}</div>
+    <div class="hint" style="margin-top:4px;">${lockedCount > 0 ? `🔒 ${lockedCount}일 잠금(비공개) 제외 · ` : ""}상대가 원하는 날을 직접 고릅니다</div>`;
+}
+
 function openAskModal(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  const mine = buildMyOfferedForRequest();
+  const roster = buildOpenRoster();
+  const lockedCount = state.selectedDays.size;
   const askD = document.getElementById("askDialog");
   askD._postId = postId;
   document.getElementById("askDialogTitle").textContent = `💬 ${p.ownerNick || "상대"} 님에게 의향 표시`;
-  const theirDays = (p.offered.days || []).length || 1;
-  const myDays = mine ? mine.days.length : 0;
-  const dayMismatch = mine && myDays !== theirDays;
-  document.getElementById("askMine").innerHTML = mine
-    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>${dayMismatch ? `<div class="req-day-warn">⚠ ${myDays}일 선택됨 (상대는 ${theirDays}일)</div>` : ""}`
-    : `<span class="hint">내 근무에서 줄 근무를 선택하세요 (상대와 같은 ${theirDays}일)</span>`;
+  document.getElementById("askMine").innerHTML = openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("askTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
-  // 의향묻기도 요청하기와 동일하게 일수 일치 + 휴식시간 검증 적용
-  const rest = !dayMismatch && mine ? restCheckIncoming(p.offered, mine.days) : { ok: true };
-  const mogiji = !dayMismatch && mine ? mogijiRestCheckIncoming(p.offered, mine.days) : { ok: true };
-  const restMsg = restIssueMessage(rest) || mogijiIssueMessage(mogiji);
   const askHint = document.getElementById("askHint");
-  if (dayMismatch) {
-    askHint.innerHTML = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 의향을 보낼 수 없습니다.`;
-    askHint.style.color = "#e53e3e";
-  } else if (restMsg) {
-    askHint.innerHTML = `${restMsg}<br><small>휴식 기준 위반 — 스왑 불가 근무입니다.</small>`;
-    askHint.style.color = "#e53e3e";
-  } else {
-    askHint.textContent = "메시지 없이 관심만 전달됩니다 · 신상정보는 자동 차단 · 크레딧 차감 없음";
-    askHint.style.color = "";
-  }
-  document.getElementById("askSendButton").disabled = !mine || dayMismatch || !rest.ok || !mogiji.ok;
+  askHint.textContent = "내 스케줄 전체가 상대에게 열립니다 · 상대가 바꿀 날을 고릅니다 · 신상정보는 상호수락 후 공개 · 크레딧 없음";
+  askHint.style.color = "";
+  document.getElementById("askSendButton").disabled = roster.length === 0;
   openGenericModal("askDialog", "askOverlay");
 }
 
@@ -2508,68 +2524,55 @@ async function sendAskInterest() {
   const postId = askD._postId;
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  const mine = buildMyOfferedForRequest();
-  if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
-  const theirDays = (p.offered.days || []).length || 1;
-  if (mine.days.length !== theirDays) {
-    showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
-    return;
-  }
-  if (!restCheckIncoming(p.offered, mine.days).ok || !mogijiRestCheckIncoming(p.offered, mine.days).ok) {
-    showToast("휴식 기준 위반 — 스왑 불가 근무입니다.");
-    return;
-  }
+  const roster = buildOpenRoster();
+  if (roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 잠금됨)."); return; }
+  await sendOpenSwap(postId, "ask", roster);
+  closeGenericModal("askDialog", "askOverlay");
+}
+
+// 요청/의향 공통 전송 — 공개 로스터를 첨부 (offered는 상대가 고른 뒤 확정)
+async function sendOpenSwap(postId, type, roster) {
+  const lockedDays = [...state.selectedDays].map(k => parseDayKey(k).day);
   try {
     const res = await fetch(`${API_BASE}/api/requests-create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        postId, type: "ask",
+        postId, type,
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
         fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
-        offered: mine,
+        openRoster: roster, lockedDays,
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { showToast(data.error || "의향 전송 실패 — 다시 시도해주세요."); return; }
-  } catch (e) { showToast("의향 전송 실패 — 네트워크 오류"); return; }
-  closeGenericModal("askDialog", "askOverlay");
+    if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return false; }
+  } catch (e) { showToast("전송 실패 — 네트워크 오류"); return false; }
+  if (type === "request") { state.credits--; saveState(); renderCredits(); }
+  state.selectedDays.clear();
+  renderCalendar && renderCalendar();
   fetchRequests();
-  showToast("의향을 보냈습니다. 상호 수락 전 개인정보는 비공개입니다.");
+  showToast(type === "ask"
+    ? "의향을 보냈습니다 — 내 스케줄이 상대에게 열렸습니다. 상대가 바꿀 날을 고르면 알려드려요."
+    : "요청을 보냈습니다 — 내 스케줄이 상대에게 열렸습니다. 상대가 바꿀 날을 고르면 알려드려요.");
+  return true;
 }
 
 function openRequestModal(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  const mine = buildMyOfferedForRequest();
+  const roster = buildOpenRoster();
+  const lockedCount = state.selectedDays.size;
   const reqD = document.getElementById("reqDialog");
   reqD._postId = postId;
-  const theirDays = (p.offered.days || []).length || 1;
-  const myDays = mine ? mine.days.length : 0;
-  const dayMismatch = mine && myDays !== theirDays;
   document.getElementById("reqDialogTitle").textContent = `${p.ownerNick || "상대"} 님에게 스왑 요청`;
-  document.getElementById("reqMine").innerHTML = mine
-    ? `<strong>${mine.patternName}</strong><div>${mine.summary || mine.type}</div>${dayMismatch ? `<div class="req-day-warn">⚠ ${myDays}일 선택됨 (상대는 ${theirDays}일)</div>` : ""}`
-    : `<span class="hint">내 근무에서 줄 근무를 선택하세요 (상대와 같은 ${theirDays}일)</span>`;
+  document.getElementById("reqMine").innerHTML = openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("reqTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
-  // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 내가 받게 될 상대 근무(p.offered)를 내 로스터에 넣었을 때 확인
-  const rest = !dayMismatch && mine ? restCheckIncoming(p.offered, mine.days) : { ok: true };
-  const mogiji = !dayMismatch && mine ? mogijiRestCheckIncoming(p.offered, mine.days) : { ok: true };
-  const restMsg = restIssueMessage(rest) || mogijiIssueMessage(mogiji);
   const hintEl = document.getElementById("reqHint");
-  if (dayMismatch) {
-    hintEl.textContent = `⚠ 상대가 내놓은 일수(${theirDays}일)와 내가 선택한 일수(${myDays}일)가 달라 요청을 보낼 수 없습니다.`;
-    hintEl.style.color = "";
-  } else if (restMsg) {
-    hintEl.innerHTML = `${restMsg}<br><small>휴식 기준 위반 — 회사 신청이 반려될 수 있어 요청을 보낼 수 없습니다.</small>`;
-    hintEl.style.color = "#e53e3e";
-  } else {
-    hintEl.textContent = "요청 1건당 1크레딧 차감 · 상호 수락 후 연락처가 공개됩니다.";
-    hintEl.style.color = "";
-  }
-  document.getElementById("reqConfirmButton").disabled = !mine || dayMismatch || !rest.ok || !mogiji.ok;
+  hintEl.textContent = "요청 1건당 1크레딧 · 내 스케줄 전체가 상대에게 열립니다 · 상대가 바꿀 날을 고른 뒤 상호 수락하면 연락처 공개.";
+  hintEl.style.color = "";
+  document.getElementById("reqConfirmButton").disabled = roster.length === 0 || state.credits < 1;
   openGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -2578,39 +2581,11 @@ async function sendSwapRequest() {
   const postId = reqD._postId;
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  const mine = buildMyOfferedForRequest();
-  if (!mine) { showToast("바꿔줄 내 근무를 먼저 선택하세요."); return; }
-  const theirDays = (p.offered.days || []).length || 1;
-  if (mine.days.length !== theirDays) {
-    showToast(`일수가 맞지 않습니다 — 상대 ${theirDays}일 / 내 선택 ${mine.days.length}일`);
-    return;
-  }
-  if (!restCheckIncoming(p.offered, mine.days).ok || !mogijiRestCheckIncoming(p.offered, mine.days).ok) {
-    showToast("휴식 기준 위반 — 스왑 불가 근무입니다.");
-    return;
-  }
-  if (state.credits < 1) { showToast("크레딧 부족"); return; }
-  try {
-    const res = await fetch(`${API_BASE}/api/requests-create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        postId, type: "request",
-        fromEmail: state.user.email, fromNick: state.user.nickname,
-        fromBase: state.user.base, fromRole: state.user.roleType,
-        fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
-        offered: mine,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { showToast(data.error || "요청 전송 실패 — 다시 시도해주세요."); return; }
-  } catch (e) { showToast("요청 전송 실패 — 네트워크 오류"); return; }
-  state.credits--;
-  saveState();
-  renderCredits();
-  closeGenericModal("reqDialog", "reqOverlay");
-  fetchRequests();
-  showToast("요청을 보냈습니다 (내 근무 ⇄ 상대 근무). 상호 수락 전 개인정보는 비공개입니다.");
+  if (state.credits < 1) { showToast("크레딧 부족 — 하루에 1개씩 자동 충전됩니다 (최대 5개)."); return; }
+  const roster = buildOpenRoster();
+  if (roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 잠금됨)."); return; }
+  const ok = await sendOpenSwap(postId, "request", roster);
+  if (ok) closeGenericModal("reqDialog", "reqOverlay");
 }
 
 // 방금 취소한 글 ID — KV 최종일관성으로 목록에 잠시 남아도 다시 안 불러오게 차단 (세션 한정)
@@ -2756,17 +2731,20 @@ async function fetchRequests() {
     // 내가 보낸 정식 요청이 상호 수락됐을 때 알림 (받은 쪽만 알림 가던 문제 보완)
     const seenReqAccepted = new Set(JSON.parse(localStorage.getItem("crewswap_seen_req_accepted") || "[]"));
     sent.forEach(r => {
-      if (r.type === "ask" || (r.stage || 1) < 3 || seenReqAccepted.has(r.id)) return;
+      if ((r.stage || 1) < 3 || seenReqAccepted.has(r.id)) return;
+      // 구버전 ask(offered 즉시)이면서 posterSelected 아닌 건 제외
+      if (r.type === "ask" && !r.posterSelected && !r.offered) return;
       seenReqAccepted.add(r.id); changed = true;
+      const picked = r.posterSelected && r.offered ? ` (${(r.offered.days || []).map(d => d + "일").join(", ")} 선택됨)` : "";
       state.alerts.unshift({
         kind: "match",
-        title: "✓ 스왑 요청 수락됨 (상호 수락)",
-        body: `${r.toNick || "상대"} 님이 요청을 수락했습니다 · ${r.postTitle || ""} — 회사 상신 단계로 진행하세요`,
+        title: "✓ 스왑 확정 (상호 수락)",
+        body: `${r.toNick || "상대"} 님이 내 스케줄에서 바꿀 날을 골랐습니다${picked} · ${r.postTitle || ""} — 회사 상신 단계로 진행하세요`,
         time: "방금",
         createdAt: r.acceptedAt || new Date().toISOString(),
         viewMode: "sent",
       });
-      showToast(`✓ ${r.toNick || "상대"} 님이 스왑 요청을 수락했습니다`);
+      showToast(`✓ ${r.toNick || "상대"} 님이 스왑을 확정했습니다`);
     });
     localStorage.setItem("crewswap_seen_req_accepted", JSON.stringify([...seenReqAccepted].slice(-200)));
     // 내가 보낸 요청이 거절됐을 때 알림
@@ -2932,6 +2910,59 @@ function renderRequests() {
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
   $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
   $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
+  // 열린 로스터 날짜 선택 칩 (글작성자가 바꿀 날 고르기)
+  $$("#requestList .roster-chip").forEach(b => b.onclick = () => {
+    const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
+    if (!_posterPick[reqId]) _posterPick[reqId] = new Set();
+    const set = _posterPick[reqId];
+    if (set.has(day)) { set.delete(day); b.classList.remove("is-active"); }
+    else { set.add(day); b.classList.add("is-active"); }
+    updatePosterPickMsg(reqId);
+  });
+  $$("#requestList .poster-select-btn").forEach(b => b.onclick = () => posterSelectDays(b.dataset.reqId));
+}
+
+// 글작성자가 고른 날짜 → 휴식검증 미리보기 메세지
+const _posterPick = {};
+function posterPickRestCheck(reqId) {
+  const r = (state.requests.received || []).find(x => x.id === reqId);
+  const days = [...(_posterPick[reqId] || [])];
+  if (!r || !days.length) return { offered: null, msg: null };
+  const entries = (r.openRoster || []).filter(s => days.includes(s.day));
+  const offered = offeredFromRosterDays(entries);
+  const myPost = (state.myPosts || []).find(p => p.id === r.postId);
+  const givenDays = myPost ? (myPost.offered.days || []) : [];
+  const msg = restIssueMessage(restCheckIncoming(offered, givenDays)) || mogijiIssueMessage(mogijiRestCheckIncoming(offered, givenDays));
+  return { offered, msg };
+}
+function updatePosterPickMsg(reqId) {
+  const el = document.getElementById(`rosterMsg-${reqId}`);
+  if (!el) return;
+  const { offered, msg } = posterPickRestCheck(reqId);
+  if (!offered) { el.textContent = ""; return; }
+  if (msg) { el.innerHTML = `<span style="color:#c53030;">${msg}<br><small>이 조합은 휴식 기준 위반 — 다른 날을 고르세요.</small></span>`; }
+  else { el.innerHTML = `<span style="color:#1a7a3f;">✓ ${offered.days.map(d=>d+"일").join(", ")} 선택됨 — 휴식 기준 통과</span>`; }
+}
+
+async function posterSelectDays(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  const r = (state.requests.received || []).find(x => x.id === reqId);
+  if (!r) return;
+  const { offered, msg } = posterPickRestCheck(reqId);
+  if (!offered) { showToast("바꿀 날을 하나 이상 선택하세요."); return; }
+  if (msg) { showToast("휴식 기준 위반 — 다른 날을 선택하세요."); return; }
+  try {
+    const res = await fetch(`${API_BASE}/api/requests-poster-select`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: reqId, email: state.user.email, offered, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast(data.error || "확정 실패 — 다시 시도해주세요."); return; }
+  } catch (e) { showToast("확정 실패 — 네트워크 오류"); return; }
+  delete _posterPick[reqId];
+  recordSwapMatch();
+  showToast("스왑 확정 — 상호 수락되었습니다. 회사 상신 단계로 진행하세요.");
+  fetchRequests();
 }
 
 // 요청자 → 글작성자에게 회사 상신 확인 메세지
@@ -3046,7 +3077,12 @@ function requestCard(r) {
   const badgeCls = newStage >= 2 ? "accepted" : "";
   const accepted = newStage >= 2;
   const isAsk = r.type === "ask";
-  const needsResponse = state.reqViewMode === "received" && (isAsk ? !r.askAccepted : !accepted);
+  const isSentV = state.reqViewMode === "sent";
+  // 새 모델: 요청자가 로스터만 열고 offered 미확정 → 받는 사람(글작성자)이 날짜를 골라야 함
+  const isOpenPending = state.reqViewMode === "received" && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  const isWaitingSent = isSentV && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  // 구버전(offered 즉시 첨부) 수락 버튼 경로 — offered가 있을 때만
+  const needsResponse = state.reqViewMode === "received" && !!r.offered && (isAsk ? !r.askAccepted : !accepted);
 
   // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
   // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 후 확인.
@@ -3088,6 +3124,15 @@ function requestCard(r) {
         <div class="req-ex-arrow">⇄</div>
         <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
       </div>` : ""}
+      ${isOpenPending ? `
+      <div class="open-roster-pick">
+        <h4>📂 상대가 전체 스케줄을 열었습니다 — 바꿀 날을 고르세요</h4>
+        <div class="roster-chips" data-req="${r.id}">
+          ${r.openRoster.map(s => `<button type="button" class="roster-chip" data-req="${r.id}" data-day="${s.day}">${schedMonthNumFromEntry(s)}/${s.day} <em>${s.type}</em>${s.routeSummary ? `<small>${escapeHtml(s.routeSummary)}</small>` : ""}</button>`).join("")}
+        </div>
+        <div class="roster-pick-msg" id="rosterMsg-${r.id}"></div>
+      </div>` : ""}
+      ${isWaitingSent ? `<div class="notice" style="margin-bottom:10px;">⏳ 내 스케줄을 열어 보냈습니다. 상대(글 작성자)가 바꿀 날을 고르는 중입니다.${(r.lockedDays && r.lockedDays.length) ? ` (🔒 ${r.lockedDays.length}일 잠금 제외)` : ""}</div>` : ""}
       <div class="disclosed-info">
         <h4>공개 정보</h4>
         <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"; })()}</strong></div>
@@ -3137,6 +3182,12 @@ function requestCard(r) {
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
       ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 휴식시간 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
+      ${isOpenPending
+        ? `<div class="req-respond-buttons">
+             <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
+             <button class="primary-button poster-select-btn" data-req-id="${r.id}">✓ 이 날짜로 스왑 확정</button>
+           </div>`
+        : ""}
       ${needsResponse
         ? `<div class="req-respond-buttons">
              <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>

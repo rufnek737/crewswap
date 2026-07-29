@@ -540,12 +540,12 @@ const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const { postId, fromEmail, fromNick, fromBase, fromRole, fromRealName, fromEmployeeId, fromPhone, type, message, offered } = body || {};
+  const { postId, fromEmail, fromNick, fromBase, fromRole, fromRealName, fromEmployeeId, fromPhone, type, message, offered, openRoster, lockedDays } = body || {};
   if (!postId || !fromEmail || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
-  // 정식 요청은 "내가 줄 근무(offered)"가 반드시 있어야 함 (의향묻기는 선택)
-  if (type === 'request' && (!offered || !offered.patternName))
-    return json({ error: '바꿔줄 내 근무를 선택해야 합니다' }, 400);
+  // 새 모델: offered 대신 openRoster(공개 로스터)를 첨부. 둘 중 하나는 있어야 함.
+  if (!offered && !(Array.isArray(openRoster) && openRoster.length))
+    return json({ error: '공개할 근무가 없습니다' }, 400);
   if (PERSONAL_INFO_RE.test(message || ''))
     return json({ error: '연락처/신상정보는 보낼 수 없습니다 (상호 수락 후 공개)' }, 400);
 
@@ -553,12 +553,6 @@ async function handleRequestsCreate(request, env) {
     const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
-    if (type === 'request') {
-      const theirDays = (post.offered?.days || []).length || 1;
-      const myDays = (offered.days || []).length || 0;
-      if (myDays !== theirDays)
-        return json({ error: `일수가 맞지 않습니다 (상대 ${theirDays}일 / 내 선택 ${myDays}일)` }, 400);
-    }
 
     const id = 'REQ-' + Date.now() + '-' + randId();
     const rec = {
@@ -571,9 +565,11 @@ async function handleRequestsCreate(request, env) {
       message: message || '',
       fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
       fromRealName: fromRealName || '', fromEmployeeId: fromEmployeeId || '', fromPhone: fromPhone || '',
-      offered: offered || null, // 요청자가 줄 근무(X)
+      offered: offered || null,             // 상대가 날짜를 고르면 확정됨 (구버전은 즉시 값 있음)
+      openRoster: Array.isArray(openRoster) ? openRoster : null, // 요청자가 공개한 전체 로스터
+      lockedDays: Array.isArray(lockedDays) ? lockedDays : [],
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
-      status: type === 'ask' ? '의향 문의' : '요청 대기',
+      status: offered ? (type === 'ask' ? '의향 문의' : '요청 대기') : '상대가 바꿀 날 고르는 중',
       stage: 1,
       createdAt: new Date().toISOString(),
     };
@@ -599,6 +595,36 @@ async function handleRequestsAccept(request, env) {
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
     // 수락자(받은 사람) 연락처 저장
+    rec.toRealName = realName || '';
+    rec.toEmployeeId = employeeId || '';
+    rec.toPhone = phone || '';
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+    return json({ ok: true });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
+/* ── requests-poster-select (글작성자가 상대 공개 로스터에서 바꿀 날을 골라 확정) ── */
+
+async function handleRequestsPosterSelect(request, env) {
+  let id, email, offered, realName, employeeId, phone;
+  try { ({ id, email, offered, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
+  if (!offered || !Array.isArray(offered.days) || !offered.days.length) return json({ error: '바꿀 날을 선택해주세요' }, 400);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
+    if (rec.toEmail !== email) return json({ error: '선택 권한이 없습니다 (글 작성자만)' }, 403);
+    // 공개 로스터에 없는 날을 고르는 부정 방지
+    const openDays = new Set((rec.openRoster || []).map(r => r.day));
+    if (rec.openRoster && !offered.days.every(d => openDays.has(d)))
+      return json({ error: '공개된 근무가 아닙니다' }, 400);
+    rec.offered = offered;                  // 확정된 '요청자가 줄 근무'
+    rec.stage = 3;
+    rec.status = '상호 수락 — 회사 상신 필요';
+    rec.acceptedAt = new Date().toISOString();
+    rec.posterSelected = true;
+    // 글작성자(받는 사람=상신 주체) 연락처 저장
     rec.toRealName = realName || '';
     rec.toEmployeeId = employeeId || '';
     rec.toPhone = phone || '';
@@ -1172,6 +1198,7 @@ export default {
     if (path === '/api/requests-create') return handleRequestsCreate(request, env);
     if (path === '/api/requests-get')    return handleRequestsGet(request, env);
     if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
+    if (path === '/api/requests-poster-select') return handleRequestsPosterSelect(request, env);
     if (path === '/api/requests-ask-accept') return handleRequestsAskAccept(request, env);
     if (path === '/api/requests-decline') return handleRequestsDecline(request, env);
     if (path === '/api/requests-submit-nudge') return handleRequestsSubmitNudge(request, env);
