@@ -2910,16 +2910,50 @@ function renderRequests() {
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
   $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
   $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
-  // 열린 로스터 날짜 선택 칩 (글작성자가 바꿀 날 고르기)
-  $$("#requestList .roster-chip").forEach(b => b.onclick = () => {
+  // 열린 로스터 달력 날짜 선택 (글작성자가 바꿀 날 고르기)
+  $$("#requestList .cmp-cell.has-req").forEach(b => b.onclick = () => {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
     if (!_posterPick[reqId]) _posterPick[reqId] = new Set();
     const set = _posterPick[reqId];
-    if (set.has(day)) { set.delete(day); b.classList.remove("is-active"); }
-    else { set.add(day); b.classList.add("is-active"); }
+    if (set.has(day)) { set.delete(day); b.classList.remove("is-picked"); }
+    else { set.add(day); b.classList.add("is-picked"); }
     updatePosterPickMsg(reqId);
   });
   $$("#requestList .poster-select-btn").forEach(b => b.onclick = () => posterSelectDays(b.dataset.reqId));
+}
+
+// 상대의 열린 로스터를 '달력'으로 렌더 + 각 날짜에 내(글작성자) 근무를 겹쳐 비교
+function renderCompareCalendar(r) {
+  const roster = r.openRoster || [];
+  const month = (roster[0] && roster[0].month) || state.currentMonth;
+  const [y, m] = month.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 월=0
+  const openByDay = {}; roster.forEach(s => { openByDay[s.day] = s; });
+  const picked = _posterPick[r.id] || new Set();
+  const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t;
+  let cells = "";
+  for (let i = 0; i < offset; i++) cells += `<div class="cmp-cell empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const req = openByDay[d];
+    const mine = state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
+    const mineHtml = mine ? `<span class="cmp-mine">내 ${escapeHtml(dutyShort(mine.type))}</span>` : "";
+    if (req) {
+      const on = picked.has(d) ? " is-picked" : "";
+      const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
+      cells += `<button type="button" class="cmp-cell has-req${on}" data-req="${r.id}" data-day="${d}">
+        <span class="cmp-day">${d}</span>
+        <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
+        ${mineHtml}
+      </button>`;
+    } else {
+      cells += `<div class="cmp-cell"><span class="cmp-day muted">${d}</span>${mineHtml}</div>`;
+    }
+  }
+  return `<div class="cmp-cal">
+    <div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+    <div class="cmp-grid">${cells}</div>
+  </div>`;
 }
 
 // 글작성자가 고른 날짜 → 휴식검증 미리보기 메세지
@@ -3115,7 +3149,7 @@ function requestCard(r) {
           <h3>${r.postTitle}</h3>
           <p>${isSent?"내가 보냄":"내가 받음"} · ${r.sentAgo}</p>
         </div>
-        <span class="badge ${badgeCls}">${r.status}</span>
+        <span class="badge ${badgeCls}">${r.status || (isOpenPending ? "바꿀 날 고르기" : isWaitingSent ? "상대가 고르는 중" : "진행 중")}</span>
       </div>
       ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
       ${r.declined && r.declineMsg ? `<div class="notice" style="margin-bottom:10px;border-color:#e53e3e;background:#fff5f5;">💔 ${escapeHtml(r.declineMsg)}</div>` : ""}
@@ -3126,10 +3160,9 @@ function requestCard(r) {
       </div>` : ""}
       ${isOpenPending ? `
       <div class="open-roster-pick">
-        <h4>📂 상대가 전체 스케줄을 열었습니다 — 바꿀 날을 고르세요</h4>
-        <div class="roster-chips" data-req="${r.id}">
-          ${r.openRoster.map(s => `<button type="button" class="roster-chip" data-req="${r.id}" data-day="${s.day}">${schedMonthNumFromEntry(s)}/${s.day} <em>${s.type}</em>${s.routeSummary ? `<small>${escapeHtml(s.routeSummary)}</small>` : ""}</button>`).join("")}
-        </div>
+        <h4>📅 상대가 전체 스케줄을 열었습니다 — 달력에서 바꿀 날을 고르세요</h4>
+        <p class="cmp-legend"><span class="cmp-swatch take"></span> 파란칸 = 상대 근무(받을 것, 탭하여 선택) · <span class="cmp-swatch mine"></span> 아래 회색 = 그날 내 근무(비교용)</p>
+        ${renderCompareCalendar(r)}
         <div class="roster-pick-msg" id="rosterMsg-${r.id}"></div>
       </div>` : ""}
       ${isWaitingSent ? `<div class="notice" style="margin-bottom:10px;">⏳ 내 스케줄을 열어 보냈습니다. 상대(글 작성자)가 바꿀 날을 고르는 중입니다.${(r.lockedDays && r.lockedDays.length) ? ` (🔒 ${r.lockedDays.length}일 잠금 제외)` : ""}</div>` : ""}

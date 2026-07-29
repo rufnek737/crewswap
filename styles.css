@@ -381,13 +381,26 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .req-respond-buttons button { flex: 1; }
 /* 열린 로스터 날짜 선택 (글작성자가 바꿀 날 고르기) */
 .open-roster-pick { margin: 10px 0; padding: 10px 12px; border: 1px solid #c8d6ef; border-radius: 8px; background: var(--blue-soft); }
-.open-roster-pick h4 { margin: 0 0 8px; font-size: 12.5px; color: #1d3a7a; }
-.roster-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.roster-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1.25; }
-.roster-chip em { font-style: normal; font-weight: 600; font-size: 10px; color: var(--muted); }
-.roster-chip small { font-size: 10px; color: var(--muted); font-weight: 400; }
-.roster-chip.is-active { background: var(--primary); border-color: var(--primary); color: #fff; }
-.roster-chip.is-active em, .roster-chip.is-active small { color: rgba(255,255,255,0.85); }
+.open-roster-pick h4 { margin: 0 0 6px; font-size: 12.5px; color: #1d3a7a; }
+.cmp-legend { margin: 0 0 8px; font-size: 10.5px; color: var(--muted); line-height: 1.5; }
+.cmp-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; vertical-align: middle; margin-right: 2px; }
+.cmp-swatch.take { background: #dbe8ff; border: 1px solid #6f9be8; }
+.cmp-swatch.mine { background: #eceff3; border: 1px solid var(--line); }
+/* 비교 달력 */
+.cmp-cal { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.cmp-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 9.5px; color: var(--muted); margin-bottom: 3px; }
+.cmp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cmp-cell { min-height: 46px; padding: 3px; border: 1px solid transparent; border-radius: 6px; background: #fafbfc; display: flex; flex-direction: column; align-items: stretch; gap: 1px; text-align: left; font: inherit; }
+.cmp-cell.empty { background: transparent; }
+.cmp-cell .cmp-day { font-size: 10px; font-weight: 700; color: var(--text); }
+.cmp-cell .cmp-day.muted { color: var(--line); }
+.cmp-cell .cmp-take { font-size: 9.5px; font-weight: 700; color: #1d3a7a; line-height: 1.2; }
+.cmp-cell .cmp-take em { display: block; font-style: normal; font-weight: 400; font-size: 8.5px; color: #4a67a8; }
+.cmp-cell .cmp-mine { margin-top: auto; font-size: 8.5px; color: var(--muted); background: #eceff3; border-radius: 3px; padding: 0 2px; align-self: flex-start; }
+button.cmp-cell.has-req { background: #dbe8ff; border-color: #a7c3ee; cursor: pointer; }
+button.cmp-cell.has-req.is-picked { background: var(--primary); border-color: var(--primary); }
+button.cmp-cell.has-req.is-picked .cmp-day, button.cmp-cell.has-req.is-picked .cmp-take, button.cmp-cell.has-req.is-picked .cmp-take em { color: #fff; }
+button.cmp-cell.has-req.is-picked .cmp-mine { background: rgba(255,255,255,0.3); color: #fff; }
 .roster-pick-msg { margin-top: 8px; font-size: 12px; font-weight: 600; }
 
 /* ===== 저장 검색 ===== */
