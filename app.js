@@ -147,7 +147,9 @@ function currentRules() {
 
 /* ====== 2. 상태 ====== */
 const state = {
-  credits: 5,
+  credits: 3,
+  creditMonth: null,
+  adCreditsThisMonth: 0,
   currentMonth: (() => {
     const d = new Date(); // 실시간 현재월
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -352,7 +354,7 @@ function createMockAlerts() {
       body:"CrewSwap은 승무원 스케줄 스왑을 더 쉽게 찾고 요청할 수 있는 서비스입니다.\n\n내 근무 확인\n내 근무에서 스케줄을 확인하고, 바꾸고 싶은 근무를 선택할 수 있습니다.\n\n스왑 찾기\n스왑하기에서 다른 사용자가 올린 스왑 글을 확인하세요.\n\n요청하기\n원하는 스왑 글을 찾았다면 요청하기를 누르고, 내가 대신 줄 근무를 선택해 제안할 수 있습니다.\n\n요청 확인\n요청함에서 내가 보낸 요청과 받은 요청을 확인할 수 있습니다.\n\n수락 후 진행\n상대가 요청을 수락하면 상세 정보를 확인한 뒤 회사 절차에 따라 스케줄 변경을 진행하면 됩니다.\n\n현재 베타 기간에는 일부 기능이 변경될 수 있습니다.\n사용 중 불편한 점이나 오류가 있으면 언제든 피드백 부탁드립니다.",
       time:"공지" },
     { id:"qna", kind:"announce", title:"❓ 자주 묻는 질문 (Q&A)", date:"2026.07.17",
-      body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n그냥 삭제되지 않고, 상대방에게 \"관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다\"라는 양해 메세지가 자동 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청·스왑 등록에 1개씩 차감됩니다(의향묻기는 무료). 크레딧은 \"하루에 1개씩 자동 충전\"되고 최대 5개까지 쌓입니다. 따로 구매하거나 광고를 볼 필요는 없어요. 요청을 남발하지 않게 하는 장치일 뿐입니다. 등록한 스왑이 마감까지 매칭 안 되면 쓴 크레딧의 50%가 자동 환급됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.\n\nQ8. 무료와 프리미엄(구독)은 뭐가 다른가요?\n스왑을 찾고, 올리고, 요청·수락해서 성사시키는 핵심 기능은 전부 무료입니다. PRO는 \"내가 앱을 열지 않아도 서버가 조건에 맞는 새 글을 찾아주는\" 유료 구독 기능입니다.\n· 무료: 스왑 둘러보기·올리기·요청·성사, 내 거래 알림, 휴식시간 규정 체크\n· PRO 구독: 목적지·유형·박수 조건 저장, 조건 수 무제한, 앱이 꺼져 있어도 새 글 즉시 푸시\n※ 베타 기간에는 조건 저장과 웹/PWA 백그라운드 푸시를 무료로 검증합니다. iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.\n\nQ9. 달력 날짜 위 아이콘(👀 ⚠️ 🔒)은 무슨 뜻인가요?\n👀 (숫자): 그 날짜를 원하는 다른 사람의 스왑 글이 몇 건 있는지 — 내가 그 근무를 올리면 매칭될 수요가 있다는 표시입니다.\n⚠️ : 그 날짜까지 연속 근무일수가 회사 규정 한도(운항 5일·객실 7일)에 임박했다는 경고입니다. 그 위에 근무를 더 얹는 스왑은 주의하세요.\n🔒 : 특수공항 자격 갱신 비행 등 회사 규정상 SWAP이 불가한 근무입니다.",
+      body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n그냥 삭제되지 않고, 상대방에게 \"관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다\"라는 양해 메세지가 자동 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청·스왑 등록에 1개씩 차감됩니다(의향묻기는 무료). 매월 첫 실행 시 기본 3개로 재설정되며 남은 크레딧과 광고 보상 크레딧은 다음 달로 이월되지 않습니다. 3개 이상이 더 필요하면 보상형 광고를 한 번 볼 때마다 1개를 받을 수 있습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.\n\nQ8. 무료와 프리미엄(구독)은 뭐가 다른가요?\n스왑을 찾고, 올리고, 요청·수락해서 성사시키는 핵심 기능은 전부 무료입니다. PRO는 \"내가 앱을 열지 않아도 서버가 조건에 맞는 새 글을 찾아주는\" 유료 구독 기능입니다.\n· 무료: 스왑 둘러보기·올리기·요청·성사, 내 거래 알림, 휴식시간 규정 체크\n· PRO 구독: 목적지·유형·박수 조건 저장, 조건 수 무제한, 앱이 꺼져 있어도 새 글 즉시 푸시\n※ 베타 기간에는 조건 저장과 웹/PWA 백그라운드 푸시를 무료로 검증합니다. iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.\n\nQ9. 달력 날짜 위 아이콘(👀 ⚠️ 🔒)은 무슨 뜻인가요?\n👀 (숫자): 그 날짜를 원하는 다른 사람의 스왑 글이 몇 건 있는지 — 내가 그 근무를 올리면 매칭될 수요가 있다는 표시입니다.\n⚠️ : 그 날짜까지 연속 근무일수가 회사 규정 한도(운항 5일·객실 7일)에 임박했다는 경고입니다. 그 위에 근무를 더 얹는 스왑은 주의하세요.\n🔒 : 특수공항 자격 갱신 비행 등 회사 규정상 SWAP이 불가한 근무입니다.",
       time:"공지" },
   ];
 }
@@ -1732,33 +1734,84 @@ function renderCredits() {
   if ($("#profileCredits")) $("#profileCredits").textContent = display;
   const nextEl = $("#creditRegenHint");
   if (nextEl) nextEl.textContent = creditRegenHint();
+  const adCount = Math.max(0, Number(state.adCreditsThisMonth) || 0);
+  const adLabel = `📺 테스트 광고 보고 +1 크레딧${adCount ? ` · 이번 달 ${adCount}회` : ""}`;
+  if ($("#watchAdButton")) $("#watchAdButton").textContent = adLabel;
+  if ($("#watchAdButtonProfile")) $("#watchAdButtonProfile").textContent = adLabel;
 }
 
-/* ====== 크레딧 시간 재생 (스팸 방지용 · 판매 아님) ======
- * 최대 5개, 하루(24h)에 1개씩 자동 충전. 광고/구매 없음. */
-const CREDIT_CAP = 5;
-const CREDIT_REGEN_MS = 24 * 60 * 60 * 1000;
+/* ====== 월 단위 크레딧 정책 ======
+ * 매월 첫 실행에 기본 3개로 재설정한다.
+ * 광고 보상만 3개를 초과할 수 있고, 다음 달로 이월되지 않는다. */
+const CREDIT_POLICY = window.CrewSwapCreditPolicy;
+const CREDIT_CAP = CREDIT_POLICY.BASE_MONTHLY_CREDITS;
 
 function regenCredits() {
-  if (typeof state.lastCreditAt !== "number") { state.lastCreditAt = Date.now(); return; }
-  if (state.credits >= CREDIT_CAP) { state.lastCreditAt = Date.now(); return; }
-  const gained = Math.floor((Date.now() - state.lastCreditAt) / CREDIT_REGEN_MS);
-  if (gained <= 0) return;
-  const add = Math.min(gained, CREDIT_CAP - state.credits);
-  state.credits = Math.round((state.credits + add) * 10) / 10;
-  state.lastCreditAt += gained * CREDIT_REGEN_MS;
-  if (state.credits >= CREDIT_CAP) state.lastCreditAt = Date.now();
+  const result = CREDIT_POLICY.reconcileMonth(state);
+  delete state.lastCreditAt;
+  if (!result.changed) return result;
   saveState();
   renderCredits();
+  if (result.changedMonth) showToast("새 달 기본 크레딧 3개가 충전되었습니다.");
+  return result;
 }
 
-// 다음 크레딧까지 남은 시간 안내 문구
 function creditRegenHint() {
-  if (state.credits >= CREDIT_CAP) return `크레딧 가득 참 (최대 ${CREDIT_CAP}개)`;
-  if (typeof state.lastCreditAt !== "number") return `하루에 1개씩 충전 (최대 ${CREDIT_CAP}개)`;
-  const remain = CREDIT_REGEN_MS - ((Date.now() - state.lastCreditAt) % CREDIT_REGEN_MS);
-  const h = Math.floor(remain / 3600000), m = Math.floor((remain % 3600000) / 60000);
-  return `다음 크레딧까지 ${h}시간 ${m}분 (하루 1개, 최대 ${CREDIT_CAP}개)`;
+  const adCount = Math.max(0, Number(state.adCreditsThisMonth) || 0);
+  return `이번 달 기본 ${CREDIT_CAP}개${adCount ? ` · 광고 시청 ${adCount}회` : ""} · 다음 달 1일 3개로 재설정`;
+}
+
+let rewardAdTimer = null;
+let rewardAdRunning = false;
+
+function openRewardAd() {
+  regenCredits();
+  rewardAdRunning = false;
+  const status = $("#rewardAdStatus");
+  const start = $("#rewardAdStartButton");
+  const cancel = $("#rewardAdCancelButton");
+  if (status) status.textContent = "재생을 누르면 5초 테스트가 시작됩니다.";
+  if (start) {
+    start.disabled = false;
+    start.textContent = "테스트 광고 재생";
+  }
+  if (cancel) cancel.disabled = false;
+  openGenericModal("rewardAdDialog", "rewardAdOverlay");
+}
+
+function closeRewardAd() {
+  if (rewardAdRunning) return;
+  if (rewardAdTimer) clearInterval(rewardAdTimer);
+  rewardAdTimer = null;
+  closeGenericModal("rewardAdDialog", "rewardAdOverlay");
+}
+
+function startRewardAd() {
+  if (rewardAdRunning) return;
+  rewardAdRunning = true;
+  let seconds = 5;
+  const status = $("#rewardAdStatus");
+  const start = $("#rewardAdStartButton");
+  const cancel = $("#rewardAdCancelButton");
+  if (start) start.disabled = true;
+  if (cancel) cancel.disabled = true;
+  if (status) status.textContent = `테스트 광고 재생 중 · ${seconds}초`;
+
+  rewardAdTimer = setInterval(() => {
+    seconds--;
+    if (seconds > 0) {
+      if (status) status.textContent = `테스트 광고 재생 중 · ${seconds}초`;
+      return;
+    }
+    clearInterval(rewardAdTimer);
+    rewardAdTimer = null;
+    CREDIT_POLICY.grantAdCredit(state);
+    saveState();
+    renderCredits();
+    rewardAdRunning = false;
+    closeGenericModal("rewardAdDialog", "rewardAdOverlay");
+    showToast("테스트 광고 시청 완료 · 이번 달 크레딧 +1");
+  }, 1000);
 }
 
 function renderMetrics() {
@@ -2164,8 +2217,11 @@ function renderMyPosts() {
     const rdDisplay = (rd && rd.includes('T'))
       ? (() => { const d = new Date(rd); return `${d.getMonth()+1}/${d.getDate()} 등록`; })()
       : (rd || '');
+    const refundGranted = Object.prototype.hasOwnProperty.call(p, "refundGranted")
+      ? p.refundGranted
+      : (p.creditSpent || 1) * 0.5;
     const statusHtml = p.status === "expired"
-      ? `<span class="my-post-status expired">마감됨${p.refunded ? ` · ${(p.creditSpent||1)*0.5}크레딧 환급` : ""}</span>`
+      ? `<span class="my-post-status expired">마감됨${p.refunded ? (refundGranted > 0 ? ` · ${refundGranted}크레딧 환급` : " · 환급 상한 도달") : ""}</span>`
       : `<span class="my-post-status done">등록 완료</span>`;
     return `
     <div class="my-post-card">
@@ -2192,7 +2248,7 @@ function renderMyPosts() {
         ? `<p class="hint" style="margin:8px 0 0;">이미 마감되어 크레딧이 환급된 글입니다. 수정·취소할 수 없습니다.</p>`
         : `<div class="my-post-btn-row">
         <button class="secondary-button edit-post-button" data-my-post-id="${p.id}">희망 조건 수정</button>
-        <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 크레딧 즉시 환급</button>
+        <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 최대 ${p.creditSpent || 1}크레딧 환급</button>
       </div>`}
     </div>
   `;
@@ -2211,7 +2267,7 @@ function renderMyPosts() {
         renderMyPosts();
         return;
       }
-      if (!confirm(`"${post.offered.patternName}" 등록을 취소하고 ${post.creditSpent}크레딧을 환급받겠습니까?`)) return;
+      if (!confirm(`"${post.offered.patternName}" 등록을 취소하시겠습니까?\n기본 크레딧이 3개 미만일 때만 최대 ${post.creditSpent || 1}크레딧이 환급됩니다.`)) return;
       if (post.deleteToken) {
         try {
           await fetch(`${API_BASE}/api/posts-delete`, {
@@ -2223,11 +2279,13 @@ function renderMyPosts() {
       }
       _deletedPostIds.add(pid);
       state.myPosts = state.myPosts.filter(x => x.id !== pid);
-      state.credits += post.creditSpent;
+      const refund = CREDIT_POLICY.grantRefund(state, post.creditSpent || 1);
       saveState();
       renderMyPosts();
       renderCredits();
-      showToast(`등록 취소 완료 — ${post.creditSpent}크레딧 환급됨`);
+      showToast(refund > 0
+        ? `등록 취소 완료 — ${refund}크레딧 환급됨`
+        : "등록 취소 완료 — 기본 크레딧 상한(3개)이라 추가 환급 없음");
     };
   });
 }
@@ -2599,7 +2657,7 @@ function schedMonthNumFromEntry(s) { return parseInt((s.month || state.currentMo
 
 // 요청하기 진입 — 내 스케줄 전체를 열고(잠금만 선택) 상대가 고르게 함
 function requestSwap(postId) {
-  if (state.credits < 1) { showToast("크레딧 부족 — 하루에 1개씩 자동 충전됩니다 (최대 5개)."); return; }
+  if (state.credits < 1) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
@@ -2710,7 +2768,7 @@ async function sendSwapRequest() {
   const postId = reqD._postId;
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  if (state.credits < 1) { showToast("크레딧 부족 — 하루에 1개씩 자동 충전됩니다 (최대 5개)."); return; }
+  if (state.credits < 1) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
   const roster = buildOpenRoster();
   if (roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 잠금됨)."); return; }
   const ok = await sendOpenSwap(postId, "request", roster);
@@ -2748,8 +2806,9 @@ async function processExpiredRefunds() {
     if (!dd.expired) return;
     // 아직 환급 안 됐으면 환급 처리
     if (!p.refunded && p.status !== "expired") {
-      const refund = (p.creditSpent || 1) * 0.5;
-      state.credits += refund;
+      const requestedRefund = (p.creditSpent || 1) * 0.5;
+      const refund = CREDIT_POLICY.grantRefund(state, requestedRefund);
+      p.refundGranted = refund;
       p.refunded = true;
       p.status = "expired";
       refundTotal += refund;
@@ -2763,12 +2822,16 @@ async function processExpiredRefunds() {
     if (count > 0) state.credits = Math.round(state.credits * 10) / 10;
     // 만료된 글마다 '마감' 알림(urgent) 추가 — 벨의 마감 탭에 남고 배지에 집계됨
     toAlert.forEach(p => {
-      const refund = (p.creditSpent || 1) * 0.5;
+      const refund = Object.prototype.hasOwnProperty.call(p, "refundGranted")
+        ? p.refundGranted
+        : (p.creditSpent || 1) * 0.5;
       p.expiredAlerted = true;
       state.alerts.unshift({
         kind: "urgent",
-        title: "⏰ 스왑 마감 · 크레딧 환급",
-        body: `내가 올린 '${p.offered?.patternName || "스왑"}'이 매칭 없이 마감되어 ${refund}크레딧(50%)이 환급되었습니다.`,
+        title: refund > 0 ? "⏰ 스왑 마감 · 크레딧 환급" : "⏰ 스왑 마감",
+        body: refund > 0
+          ? `내가 올린 '${p.offered?.patternName || "스왑"}'이 매칭 없이 마감되어 ${refund}크레딧(50%)이 환급되었습니다.`
+          : `내가 올린 '${p.offered?.patternName || "스왑"}'이 매칭 없이 마감되었습니다. 기본 크레딧이 이미 3개 이상이라 추가 환급은 없습니다.`,
         time: "방금",
         createdAt: new Date().toISOString(),
       });
@@ -2777,7 +2840,9 @@ async function processExpiredRefunds() {
     renderCredits();
     renderMyPosts();
     renderAlerts();
-    if (count > 0) showToast(`마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급(50%)`);
+    if (count > 0) showToast(refundTotal > 0
+      ? `마감된 미매칭 스왑 ${count}건 — 크레딧 ${refundTotal} 환급`
+      : `마감된 미매칭 스왑 ${count}건 — 기본 크레딧 상한(3개)이라 추가 환급 없음`);
     // 서버(KV)에서도 실제로 제거 — 안 하면 다른 사용자의 "스왑 찾기" 화면에 마감 지난 글이 계속 노출됨
     newlyExpired.forEach(p => {
       if (!p.deleteToken) return;
@@ -3269,7 +3334,7 @@ async function markSubmitDone(reqId) {
 async function proceedToRequestFromAsk(reqId) {
   const r = (state.requests.sent || []).find(x => x.id === reqId);
   if (!r || !r.offered) { showToast("의향 정보를 찾을 수 없습니다."); return; }
-  if (state.credits < 1) { showToast("크레딧 부족 — 하루에 1개씩 자동 충전됩니다 (최대 5개)."); return; }
+  if (state.credits < 1) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
   let post = state.posts.find(p => p.id === r.postId);
   if (!post) { await fetchPosts(); post = state.posts.find(p => p.id === r.postId); }
   if (!post) { showToast("상대 글이 마감되었거나 삭제되었습니다."); return; }
@@ -3726,6 +3791,11 @@ function initPullToRefresh() {
 
 function bindEvents() {
   $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  $("#watchAdButton")?.addEventListener("click", openRewardAd);
+  $("#watchAdButtonProfile")?.addEventListener("click", openRewardAd);
+  $("#rewardAdStartButton")?.addEventListener("click", startRewardAd);
+  $("#rewardAdCancelButton")?.addEventListener("click", closeRewardAd);
+  $("#rewardAdOverlay")?.addEventListener("click", closeRewardAd);
   $("#startPostFlow")?.addEventListener("click", startPostGuide);
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
   $("#openAdvancedFind")?.addEventListener("click", () => exitGuideFlow("find"));
@@ -3975,8 +4045,13 @@ function bindEvents() {
         return;
       }
       applyLoggedInProfile(_verifyEmail, data.profile || profile);
+      state.credits = CREDIT_CAP;
+      state.creditMonth = CREDIT_POLICY.monthKey();
+      state.adCreditsThisMonth = 0;
+      saveState();
+      renderCredits();
       closeSignupModal();
-      showToast("가입 완료 · 크레딧 5장 지급! '📥 CrewConnex 불러오기'로 내 스케줄을 가져오세요.");
+      showToast("가입 완료 · 이번 달 기본 크레딧 3개 지급! '📥 CrewConnex 불러오기'로 내 스케줄을 가져오세요.");
     } catch (err) {
       setVerifyStatus("네트워크 오류 — 잠시 후 다시 시도해주세요.", "err");
     } finally {
@@ -4662,7 +4737,8 @@ function saveState() {
       schedules: state.schedules,
       user: state.user,
       credits: state.credits,
-      lastCreditAt: state.lastCreditAt,
+      creditMonth: state.creditMonth,
+      adCreditsThisMonth: state.adCreditsThisMonth,
       requests: state.requests,
       savedSearches: state.savedSearches,
       currentMonth: state.currentMonth,
@@ -4682,6 +4758,9 @@ function loadStateFromStorage() {
     if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
     if (d.user) Object.assign(state.user, d.user);
     if (typeof d.credits === "number") state.credits = d.credits;
+    if (typeof d.creditMonth === "string") state.creditMonth = d.creditMonth;
+    if (typeof d.adCreditsThisMonth === "number") state.adCreditsThisMonth = d.adCreditsThisMonth;
+    // 이전 일 단위 충전 데이터는 이번 월 단위 마이그레이션에서 폐기한다.
     if (typeof d.lastCreditAt === "number") state.lastCreditAt = d.lastCreditAt;
     if (d.requests) state.requests = d.requests;
     if (d.savedSearches) state.savedSearches = d.savedSearches;
@@ -4993,7 +5072,7 @@ fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
 syncPremiumAlertSettings(); // PRO 저장조건을 서버와 동기화 (푸시 권한 요청은 사용자 버튼에서만)
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
-regenCredits();          // 크레딧 시간 재생 (하루 1개, 최대 5개)
+regenCredits();          // 월 변경·구버전 크레딧 정책 마이그레이션
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
 initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 

@@ -44,7 +44,7 @@
             <span id="baseBadge">GMP</span>
             <span class="rating-pill" id="ratingBadge">★ 4.8</span>
           </div>
-          <span class="credit-pill"><b id="creditCount">5</b> 크레딧</span>
+          <span class="credit-pill"><b id="creditCount">3</b> 크레딧</span>
           <button id="bellButton" class="bell-button" aria-label="알림">
             🔔<span class="bell-badge" id="bellBadge">3</span>
           </button>
@@ -58,7 +58,7 @@
           <p class="eyebrow">회원가입 / Sign up</p>
           <h2>CrewSwap</h2>
           <p>승무원 스케줄 스왑 매칭<br/>Crew schedule swap matching</p>
-          <p class="signup-bonus">🎁 가입 보너스 5크레딧 / 5 free credits</p>
+          <p class="signup-bonus">🎁 가입 보너스 3크레딧 / 3 free credits</p>
         </div>
         <form id="signupForm" class="signup-form">
           <label>닉네임 <input id="signupNickname" placeholder="예) 스카이하준" autocomplete="username" /></label>
@@ -598,12 +598,13 @@
         <!-- 등록 전 요약 -->
         <div class="post-footer">
           <div class="preview-stats" id="previewStats">
-            <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>하루 1개 자동 충전</small></div>
+            <div class="stat-cell"><span>등록 비용</span><strong>1크레딧</strong><small>매월 기본 3개</small></div>
           </div>
           <div class="rule-check-summary" id="postRuleCheck"></div>
           <div class="post-footer-btns">
             <button id="saveDraftButton" class="secondary-button" disabled>임시 저장</button>
             <button id="submitPostButton" class="primary-button" disabled>등록하기 · 1크레딧</button>
+            <button id="watchAdButton" class="secondary-button rewarded-ad-button" type="button">📺 테스트 광고 보고 +1 크레딧</button>
           </div>
         </div>
 
@@ -731,9 +732,10 @@
 
           <div class="profile-card">
             <h3>크레딧</h3>
-            <div class="credit-balance"><strong id="profileCredits">5</strong> 크레딧</div>
+            <div class="credit-balance"><strong id="profileCredits">3</strong> 크레딧</div>
             <p id="creditRegenHint" class="hint" style="margin:6px 0 0;"></p>
-            <p class="hint" style="margin-top:8px;">💡 크레딧은 <strong>하루에 1개씩 자동 충전</strong>(최대 5개)됩니다. 요청·등록에 1개씩 쓰이고, 등록한 스왑이 <strong>마감일까지 매칭되지 않으면 50%가 자동 환급</strong>됩니다.</p>
+            <p class="hint" style="margin-top:8px;">💡 매월 첫 실행 시 <strong>기본 3개</strong>로 재설정됩니다. 광고 보상은 1회당 1개이며 다음 달로 이월되지 않습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.</p>
+            <button id="watchAdButtonProfile" class="secondary-button rewarded-ad-button" type="button">📺 테스트 광고 보고 +1 크레딧</button>
           </div>
         </div>
 
@@ -891,7 +893,23 @@
       </div>
     </div>
 
+    <!-- 보상형 광고 테스트 — 실제 광고 SDK 연결 전 사용자 흐름 검증용 -->
+    <div id="rewardAdOverlay" class="generic-modal-overlay" hidden></div>
+    <div id="rewardAdDialog" class="generic-modal" hidden role="dialog" aria-modal="true" aria-labelledby="rewardAdTitle">
+      <div class="dialog-body reward-ad-dialog">
+        <div class="reward-ad-icon" aria-hidden="true">📺</div>
+        <h3 id="rewardAdTitle">보상형 광고 · 테스트</h3>
+        <p>실제 광고 SDK 연결 전 흐름을 확인하는 테스트 화면입니다. 끝까지 시청하면 이번 달에만 사용할 수 있는 크레딧 1개가 지급됩니다.</p>
+        <div id="rewardAdStatus" class="reward-ad-status">재생을 누르면 5초 테스트가 시작됩니다.</div>
+        <div class="dialog-actions">
+          <button id="rewardAdCancelButton" class="secondary-button" type="button">취소</button>
+          <button id="rewardAdStartButton" class="primary-button" type="button">테스트 광고 재생</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="credit-policy.js"></script>
     <script src="post-dates.js"></script>
     <script src="app.js"></script>
     <script>
