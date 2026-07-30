@@ -3626,7 +3626,7 @@ function renderAlerts() {
     const unread = a.kind !== "announce" && !a.read;
     return `
     <div class="alert-item ${a.kind}${unread ? " is-unread" : ""}" data-alert-idx="${i}">
-      <button class="alert-del-btn" data-alert-idx="${i}" title="삭제">×</button>
+      <button class="alert-del-btn" data-alert-idx="${i}" title="알림 삭제" aria-label="알림 삭제">×</button>
       <strong>${unread ? '<span class="unread-dot"></span>' : ""}${escapeHtml(a.title)}</strong>
       <p class="alert-body">${escapeHtml(a.body)}</p>
       <span class="time">${alertTimeAgo(a)}</span>
