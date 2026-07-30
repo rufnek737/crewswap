@@ -141,3 +141,62 @@ test('poster cannot place work on the requester mortgage-rest day', async () => 
   assert.equal((await response.json()).code, 'MOGIJI_REST_VIOLATION');
   assert.equal((await env.POSTS.get('req:REQ-1', { type: 'json' })).stage, 1);
 });
+
+test('mortgage-rest rejection tells the requester the verified rule reason', async () => {
+  const original = {
+    ...pendingRequest(),
+    postId: 'POST-1',
+    openRoster: [
+      { month: '2026-08', day: 21, type: '국제선' },
+      { month: '2026-08', day: 22, type: '국제선' },
+      { month: '2026-08', day: 23, type: 'ARRIVAL' },
+      { month: '2026-08', day: 24, type: 'OFF' },
+    ],
+  };
+  const post = {
+    id: 'POST-1',
+    offered: {
+      days: [24, 25],
+      daySchedules: [
+        { month: '2026-08', day: 24, type: '국내선', title: '7C129' },
+        { month: '2026-08', day: 25, type: 'OFF', title: 'OFF' },
+      ],
+    },
+  };
+  const env = { POSTS: createKv({
+    'req:REQ-1': original,
+    'post:POST-1': post,
+    'idx:requests': [original],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-decline', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    reason: 'MOGIJI_REST_CONFLICT',
+  }), env, {});
+  assert.equal(response.status, 200);
+
+  const declined = await env.POSTS.get('req:REQ-1', { type: 'json' });
+  assert.equal(declined.declineReason, 'MOGIJI_REST_CONFLICT');
+  assert.equal(declined.status, '⚠️ 모기지 휴무 규정 불일치');
+  assert.match(declined.declineMsg, /8월 23일 모기지 도착/);
+  assert.match(declined.declineMsg, /8월 24일 필수 휴무/);
+  assert.match(declined.declineMsg, /7C129/);
+  assert.match(declined.declineMsg, /자동 판정/);
+});
+
+test('a client cannot falsely label a normal rejection as a rule conflict', async () => {
+  const original = pendingRequest();
+  const env = { POSTS: createKv({
+    'req:REQ-1': original,
+    'idx:requests': [original],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-decline', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    reason: 'MOGIJI_REST_CONFLICT',
+  }), env, {});
+  assert.equal(response.status, 409);
+  assert.equal((await env.POSTS.get('req:REQ-1', { type: 'json' })).declined, undefined);
+});

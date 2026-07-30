@@ -766,17 +766,34 @@ async function handleRequestsAskAccept(request, env) {
 /* ── requests-decline (받은 요청 거절 — 양해 메세지 상태로 저장) ─────── */
 
 async function handleRequestsDecline(request, env) {
-  let id, email;
-  try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, reason;
+  try { ({ id, email, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ ok: true, alreadyGone: true });
     if (rec.toEmail !== email) return json({ error: '거절 권한이 없습니다' }, 403);
-    rec.status = '💔 거절됨';
+    if (reason === 'MOGIJI_REST_CONFLICT') {
+      const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+      const violation = validateMogijiExchange(rec, post, { days: [] });
+      if (!violation || violation.side !== '상대 일정')
+        return json({ error: '모기지 휴무 규정 충돌을 확인할 수 없습니다' }, 409);
+      const issue = violation.issue;
+      const [, arrivalMonth, arrivalDay] = issue.arrivalDate.split('-').map(Number);
+      const [, restMonth, restDay] = issue.dayKey.split('-').map(Number);
+      const incomingMonth = Number(String(issue.incoming?.month || issue.dayKey).split('-')[1]);
+      const incomingDay = Number(issue.incoming?.day || restDay);
+      const incomingDuty = issue.incoming?.title || issue.incoming?.type || '근무';
+      rec.status = '⚠️ 모기지 휴무 규정 불일치';
+      rec.declineReason = 'MOGIJI_REST_CONFLICT';
+      rec.declineMsg = `요청하신 스왑은 ${arrivalMonth}월 ${arrivalDay}일 모기지 도착 후 ${restMonth}월 ${restDay}일 필수 휴무와, 교환받을 ${incomingMonth}월 ${incomingDay}일 ${incomingDuty} 근무가 겹쳐 진행할 수 없습니다. 개인적인 사유가 아닌 휴식 규정 자동 판정에 따른 거절입니다.`;
+    } else {
+      rec.status = '💔 거절됨';
+      rec.declineReason = 'PERSONAL';
+      rec.declineMsg = '관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다.';
+    }
     rec.declined = true;
     rec.declinedAt = new Date().toISOString();
-    rec.declineMsg = '관심(요청) 감사합니다. 하지만 개인적 사정으로 거절함을 양해 부탁드립니다.';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     return json({ ok: true });
