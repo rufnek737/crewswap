@@ -1000,10 +1000,12 @@ function parseRosterToSchedules(html, userNameHint) {
   });
   dedup.sort((a, b) => a.day - b.day);
   for (let i = 0; i < dedup.length; i++) {
-    const e = dedup[i]; if (e.type === 'UNKNOWN' && !e.dep) {
+    const e = dedup[i]; if (e.type === 'UNKNOWN') {
       const prev = dedup.find(x => x.day === e.day - 1);
+      const next = dedup.find(x => x.day === e.day + 1);
       if (prev) {
         if (prev._overnightArrival) { const info = prev._overnightArrival; e.type = 'ARRIVAL'; e.title = `← ${info.flightTitle} 도착`; e.arrivalAirport = info.to; e.arrivalTime = info.arrivalTime; e.crewComposition = `${info.flightTitle} ${info.from}→${info.to} 도착일`; }
+        else if (prev.arr && next?.dep && prev.arr === next.dep) { e.type = 'LAYOV'; e.title = `LAYOV ${prev.arr}`; e.layoverAirport = prev.arr; e.crewComposition = `${prev.arr} 체류 (자동)`; }
         else if (prev.type === 'LAYOV' && prev.layoverAirport) { e.type = 'LAYOV'; e.title = `LAYOV ${prev.layoverAirport}`; e.layoverAirport = prev.layoverAirport; e.crewComposition = `${prev.layoverAirport} 체류 (자동)`; }
         else if (prev.type === '국제선' && prev.arr && !DOM_AIRPORTS.has(prev.arr)) { e.type = 'LAYOV'; e.title = `LAYOV ${prev.arr}`; e.layoverAirport = prev.arr; e.crewComposition = `${prev.arr} 체류 (자동)`; }
       }

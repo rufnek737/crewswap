@@ -323,8 +323,9 @@ function parseRosterToSchedules(html, userNameHint) {
   // Phase 4: Shadow → ARRIVAL/LAYOV 추론 (type 변환만, patternId는 인접 룰이 처리)
   for (let i = 0; i < dedup.length; i++) {
     const e = dedup[i];
-    if (e.type === 'UNKNOWN' && !e.dep) {
+    if (e.type === 'UNKNOWN') {
       const prev = dedup.find(x => x.day === e.day - 1);
+      const next = dedup.find(x => x.day === e.day + 1);
       if (prev) {
         if (prev._overnightArrival) {
           const info = prev._overnightArrival;
@@ -333,6 +334,11 @@ function parseRosterToSchedules(html, userNameHint) {
           e.arrivalAirport = info.to;
           e.arrivalTime = info.arrivalTime;
           e.crewComposition = `${info.flightTitle} ${info.from}→${info.to} 도착일`;
+        } else if (prev.arr && next?.dep && prev.arr === next.dep) {
+          e.type = 'LAYOV';
+          e.title = `LAYOV ${prev.arr}`;
+          e.layoverAirport = prev.arr;
+          e.crewComposition = `${prev.arr} 체류 (자동)`;
         } else if (prev.type === 'LAYOV' && prev.layoverAirport) {
           e.type = 'LAYOV';
           e.title = `LAYOV ${prev.layoverAirport}`;

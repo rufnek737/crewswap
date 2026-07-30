@@ -2616,6 +2616,8 @@ function recordSwapMatch() {
 
 // 잠금(선택)한 날을 제외한 '해당 월 전체 로스터'를 상대에게 공개용으로 요약
 function buildOpenRoster() {
+  // 월 경계 ARRIVAL과 다일 편조 LAYOV를 먼저 확정한 뒤 공개 스냅샷을 만든다.
+  window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules);
   const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
   return currentMonthSchedules()
     .filter(s => !locked.has(dayKey(s.day)))
@@ -2885,8 +2887,12 @@ async function fetchRequests() {
       if (mins < 60) return `${mins}분 전`;
       return `${Math.round(mins / 60)}시간 전`;
     };
-    const received = (data.received || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
-    const sent = (data.sent || []).map(r => ({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
+    const normalizeRoster = r => {
+      window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(r.openRoster);
+      return r;
+    };
+    const received = (data.received || []).map(r => normalizeRoster({ ...r, sentAgo: ago(r.createdAt), nickname: r.fromNick, base: r.fromBase })).reverse();
+    const sent = (data.sent || []).map(r => normalizeRoster({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
     state.requests.sent = sent;
     // 받은 요청 중 아직 종 알림 안 띄운 것 → 종 알림 추가 (있던 것/새 것 모두 한 번씩)
     const alerted = getAlertedReqIds();
@@ -3130,6 +3136,9 @@ function renderSavedSearches() {
   });
 }
 
+const _posterPick = {};
+const _compareOwnInspect = {};
+
 function renderRequests() {
   const reqs = state.requests[state.reqViewMode];
   $("#requestList").innerHTML = reqs.length ? reqs.map(r => requestCard(r)).join("") : `<div class="empty-state">${state.reqViewMode==="sent"?"보낸":"받은"} 요청이 없습니다.</div>`;
@@ -3140,13 +3149,25 @@ function renderRequests() {
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
   $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
   $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
-  // 열린 로스터 달력 날짜 선택 (글작성자가 바꿀 날 고르기)
+  // 내 달력 날짜는 교환 선택과 무관하게 세부 일정만 확인한다.
+  $$("#requestList .cmp-own-cell.has-own").forEach(b => b.onclick = () => {
+    const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
+    _compareOwnInspect[reqId] = day;
+    $$("#requestList .cmp-own-cell.has-own").forEach(cell => {
+      if (cell.dataset.req === reqId) {
+        cell.classList.toggle("is-inspected", Number(cell.dataset.day) === day);
+      }
+    });
+    updateCompareOwnDetail(reqId);
+  });
+  // 열린 로스터 달력 날짜 선택 (글작성자가 바꿀 날 고르기 + 세부 일정 표시)
   $$("#requestList .cmp-cell.has-req").forEach(b => b.onclick = () => {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
     if (!_posterPick[reqId]) _posterPick[reqId] = new Set();
     const set = _posterPick[reqId];
     if (set.has(day)) { set.delete(day); b.classList.remove("is-picked"); }
     else { set.add(day); b.classList.add("is-picked"); }
+    updateCompareRequestDetail(reqId);
     updatePosterPickMsg(reqId);
   });
   $$("#requestList .poster-select-btn").forEach(b => b.onclick = () => posterSelectDays(b.dataset.reqId));
@@ -3154,9 +3175,57 @@ function renderRequests() {
   $$("#requestList .requester-repick-btn").forEach(b => b.onclick = () => rejectPosterSelection(b.dataset.reqId));
 }
 
+function compareScheduleDetailHtml(schedule, month) {
+  if (!schedule) return "";
+  const monthNumber = parseInt((schedule.month || month || state.currentMonth).split("-")[1], 10);
+  const title = schedule.title && schedule.title !== "-" ? schedule.title : schedule.type;
+  let route = schedule.routeSummary || "";
+  if (!route && schedule.type === "ARRIVAL" && schedule.arrivalAirport) route = `${schedule.arrivalAirport} 도착`;
+  if (!route && schedule.layoverAirport) route = `${schedule.layoverAirport} 체류`;
+  if (!route && schedule.dep && schedule.arr) route = `${schedule.dep} → ${schedule.arr}`;
+  const times = [
+    schedule.reportTime ? `<span><small>Check-in</small><b>${escapeHtml(schedule.reportTime)}</b></span>` : "",
+    schedule.arrivalTime ? `<span><small>도착</small><b>${escapeHtml(schedule.arrivalTime)}</b></span>` : "",
+    schedule.releaseTime ? `<span><small>Check-out</small><b>${escapeHtml(schedule.releaseTime)}</b></span>` : "",
+  ].filter(Boolean).join("");
+  return `<article class="cmp-detail-card">
+    <div class="cmp-detail-head">
+      <strong>${monthNumber}/${schedule.day} · ${escapeHtml(schedule.type || "일정")}</strong>
+      <b>${escapeHtml(title || "일정")}</b>
+    </div>
+    ${route ? `<p>${escapeHtml(route)}</p>` : ""}
+    ${times ? `<div class="cmp-detail-times">${times}</div>` : ""}
+  </article>`;
+}
+
+function updateCompareOwnDetail(reqId) {
+  const request = (state.requests.received || []).find(item => item.id === reqId);
+  const panel = document.getElementById(`cmpOwnDetail-${reqId}`);
+  if (!request || !panel) return;
+  const month = (request.openRoster?.[0] && request.openRoster[0].month) || state.currentMonth;
+  const day = _compareOwnInspect[reqId];
+  const schedule = state.schedules.find(item =>
+    item.day === day && (item.month || state.currentMonth) === month);
+  panel.innerHTML = compareScheduleDetailHtml(schedule, month);
+  panel.hidden = !schedule;
+}
+
+function updateCompareRequestDetail(reqId) {
+  const request = (state.requests.received || []).find(item => item.id === reqId);
+  const panel = document.getElementById(`cmpRequestDetail-${reqId}`);
+  if (!request || !panel) return;
+  const picked = _posterPick[reqId] || new Set();
+  const schedules = (request.openRoster || [])
+    .filter(item => picked.has(item.day))
+    .sort((a, b) => a.day - b.day);
+  panel.innerHTML = schedules.map(item => compareScheduleDetailHtml(item, item.month)).join("");
+  panel.hidden = schedules.length === 0;
+}
+
 // 같은 달을 기준으로 내 로스터와 상대의 공개 로스터를 나란히 렌더한다.
 function renderCompareCalendar(r) {
   const roster = r.openRoster || [];
+  window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(roster);
   const month = (roster[0] && roster[0].month) || state.currentMonth;
   const [y, m] = month.split("-").map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -3166,6 +3235,7 @@ function renderCompareCalendar(r) {
   const picked = _posterPick[r.id] || new Set();
   const myPost = (state.myPosts || []).find(p => p.id === r.postId);
   const postedDays = new Set(myPost?.offered?.days || []);
+  const inspectedOwnDay = _compareOwnInspect[r.id];
   const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t;
   const weekday = `<div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>`;
   let myCells = "";
@@ -3178,12 +3248,13 @@ function renderCompareCalendar(r) {
     const req = openByDay[d];
     const mine = state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
     const isPosted = postedDays.has(d);
-    myCells += `<div class="cmp-cell cmp-own-cell${isPosted ? " is-posted" : ""}">
+    const ownClass = `${isPosted ? " is-posted" : ""}${inspectedOwnDay === d ? " is-inspected" : ""}`;
+    myCells += mine ? `<button type="button" class="cmp-cell cmp-own-cell has-own${ownClass}" data-req="${r.id}" data-day="${d}">
       <span class="cmp-day">${d}</span>
-      ${mine ? `<span class="cmp-own-duty">${escapeHtml(dutyShort(mine.type))}</span>
-        ${mine.routeSummary ? `<em>${escapeHtml(mine.routeSummary)}</em>` : ""}` : ""}
+      <span class="cmp-own-duty">${escapeHtml(dutyShort(mine.type))}</span>
+      ${mine.routeSummary ? `<em>${escapeHtml(mine.routeSummary)}</em>` : ""}
       ${isPosted ? `<small>내가 내놓음</small>` : ""}
-    </div>`;
+    </button>` : `<div class="cmp-cell cmp-own-cell"><span class="cmp-day">${d}</span></div>`;
     if (req) {
       const on = picked.has(d) ? " is-picked" : "";
       const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
@@ -3203,18 +3274,23 @@ function renderCompareCalendar(r) {
       <p>주황색은 내가 스왑 글에 올린 근무입니다.</p>
       ${weekday}
       <div class="cmp-grid">${myCells}</div>
+      <div id="cmpOwnDetail-${r.id}" class="cmp-detail-panel" ${inspectedOwnDay ? "" : "hidden"}>
+        ${compareScheduleDetailHtml(state.schedules.find(item => item.day === inspectedOwnDay && (item.month || state.currentMonth) === month), month)}
+      </div>
     </section>
     <section class="cmp-cal cmp-request-cal">
       <h5><span class="cmp-owner-dot take"></span> 상대가 공개한 스케줄</h5>
       <p>교환받고 싶은 날짜를 누르세요.</p>
       ${weekday}
       <div class="cmp-grid">${requestCells}</div>
+      <div id="cmpRequestDetail-${r.id}" class="cmp-detail-panel" ${picked.size ? "" : "hidden"}>
+        ${roster.filter(item => picked.has(item.day)).sort((a, b) => a.day - b.day).map(item => compareScheduleDetailHtml(item, month)).join("")}
+      </div>
     </section>
   </div>`;
 }
 
 // 글작성자가 고른 날짜 → 휴식검증 미리보기 메세지
-const _posterPick = {};
 function posterPickRestCheck(reqId) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
   const days = [...(_posterPick[reqId] || [])];
@@ -4265,6 +4341,7 @@ function bindEvents() {
   $("#confirmImportButton").addEventListener("click", () => {
     const finalSchedules = collectPreviewEdits();
     if (finalSchedules.length === 0) { showToast("저장할 항목이 없습니다."); return; }
+    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(finalSchedules);
     state.schedules = finalSchedules;
     state.selectedDays.clear();
     // 현재 월에 데이터가 있는지 확인, 없으면 데이터가 있는 첫 월로 자동 전환
@@ -4756,6 +4833,7 @@ function loadStateFromStorage() {
     const d = JSON.parse(raw);
     if (d.v !== 4) return null;  // v3 이하는 서버 계정 도입 전 로컬-only 세션 — 무효화(재로그인 유도)
     if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
+    const continuityFixes = window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules) || 0;
     if (d.user) Object.assign(state.user, d.user);
     if (typeof d.credits === "number") state.credits = d.credits;
     if (typeof d.creditMonth === "string") state.creditMonth = d.creditMonth;
@@ -4802,6 +4880,7 @@ function loadStateFromStorage() {
         "background:#b96c00;color:#fff;padding:3px 8px;border-radius:4px;");
       state.currentMonth = pick;
     }
+    if (continuityFixes > 0) saveState();
     return d.savedAt;
   } catch (e) { console.warn("복원 실패:", e); return null; }
 }
@@ -5100,6 +5179,7 @@ if (quickBtn) {
       catch { showToast("클립보드 내용이 JSON이 아닙니다."); return; }
       if (!Array.isArray(arr) || arr.length === 0) { showToast("스케줄 배열이 아닙니다."); return; }
       if (!arr[0].day || !arr[0].type) { showToast("스케줄 형식이 아닙니다 (day/type 필수)."); return; }
+      window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(arr);
       state.schedules = arr;
       state.selectedDays.clear();
       const monthsAvail = [...new Set(arr.map(s => s.month).filter(Boolean))].sort();
@@ -5122,6 +5202,7 @@ window.loadRoster = function(json) {
   try {
     const arr = typeof json === 'string' ? JSON.parse(json) : json;
     if (!Array.isArray(arr)) throw new Error("최상위는 배열이어야 함");
+    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(arr);
     state.schedules = arr;
     state.selectedDays.clear();
     const monthsAvail = [...new Set(arr.map(s => s.month).filter(Boolean))].sort();
