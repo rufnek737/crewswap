@@ -101,3 +101,43 @@ test('requester can reject only the selected combination and ask for another dat
   assert.equal(reopened.offered, null);
   assert.match(reopened.status, /다른 날짜 선택 요청/);
 });
+
+test('poster cannot place work on the requester mortgage-rest day', async () => {
+  const original = {
+    ...pendingRequest(),
+    postId: 'POST-1',
+    openRoster: [
+      { month: '2026-08', day: 21, type: '국제선' },
+      { month: '2026-08', day: 22, type: '국제선' },
+      { month: '2026-08', day: 23, type: 'ARRIVAL' },
+      { month: '2026-08', day: 24, type: 'OFF' },
+    ],
+  };
+  const post = {
+    id: 'POST-1',
+    offered: {
+      days: [24, 25],
+      daySchedules: [
+        { month: '2026-08', day: 24, type: '국내선', title: '7C129' },
+        { month: '2026-08', day: 25, type: 'OFF', title: 'OFF' },
+      ],
+    },
+  };
+  const env = {
+    POSTS: createKv({
+      'req:REQ-1': original,
+      'post:POST-1': post,
+      'idx:requests': [original],
+    }),
+  };
+
+  const response = await worker.fetch(api('/api/requests-poster-select', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    offered: { patternName: '8/24 OFF', days: [24] },
+  }), env, {});
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'MOGIJI_REST_VIOLATION');
+  assert.equal((await env.POSTS.get('req:REQ-1', { type: 'json' })).stage, 1);
+});

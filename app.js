@@ -610,13 +610,7 @@ function restIssueMessage(rc) {
  * 복귀 후 필요한 모기지(집·베이스) 휴식일수가 정해져 있음. 퀵턴(당일 왕복, LAYOV 없음)은 해당 없음.
  * 검사 방향은 직후만: 새 트립 복귀 후 → 다음 LAYOV 트립 출발 전까지 남는 날수가 부족하면 경고. */
 function mogijiRestReqDays(tripDays) {
-  if (tripDays < 3) return 0;
-  if (tripDays <= 5) return 1;
-  if (tripDays === 6) return 2;
-  if (tripDays === 7) return 3;
-  if (tripDays <= 10) return 4;
-  if (tripDays <= 13) return 5;
-  return 6;
+  return window.CrewSwapMogijiPolicy?.requiredRestDays(tripDays) ?? 0;
 }
 
 // day 이후(> day) 가장 빠른 "LAYOV 포함 트립"의 시작일 찾기 (현재 달 스케줄 범위 내)
@@ -2618,6 +2612,7 @@ function recordSwapMatch() {
 function buildOpenRoster() {
   // 월 경계 ARRIVAL과 다일 편조 LAYOV를 먼저 확정한 뒤 공개 스냅샷을 만든다.
   window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules);
+  const mogijiProtectedDays = window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules);
   const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
   return currentMonthSchedules()
     .filter(s => !locked.has(dayKey(s.day)))
@@ -2630,6 +2625,8 @@ function buildOpenRoster() {
       dep: s.dep || null, arr: s.arr || null, layoverAirport: s.layoverAirport || null,
       routeSummary: s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : null),
       reportTime: s.reportTime || null, releaseTime: s.releaseTime || null, arrivalTime: s.arrivalTime || null,
+      patternId: s.patternId || null,
+      mogijiRest: window.CrewSwapMogijiPolicy?.markerForEntry(s, mogijiProtectedDays),
       aircraft: s.aircraft || null,
       requiresEdto: !!s.requiresEdto, requiresCat3: !!s.requiresCat3,
     }));
@@ -3179,6 +3176,10 @@ function renderRequests() {
   $$("#requestList .poster-select-btn").forEach(b => b.onclick = () => posterSelectDays(b.dataset.reqId));
   $$("#requestList .requester-approve-btn").forEach(b => b.onclick = () => approvePosterSelection(b.dataset.reqId));
   $$("#requestList .requester-repick-btn").forEach(b => b.onclick = () => rejectPosterSelection(b.dataset.reqId));
+  // 25초 폴링으로 카드가 다시 그려져도 선택 조합과 규정 판정 문구를 복원한다.
+  reqs.forEach(r => {
+    if ((_posterPick[r.id]?.size || 0) > 0) updatePosterPickMsg(r.id);
+  });
 }
 
 function compareScheduleDetailHtml(schedule, month) {
@@ -3297,6 +3298,29 @@ function renderCompareCalendar(r) {
 }
 
 // 글작성자가 고른 날짜 → 휴식검증 미리보기 메세지
+function schedulesOfferedByPost(post) {
+  if (!post?.offered) return [];
+  if (Array.isArray(post.offered.daySchedules) && post.offered.daySchedules.length) {
+    return post.offered.daySchedules;
+  }
+  const keys = Array.isArray(post.offered.dateKeys) && post.offered.dateKeys.length
+    ? post.offered.dateKeys
+    : (post.offered.days || []).map(day =>
+        dayKey(day, post.offered.startDate?.slice(0, 7) || post.deadlineMonth || state.currentMonth));
+  return keys.map(key => {
+    const { day, month } = parseDayKey(key);
+    return state.schedules.find(schedule =>
+      schedule.day === day && (schedule.month || state.currentMonth) === month);
+  }).filter(Boolean);
+}
+
+function protectedMogijiIssueMessage(issue, ownerLabel) {
+  if (!issue) return null;
+  const restDate = issue.dayKey.split("-").slice(1).map(Number);
+  const arrivalDate = issue.arrivalDate.split("-").slice(1).map(Number);
+  return `❌ ${ownerLabel} ${restDate[0]}월 ${restDate[1]}일은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 필요한 휴식일입니다. 이 교환으로 근무가 들어가 규정에 맞지 않습니다.`;
+}
+
 function posterPickRestCheck(reqId) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
   const days = [...(_posterPick[reqId] || [])];
@@ -3305,7 +3329,15 @@ function posterPickRestCheck(reqId) {
   const offered = offeredFromRosterDays(entries);
   const myPost = (state.myPosts || []).find(p => p.id === r.postId);
   const givenDays = myPost ? (myPost.offered.days || []) : [];
-  const msg = restIssueMessage(restCheckIncoming(offered, givenDays)) || mogijiIssueMessage(mogijiRestCheckIncoming(offered, givenDays));
+  const policy = window.CrewSwapMogijiPolicy;
+  const myIncomingViolation = policy?.findProtectedRestViolation(state.schedules, entries);
+  const requesterIncoming = schedulesOfferedByPost(myPost);
+  const requesterIncomingViolation = policy?.findProtectedRestViolation(r.openRoster || [], requesterIncoming);
+  const msg =
+    protectedMogijiIssueMessage(myIncomingViolation, "내 일정에서") ||
+    protectedMogijiIssueMessage(requesterIncomingViolation, "상대 일정에서") ||
+    restIssueMessage(restCheckIncoming(offered, givenDays)) ||
+    mogijiIssueMessage(mogijiRestCheckIncoming(offered, givenDays));
   return { offered, msg };
 }
 function updatePosterPickMsg(reqId) {
@@ -4544,6 +4576,7 @@ function bindEvents() {
       }).filter(Boolean);
       if (ss.length === 0) continue;
       const firstParsed = parseDayKey(keyGroup[0]);
+      const mogijiProtectedDays = window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules);
 
       const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
       const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
@@ -4578,6 +4611,14 @@ function bindEvents() {
           startDate: keyGroup[0],
           endDate: keyGroup[keyGroup.length - 1],
           days: keyGroup.map(k => parseDayKey(k).day),
+          daySchedules: ss.map(s => ({
+            month: s.month || state.currentMonth,
+            day: s.day,
+            type: s.type,
+            title: s.title,
+            reportTime: s.reportTime || null,
+            releaseTime: s.releaseTime || null,
+          })),
           summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
           type: ss[0].type,
           aircraft: ss[0].aircraft || null,
@@ -4591,6 +4632,8 @@ function bindEvents() {
           lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
           lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
           hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),
+          mogijiProtectedDays: [...(mogijiProtectedDays?.values() || [])]
+            .filter(info => info.dayKey.startsWith(firstParsed.month)),
           crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
         },
         wanted,

@@ -5,6 +5,9 @@ import {
   subscriberCanUsePost,
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
+import '../mogiji-policy.js';
+
+const mogijiPolicy = globalThis.CrewSwapMogijiPolicy;
 
 // CrewSwap API — Cloudflare Workers
 // 라우팅: /api/send-verify, /api/check-verify, /api/posts-get,
@@ -606,6 +609,59 @@ async function handleRequestsAccept(request, env) {
 
 /* ── requests-poster-select (글작성자가 상대 공개 로스터에서 바꿀 날을 골라 승인 요청) ── */
 
+function scheduleEntriesFromPost(post) {
+  const offered = post?.offered;
+  if (!offered) return [];
+  if (Array.isArray(offered.daySchedules) && offered.daySchedules.length) return offered.daySchedules;
+  const month = String(offered.startDate || post.deadlineMonth || '').slice(0, 7);
+  const firstDay = Math.min(...(offered.days || []));
+  return (offered.days || []).map(day => ({
+    month,
+    day,
+    type: day === firstDay && offered.reportTime ? (offered.type || '근무') : 'OFF',
+    title: day === firstDay ? offered.patternName : 'OFF',
+  }));
+}
+
+function markerEntries(markers) {
+  return (Array.isArray(markers) ? markers : []).map(marker => {
+    const [year, month, day] = String(marker.dayKey || '').split('-');
+    return {
+      month: year && month ? `${year}-${month}` : null,
+      day: Number(day),
+      type: 'OFF',
+      mogijiRest: marker,
+    };
+  }).filter(entry => entry.month && entry.day);
+}
+
+function validateMogijiExchange(rec, post, selectedOffered) {
+  if (!mogijiPolicy) return null;
+  const selectedDays = new Set(selectedOffered?.days || []);
+  const requesterGives = (rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
+  const requesterViolation = mogijiPolicy.findProtectedRestViolation(
+    rec.openRoster || [],
+    scheduleEntriesFromPost(post),
+  );
+  if (requesterViolation) return { side: '상대 일정', issue: requesterViolation };
+
+  const posterProtectedRoster = markerEntries(post?.offered?.mogijiProtectedDays);
+  const posterViolation = mogijiPolicy.findProtectedRestViolation(
+    posterProtectedRoster,
+    requesterGives,
+  );
+  return posterViolation ? { side: '내 일정', issue: posterViolation } : null;
+}
+
+function mogijiViolationResponse(violation) {
+  const [, restMonth, restDay] = violation.issue.dayKey.split('-').map(Number);
+  const [, arrivalMonth, arrivalDay] = violation.issue.arrivalDate.split('-').map(Number);
+  return json({
+    error: `${violation.side}에서 ${restMonth}월 ${restDay}일은 ${arrivalMonth}월 ${arrivalDay}일 모기지 도착 후 필요한 휴식일입니다.`,
+    code: 'MOGIJI_REST_VIOLATION',
+  }, 409);
+}
+
 async function handleRequestsPosterSelect(request, env) {
   let id, email, offered, realName, employeeId, phone;
   try { ({ id, email, offered, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -620,6 +676,9 @@ async function handleRequestsPosterSelect(request, env) {
     const openDays = new Set((rec.openRoster || []).map(r => r.day));
     if (rec.openRoster && !offered.days.every(d => openDays.has(d)))
       return json({ error: '공개된 근무가 아닙니다' }, 400);
+    const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+    const mogijiViolation = validateMogijiExchange(rec, post, offered);
+    if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
     rec.stage = 2;
     rec.status = '요청자 최종 승인 대기';
@@ -647,6 +706,9 @@ async function handleRequestsRequesterAccept(request, env) {
     if (rec.fromEmail !== email) return json({ error: '최종 승인 권한이 없습니다 (요청자만)' }, 403);
     if (!rec.posterSelected || !rec.offered || (rec.stage || 1) !== 2)
       return json({ error: '최종 승인할 일정 선택이 없습니다' }, 409);
+    const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+    const mogijiViolation = validateMogijiExchange(rec, post, rec.offered);
+    if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
