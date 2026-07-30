@@ -3152,10 +3152,13 @@ function renderRequests() {
   // 내 달력 날짜는 교환 선택과 무관하게 세부 일정만 확인한다.
   $$("#requestList .cmp-own-cell.has-own").forEach(b => b.onclick = () => {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
-    _compareOwnInspect[reqId] = day;
+    const isClosing = _compareOwnInspect[reqId] === day;
+    _compareOwnInspect[reqId] = isClosing ? null : day;
     $$("#requestList .cmp-own-cell.has-own").forEach(cell => {
       if (cell.dataset.req === reqId) {
-        cell.classList.toggle("is-inspected", Number(cell.dataset.day) === day);
+        const isInspected = !isClosing && Number(cell.dataset.day) === day;
+        cell.classList.toggle("is-inspected", isInspected);
+        cell.setAttribute("aria-pressed", String(isInspected));
       }
     });
     updateCompareOwnDetail(reqId);
@@ -3165,8 +3168,11 @@ function renderRequests() {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
     if (!_posterPick[reqId]) _posterPick[reqId] = new Set();
     const set = _posterPick[reqId];
-    if (set.has(day)) { set.delete(day); b.classList.remove("is-picked"); }
-    else { set.add(day); b.classList.add("is-picked"); }
+    const isDeselecting = set.has(day);
+    if (isDeselecting) set.delete(day);
+    else set.add(day);
+    b.classList.toggle("is-picked", !isDeselecting);
+    b.setAttribute("aria-pressed", String(!isDeselecting));
     updateCompareRequestDetail(reqId);
     updatePosterPickMsg(reqId);
   });
@@ -3249,7 +3255,7 @@ function renderCompareCalendar(r) {
     const mine = state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
     const isPosted = postedDays.has(d);
     const ownClass = `${isPosted ? " is-posted" : ""}${inspectedOwnDay === d ? " is-inspected" : ""}`;
-    myCells += mine ? `<button type="button" class="cmp-cell cmp-own-cell has-own${ownClass}" data-req="${r.id}" data-day="${d}">
+    myCells += mine ? `<button type="button" class="cmp-cell cmp-own-cell has-own${ownClass}" data-req="${r.id}" data-day="${d}" aria-pressed="${inspectedOwnDay === d}">
       <span class="cmp-day">${d}</span>
       <span class="cmp-own-duty">${escapeHtml(dutyShort(mine.type))}</span>
       ${mine.routeSummary ? `<em>${escapeHtml(mine.routeSummary)}</em>` : ""}
@@ -3258,7 +3264,7 @@ function renderCompareCalendar(r) {
     if (req) {
       const on = picked.has(d) ? " is-picked" : "";
       const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
-      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}" data-req="${r.id}" data-day="${d}">
+      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}">
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
       </button>`;
