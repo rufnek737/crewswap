@@ -3798,7 +3798,7 @@ function bindEvents() {
   $("#rewardAdOverlay")?.addEventListener("click", closeRewardAd);
   $("#startPostFlow")?.addEventListener("click", startPostGuide);
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
-  $("#openAdvancedFind")?.addEventListener("click", () => exitGuideFlow("find"));
+  $("#openSwapMenuFromSchedule")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $$(".flow-exit-btn").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
   $$(".find-guide-cancel").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
   $$("#guideTypeChips [data-guide-type]").forEach(button => button.addEventListener("click", () => {

@@ -225,17 +225,12 @@
       <!-- ===================== 내 스케줄 ===================== -->
       <section id="schedule" class="view is-active">
         <div id="postGuideSchedule" class="flow-guide-banner" hidden>
-          <div class="flow-stepper" aria-label="스왑 올리기 진행 단계">
-            <span class="is-active"><b>1</b> 내 근무 선택</span>
-            <span><b>2</b> 희망 조건</span>
-            <span><b>3</b> 확인·등록</span>
-          </div>
           <div class="flow-guide-copy">
             <div>
-              <strong>먼저 바꾸고 싶은 내 근무를 선택하세요</strong>
-              <p>달력에서 날짜를 누른 뒤 아래의 ‘다음’ 버튼으로 진행합니다.</p>
+              <strong>바꾸고 싶은 내 근무를 선택하세요</strong>
+              <p>날짜를 선택하면 바로 스왑 등록을 이어갈 수 있습니다.</p>
             </div>
-            <button type="button" class="link-button flow-exit-btn">단계별 진행 종료</button>
+            <button type="button" id="openSwapMenuFromSchedule" class="secondary-button flow-menu-button">🔄 스왑하기</button>
           </div>
         </div>
         <div class="section-head">
@@ -322,30 +317,27 @@
       <section id="swapGuide" class="view">
         <div class="flow-home">
           <div class="flow-home-head">
-            <span class="flow-kicker">STEP BY STEP</span>
-            <h2>무엇을 하고 싶으세요?</h2>
-            <p>하나씩 선택하면 필요한 화면만 순서대로 안내합니다.</p>
+            <h2>스왑하기</h2>
+            <p>원하는 메뉴를 선택하세요.</p>
           </div>
           <div class="flow-choice-grid">
-            <button type="button" id="startPostFlow" class="flow-choice-card">
-              <span class="flow-choice-icon">📤</span>
-              <span>
-                <strong>내 스왑 올리기</strong>
-                <small>내 근무 선택 → 희망 조건 → 확인·등록</small>
-              </span>
-              <b>시작 →</b>
-            </button>
             <button type="button" id="startFindFlow" class="flow-choice-card">
               <span class="flow-choice-icon">🔎</span>
               <span>
                 <strong>원하는 스왑 찾기</strong>
-                <small>원하는 종류 → 세부 조건 → 결과 비교</small>
+                <small>조건에 맞는 스왑을 찾아봅니다.</small>
               </span>
-              <b>시작 →</b>
+              <b>열기 →</b>
+            </button>
+            <button type="button" id="startPostFlow" class="flow-choice-card">
+              <span class="flow-choice-icon">📤</span>
+              <span>
+                <strong>내 스왑 올리기</strong>
+                <small>내 근무를 선택해 스왑 글을 올립니다.</small>
+              </span>
+              <b>열기 →</b>
             </button>
           </div>
-          <div id="flowScheduleNotice" class="flow-schedule-notice"></div>
-          <button type="button" id="openAdvancedFind" class="secondary-button flow-advanced-btn">전체 글·고급 필터 바로 보기</button>
         </div>
       </section>
 

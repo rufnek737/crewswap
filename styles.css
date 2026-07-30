@@ -936,13 +936,13 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 }
 
 /* ===== 단계별 스왑 흐름 ===== */
-.flow-home { max-width: 920px; margin: 0 auto; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
-.flow-home-head { text-align: center; padding: 12px 8px 22px; }
-.flow-home-head h2 { margin: 5px 0 7px; font-size: clamp(24px, 4vw, 34px); }
+.flow-home { max-width: 920px; margin: 0 auto; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); }
+.flow-home-head { text-align: center; padding: 4px 8px 18px; }
+.flow-home-head h2 { margin: 0 0 5px; font-size: clamp(24px, 4vw, 32px); }
 .flow-home-head p { margin: 0; }
 .flow-kicker { color: var(--primary); font-size: 11px; font-weight: 900; letter-spacing: 1px; }
 .flow-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.flow-choice-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 132px; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--text); text-align: left; box-shadow: 0 8px 24px rgba(24,32,45,.06); }
+.flow-choice-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 108px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--text); text-align: left; box-shadow: 0 8px 24px rgba(24,32,45,.06); }
 .flow-choice-card:hover { border-color: var(--primary); transform: translateY(-1px); }
 .flow-choice-card > span:not(.flow-choice-icon) { min-width: 0; }
 .flow-choice-card strong, .flow-choice-card small { display: block; }
@@ -965,6 +965,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .flow-guide-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .flow-guide-copy strong { display: block; margin-bottom: 3px; }
 .flow-guide-copy p { margin: 0; font-size: 12px; }
+.flow-menu-button { flex: 0 0 auto; white-space: nowrap; }
 .find-guide { padding: 14px; }
 .find-guide-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .find-guide-card h3 { margin: 5px 0 4px; font-size: 20px; }
@@ -1017,12 +1018,12 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   .privacy-stepper { grid-template-columns: repeat(2, 1fr); }
   .flow-home { padding: 14px; }
   .flow-choice-grid { grid-template-columns: 1fr; }
-  .flow-choice-card { min-height: 112px; padding: 16px; }
+  .flow-choice-card { min-height: 96px; padding: 14px; }
   .flow-choice-card strong { font-size: 17px; }
   .flow-choice-icon { width: 44px; height: 44px; }
   .flow-stepper span { flex-direction: column; min-height: 48px; font-size: 9.5px; }
   .flow-guide-copy, .find-guide-result-head { align-items: stretch; flex-direction: column; }
-  .flow-guide-copy .link-button { align-self: flex-end; }
+  .flow-guide-copy .flow-menu-button { align-self: stretch; }
   .guide-chip-grid { grid-template-columns: repeat(2, 1fr); }
   .guide-field-grid { grid-template-columns: 1fr; }
   .flow-actions, .flow-result-actions { display: grid; grid-template-columns: 1fr 1fr; }
