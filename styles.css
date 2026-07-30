@@ -555,8 +555,10 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .pending-target-name { display: block; font-size: 13px; font-weight: 800; }
 .pending-target-sub { display: block; font-size: 11px; font-weight: 600; opacity: 0.92; }
 .pending-guide { display: block; }
-.my-post-section { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.my-post-section { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; scroll-margin-top: 170px; }
+.my-post-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .my-post-title { margin: 0 0 12px; font-size: 15px; }
+.my-post-heading .my-post-title { margin: 0; }
 .submit-owner { font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; line-height: 1.4; }
 .submit-owner.me { background: #e6f4ea; color: #1a7a3f; }
 .submit-owner.other { background: #fff4e5; color: #b06400; }
@@ -960,6 +962,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .flow-kicker { color: var(--primary); font-size: 11px; font-weight: 900; letter-spacing: 1px; }
 .flow-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .flow-choice-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; min-height: 108px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--text); text-align: left; box-shadow: 0 8px 24px rgba(24,32,45,.06); }
+.flow-choice-card.is-manage { grid-column: 1 / -1; }
 .flow-choice-card:hover { border-color: var(--primary); transform: translateY(-1px); }
 .flow-choice-card > span:not(.flow-choice-icon) { min-width: 0; }
 .flow-choice-card strong, .flow-choice-card small { display: block; }

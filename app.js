@@ -71,7 +71,7 @@ const WANTED_TYPE_OPTIONS = ["OFF","국내선","국제선","LAYOV","RSV","STBY",
 const WANTED_TYPE_LABELS = { "비행(전체)": "모든 비행", "아무거나": "전부 (휴무 포함)" };
 const wantedTypeLabel = t => WANTED_TYPE_LABELS[t] || t;
 // 연속근무 계산 제외 유형 (휴무/휴가)
-const NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P"]);
+const NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P","UV_ML","OFFMED"]);
 
 /* ====== 회사·직군별 룰 (확장 대비) ======
    사용자는 가입 시 airline + crewType 1회 선택 → 본인 룰 자동 적용.
@@ -163,6 +163,7 @@ const state = {
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
   pendingRequestType: null,   // "request" | "ask"
   guideFlow: null,       // null | "post" | "find" — 단계별 스왑 진행
+  managingMyPosts: false,
   findGuideStep: 1,
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
@@ -526,13 +527,23 @@ function fmtDur(min) {
 }
 
 // [객실] 직전 근무 도착공항·비행근무시간 → 최소 STA→C/I 필요시간(분). 회사 SKD Swap 산정기준.
-function cabinRestReqMin(arrAirport, fdtMin) {
-  let base = arrAirport === "ICN" ? 720 : 680; // 12h00(셔틀 포함) / 11h20 — Rest 10h 포함값
-  if (fdtMin > 14 * 60) base += 240;           // 객실 FOM: 비행근무 14h 초과 시 휴식 14h(+4h)
-  return base;
+function cabinRestReqMin(arrAirport, nextDepAirport, fdtMin, nextType) {
+  const previous = {
+    arr: arrAirport,
+    reportTime: "00:00",
+    releaseTime: fdtMin ? `${String(Math.floor(fdtMin / 60)).padStart(2, "0")}:${String(fdtMin % 60).padStart(2, "0")}` : null,
+  };
+  const policy = window.CrewSwapCabinPolicy;
+  const next = { dep: nextDepAirport, type: nextType };
+  const stdGap = policy?.minimumRestGapMinutes(
+    previous,
+    next,
+  ) ?? 10 * 60;
+  return Math.max(10 * 60, stdGap - (policy?.reportToDepartureMinutes(next) || 0));
 }
 
-// offered: { days, reportTime(첫날 C/I), releaseTime(막날 C/O), lastReport(막날 C/I),
+// offered: { days, reportTime(첫날 C/I), firstDepAirport(첫 출발공항),
+//            releaseTime(막날 C/O), lastReport(막날 C/I),
 //            lastArrival(막날 STA), lastArrAirport(막날 도착공항) }
 // givenAwayDays: 내가 내주는 날짜(이 날들의 내 근무는 사라지므로 인접 검사에서 제외)
 function restCheckIncoming(offered, givenAwayDays) {
@@ -556,7 +567,7 @@ function restCheckIncoming(offered, givenAwayDays) {
         // STA(도착) → C/I(출두), 직전 근무 도착공항·FDT 기준
         if (prev.arrivalTime && /^\d/.test(prev.arrivalTime)) {
           gap = newCI - absMinAt(prev.day, prev.arrivalTime);
-          need = cabinRestReqMin(prev.arr, dutyMinutesOf(prev));
+          need = cabinRestReqMin(prev.arr, offered.firstDepAirport, dutyMinutesOf(prev), offered.type);
         }
       } else {
         // 운항: C/O(퇴근) → C/I(출두), 직전 근무 FDT 기준
@@ -579,7 +590,7 @@ function restCheckIncoming(offered, givenAwayDays) {
           const blockFDT = (offered.lastReport && /^\d/.test(offered.lastReport) && offered.releaseTime && /^\d/.test(offered.releaseTime))
             ? Math.max(0, absMinAt(lastDay, offered.releaseTime) - absMinAt(lastDay, offered.lastReport)) : 0;
           gap = nextCI - absMinAt(lastDay, offered.lastArrival);
-          need = cabinRestReqMin(offered.lastArrAirport, blockFDT);
+          need = cabinRestReqMin(offered.lastArrAirport, next.dep, blockFDT, next.type);
         }
       } else {
         // 운항: 새 근무 막날 C/O → 다음 근무 C/I, 막날 FDT 기준
@@ -1619,12 +1630,14 @@ function renderFlowUi() {
 
 function exitGuideFlow(target = "swapGuide") {
   state.guideFlow = null;
+  state.managingMyPosts = false;
   state.findGuideStep = 1;
   renderFlowUi();
   switchTab(target);
 }
 
 function startPostGuide() {
+  state.managingMyPosts = false;
   if (!state.schedules.length) {
     state.guideFlow = "post";
     showToast("먼저 CrewConnex 스케줄을 불러와주세요.");
@@ -1639,7 +1652,20 @@ function startPostGuide() {
   switchTab("schedule");
 }
 
+async function openMyPostsManager() {
+  state.guideFlow = null;
+  state.managingMyPosts = true;
+  renderFlowUi();
+  switchTab("post");
+  await fetchMyPosts();
+  renderMyPosts();
+  requestAnimationFrame(() => {
+    document.getElementById("myPostSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function startFindGuide() {
+  state.managingMyPosts = false;
   state.guideFlow = "find";
   state.findGuideStep = 1;
   state.filters.types = [];
@@ -2227,9 +2253,22 @@ function renderMyPosts() {
   const el = $("#myPostList");
   if (!el) return;
   const section = $("#myPostSection");
+  const title = $("#myPostTitle");
+  const closeButton = $("#closeMyPostsManager");
+  const menuCount = $("#myPostMenuCount");
+  const managing = !!state.managingMyPosts;
+  if (title) title.textContent = managing ? "📋 내가 올린 스왑 관리" : "📋 이미 올린 스케줄";
+  if (closeButton) closeButton.hidden = !managing;
+  if (menuCount) {
+    menuCount.textContent = state.myPosts.length
+      ? `현재 ${state.myPosts.length}건 · 수정하거나 등록을 취소할 수 있습니다.`
+      : "등록한 스왑이 있는지 서버에서 확인합니다.";
+  }
   if (state.myPosts.length === 0) {
-    el.innerHTML = "";
-    if (section) section.hidden = true;
+    el.innerHTML = managing
+      ? `<div class="empty-state">이 계정으로 등록한 스왑이 없습니다.</div>`
+      : "";
+    if (section) section.hidden = !managing;
     return;
   }
   if (section) section.hidden = false;
@@ -2635,25 +2674,46 @@ function recordSwapMatch() {
 
 // 선택된 내 근무를 요청용 offered(X) 객체로 요약
 
-// 잠금(선택)한 날을 제외한 '해당 월 전체 로스터'를 상대에게 공개용으로 요약
-function buildOpenRoster() {
-  // 월 경계 ARRIVAL과 다일 편조 LAYOV를 먼저 확정한 뒤 공개 스냅샷을 만든다.
+function validationRosterSnapshot() {
   window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules);
-  const mogijiProtectedDays = window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules);
-  const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
-  return currentMonthSchedules()
-    .filter(s => !locked.has(dayKey(s.day)))
-    .sort((a, b) => a.day - b.day)
+  const mogijiProtectedDays = state.user.crewType === "PILOT"
+    ? window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules)
+    : null;
+  return state.schedules
+    .filter(s => s && s.day && (s.month || state.currentMonth))
     .map(s => ({
       day: s.day,
       month: s.month || state.currentMonth,
       type: s.type,
       title: s.title,
-      dep: s.dep || null, arr: s.arr || null, layoverAirport: s.layoverAirport || null,
-      routeSummary: s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : s.layoverAirport ? `LAYOV ${s.layoverAirport}` : null),
-      reportTime: s.reportTime || null, releaseTime: s.releaseTime || null, arrivalTime: s.arrivalTime || null,
+      dep: s.dep || null,
+      arr: s.arr || null,
+      layoverAirport: s.layoverAirport || null,
+      routeSummary: s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : null),
+      reportTime: s.reportTime || null,
+      departureTime: s.departureTime || null,
+      releaseTime: s.releaseTime || null,
+      arrivalTime: s.arrivalTime || null,
       patternId: s.patternId || null,
-      mogijiRest: window.CrewSwapMogijiPolicy?.markerForEntry(s, mogijiProtectedDays),
+      blockMinutes: Number.isFinite(s.blockMinutes) ? s.blockMinutes : null,
+      aircraft: s.aircraft || null,
+      requiresEdto: !!s.requiresEdto,
+      requiresCat3: !!s.requiresCat3,
+      mogijiRest: state.user.crewType === "PILOT"
+        ? window.CrewSwapMogijiPolicy?.markerForEntry(s, mogijiProtectedDays)
+        : null,
+    }));
+}
+
+// 잠금(선택)한 날을 제외한 '해당 월 전체 로스터'를 상대에게 공개용으로 요약
+function buildOpenRoster() {
+  const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
+  return validationRosterSnapshot()
+    .filter(s => (s.month || state.currentMonth) === state.currentMonth)
+    .filter(s => !locked.has(dayKey(s.day)))
+    .sort((a, b) => a.day - b.day)
+    .map(s => ({
+      ...s,
       aircraft: s.aircraft || null,
       requiresEdto: !!s.requiresEdto, requiresCat3: !!s.requiresCat3,
     }));
@@ -2672,6 +2732,8 @@ function offeredFromRosterDays(rosterEntries) {
     days: ss.map(s => s.day),
     aircraft: ss[0].aircraft || null,
     reportTime: (ss.find(s => s.reportTime && /^\d/.test(s.reportTime)) || {}).reportTime || null,
+    firstDepartureTime: (ss.find(s => s.departureTime && /^\d/.test(s.departureTime)) || {}).departureTime || null,
+    firstDepAirport: (ss.find(s => s.dep) || {}).dep || null,
     releaseTime: ([...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime)) || {}).releaseTime || null,
     lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
     lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
@@ -2755,7 +2817,9 @@ async function sendOpenSwap(postId, type, roster) {
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
         fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
-        openRoster: roster, lockedDays,
+        openRoster: roster,
+        lockedDays,
+        validationRoster: validationRosterSnapshot(),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -3357,8 +3421,9 @@ function protectedMogijiIssueMessage(issue, ownerLabel) {
 
 function requesterFixedMogijiViolation(request, myPost) {
   const policy = window.CrewSwapMogijiPolicy;
-  if (!policy || !request) return null;
+  if (!policy || !request || state.user.crewType !== "PILOT") return null;
   const post = myPost || (state.myPosts || []).find(item => item.id === request.postId);
+  if (post?.crewType === "CABIN") return null;
   return policy.findProtectedRestViolation(
     request.openRoster || [],
     schedulesOfferedByPost(post),
@@ -3377,6 +3442,11 @@ function requesterFixedMogijiMessage(issue) {
   return `❌ 상대방은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 ${restDate[0]}월 ${restDate[1]}일이 필수 휴무이지만, 내가 내놓은 ${incomingDate} ${escapeHtml(incomingDuty)} 근무를 받게 됩니다.<br><strong>따라서 상대 달력에서 다른 날짜를 선택해도 이 요청자와는 교환할 수 없습니다.</strong>`;
 }
 
+function cabinRestIssueMessage(issue, ownerLabel) {
+  if (!issue) return null;
+  return `❌ ${ownerLabel} 객실 휴식시간 부족 — ${issue.routeKey} 기준 실제 ${fmtDur(Math.max(0, issue.gapMinutes))} · 최소 ${fmtDur(issue.requiredMinutes)} 필요`;
+}
+
 function posterPickRestCheck(reqId) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
   if (!r) return { offered: null, msg: null, fixed: false };
@@ -3390,6 +3460,26 @@ function posterPickRestCheck(reqId) {
   const entries = (r.openRoster || []).filter(s => days.includes(s.day));
   const offered = offeredFromRosterDays(entries);
   const givenDays = myPost ? (myPost.offered.days || []) : [];
+  if (state.user.crewType === "CABIN") {
+    const cabinPolicy = window.CrewSwapCabinPolicy;
+    const myPostSchedules = schedulesOfferedByPost(myPost);
+    const requesterViolation = cabinPolicy?.findRestViolation(
+      r.openRoster || [],
+      entries,
+      myPostSchedules,
+    );
+    const posterViolation = cabinPolicy?.findRestViolation(
+      state.schedules,
+      myPostSchedules,
+      entries,
+    );
+    return {
+      offered,
+      msg: cabinRestIssueMessage(requesterViolation, "상대 일정") ||
+        cabinRestIssueMessage(posterViolation, "내 일정"),
+      fixed: false,
+    };
+  }
   const policy = window.CrewSwapMogijiPolicy;
   const myIncomingViolation = policy?.findProtectedRestViolation(state.schedules, entries);
   const msg =
@@ -3889,6 +3979,7 @@ function switchTab(name) {
   if (name === "find") { fetchPosts(); renderSavedSearches(); }
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
+  if (name === "swapGuide") fetchMyPosts();
   renderFlowUi();
   history.replaceState(null, "", "#" + name);
   // 탭 전환 시 항상 맨 위에서 시작 (이전 탭 스크롤 위치 잔존 방지)
@@ -3991,6 +4082,12 @@ function bindEvents() {
   $("#rewardAdOverlay")?.addEventListener("click", closeRewardAd);
   $("#startPostFlow")?.addEventListener("click", startPostGuide);
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
+  $("#openMyPostsManager")?.addEventListener("click", openMyPostsManager);
+  $("#closeMyPostsManager")?.addEventListener("click", () => {
+    state.managingMyPosts = false;
+    renderMyPosts();
+    switchTab("swapGuide");
+  });
   $("#openSwapMenuFromSchedule")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $$(".flow-exit-btn").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
   $$(".find-guide-cancel").forEach(button => button.addEventListener("click", () => exitGuideFlow("swapGuide")));
@@ -4013,7 +4110,10 @@ function bindEvents() {
     setFindGuideStep(3);
   });
   // 스왑하기 서브탭 (바꿀 근무 찾기 / 스왑 요청 올리기)
-  $$(".swap-subtab").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.swaptab)));
+  $$(".swap-subtab").forEach(b => b.addEventListener("click", () => {
+    state.managingMyPosts = false;
+    switchTab(b.dataset.swaptab);
+  }));
   // 스왑 찾기 새로고침
   $("#refreshFindBtn")?.addEventListener("click", () => { fetchPosts(); showToast("최신 글을 불러왔습니다."); });
   // 🔔 스왑 알림(저장검색) 섹션 펼치기/접기
@@ -4655,7 +4755,9 @@ function bindEvents() {
       }).filter(Boolean);
       if (ss.length === 0) continue;
       const firstParsed = parseDayKey(keyGroup[0]);
-      const mogijiProtectedDays = window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules);
+      const mogijiProtectedDays = state.user.crewType === "PILOT"
+        ? window.CrewSwapMogijiPolicy?.collectProtectedDays(state.schedules)
+        : null;
 
       const firstFlight = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
       const lastFlight = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
@@ -4681,6 +4783,7 @@ function bindEvents() {
         ownerEmail: state.user.email,
         ownerRating: state.user.rating || 4.5,
         ownerBase: state.user.base || "GMP",
+        ownerValidationRoster: validationRosterSnapshot(),
         deadlineDay: ss[0].day,
         deadlineMonth: ss[0].month || state.currentMonth,
         watchers: 0,
@@ -4695,8 +4798,14 @@ function bindEvents() {
             day: s.day,
             type: s.type,
             title: s.title,
+            dep: s.dep || null,
+            arr: s.arr || null,
+            routeSummary: s.routeSummary || null,
             reportTime: s.reportTime || null,
+            departureTime: s.departureTime || null,
             releaseTime: s.releaseTime || null,
+            arrivalTime: s.arrivalTime || null,
+            blockMinutes: Number.isFinite(s.blockMinutes) ? s.blockMinutes : null,
           })),
           summary: ss.map(s => s.routeSummary || (s.dep&&s.arr?`${s.dep}-${s.arr}`:s.type)).join(" · "),
           type: ss[0].type,
@@ -4706,13 +4815,17 @@ function bindEvents() {
           flightMinutes: ss.reduce((sum,s)=>sum+flightMinutesOf(s),0),
           region,
           reportTime: firstFlight ? firstFlight.reportTime : null,
+          firstDepartureTime: firstFlight?.departureTime || null,
+          firstDepAirport: firstFlight?.dep || null,
           releaseTime: lastFlight ? lastFlight.releaseTime : null,
           lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
           lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
           lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
           hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),
-          mogijiProtectedDays: [...(mogijiProtectedDays?.values() || [])]
-            .filter(info => info.dayKey.startsWith(firstParsed.month)),
+          mogijiProtectedDays: state.user.crewType === "PILOT"
+            ? [...(mogijiProtectedDays?.values() || [])]
+              .filter(info => info.dayKey.startsWith(firstParsed.month))
+            : [],
           crewPublic: firstCrew ? buildCrewPublic(firstCrew.crewComposition, state.user.roleType) : null,
         },
         wanted,

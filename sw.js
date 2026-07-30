@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v88';
-const SHELL = ['./index.html', './styles.css', './credit-policy.js', './post-dates.js', './schedule-continuity.js', './mogiji-policy.js', './app.js', './manifest.json', './privacy.html', './terms.html'];
+const CACHE = 'crewswap-v90';
+const SHELL = ['./index.html', './styles.css', './credit-policy.js', './post-dates.js', './schedule-continuity.js', './mogiji-policy.js', './cabin-policy.js', './app.js', './manifest.json', './privacy.html', './terms.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {

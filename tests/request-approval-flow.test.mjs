@@ -200,3 +200,159 @@ test('a client cannot falsely label a normal rejection as a rule conflict', asyn
   assert.equal(response.status, 409);
   assert.equal((await env.POSTS.get('req:REQ-1', { type: 'json' })).declined, undefined);
 });
+
+test('cabin requests are not rejected by the pilot mortgage-rest rule', async () => {
+  const original = {
+    ...pendingRequest(),
+    postId: 'POST-CABIN',
+    openRoster: [
+      { month: '2026-08', day: 21, type: '국제선' },
+      { month: '2026-08', day: 22, type: '국제선' },
+      { month: '2026-08', day: 23, type: 'ARRIVAL' },
+      { month: '2026-08', day: 24, type: 'OFF' },
+    ],
+  };
+  const post = {
+    id: 'POST-CABIN',
+    crewType: 'CABIN',
+    offered: {
+      days: [24],
+      daySchedules: [{ month: '2026-08', day: 24, type: '국내선', title: '7C129' }],
+    },
+  };
+  const env = { POSTS: createKv({
+    'req:REQ-1': original,
+    'post:POST-CABIN': post,
+    'idx:requests': [original],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-poster-select', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    offered: { patternName: '8/24 OFF', days: [24] },
+  }), env, {});
+
+  assert.equal(response.status, 200);
+});
+
+test('server blocks a cabin exchange that violates the base-pair rest table', async () => {
+  const original = {
+    ...pendingRequest(),
+    postId: 'POST-CABIN',
+    openRoster: [{ month: '2026-08', day: 3, type: 'OFF' }],
+  };
+  const requesterValidationRoster = [
+    {
+      month: '2026-08', day: 1, type: '국제선', title: '7C101',
+      dep: 'NRT', arr: 'ICN',
+      reportTime: '16:00', arrivalTime: '22:00', releaseTime: '22:30',
+    },
+    { month: '2026-08', day: 2, type: 'OFF', title: 'OFF' },
+    { month: '2026-08', day: 3, type: 'OFF', title: 'OFF' },
+  ];
+  const post = {
+    id: 'POST-CABIN',
+    crewType: 'CABIN',
+    offered: {
+      days: [2],
+      daySchedules: [{
+        month: '2026-08', day: 2, type: '국제선', title: '7C102',
+        dep: 'ICN', arr: 'KIX',
+        reportTime: '10:10', departureTime: '12:30',
+        arrivalTime: '16:00', releaseTime: '16:30',
+      }],
+    },
+    ownerValidationRoster: [],
+  };
+  const env = { POSTS: createKv({
+    'req:REQ-1': original,
+    'reqval:REQ-1': requesterValidationRoster,
+    'post:POST-CABIN': post,
+    'idx:requests': [original],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-poster-select', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    offered: { patternName: '8/3 OFF', days: [3] },
+  }), env, {});
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).code, 'CABIN_REST_VIOLATION');
+});
+
+test('server checks the cabin post owner schedule as well as the requester schedule', async () => {
+  const incoming = {
+    month: '2026-08', day: 2, type: '국제선', title: '7C102',
+    dep: 'ICN', arr: 'KIX',
+    reportTime: '10:10', departureTime: '12:30',
+    arrivalTime: '16:00', releaseTime: '16:30',
+  };
+  const original = {
+    ...pendingRequest(),
+    postId: 'POST-CABIN',
+    openRoster: [incoming],
+  };
+  const post = {
+    id: 'POST-CABIN',
+    crewType: 'CABIN',
+    offered: {
+      days: [3],
+      daySchedules: [{ month: '2026-08', day: 3, type: 'OFF', title: 'OFF' }],
+    },
+    ownerValidationRoster: [
+      {
+        month: '2026-08', day: 1, type: '국제선', title: '7C101',
+        dep: 'NRT', arr: 'ICN',
+        reportTime: '16:00', arrivalTime: '22:00', releaseTime: '22:30',
+      },
+      { month: '2026-08', day: 2, type: 'OFF', title: 'OFF' },
+      { month: '2026-08', day: 3, type: 'OFF', title: 'OFF' },
+    ],
+  };
+  const env = { POSTS: createKv({
+    'req:REQ-1': original,
+    'reqval:REQ-1': [incoming],
+    'post:POST-CABIN': post,
+    'idx:requests': [original],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-poster-select', {
+    id: 'REQ-1',
+    email: 'poster@jejuair.net',
+    offered: { patternName: '8/2 국제선', days: [2] },
+  }), env, {});
+
+  assert.equal(response.status, 409);
+  const result = await response.json();
+  assert.equal(result.code, 'CABIN_REST_VIOLATION');
+  assert.match(result.error, /내 일정/);
+});
+
+test('private validation rosters are not exposed in the public post list', async () => {
+  const post = {
+    id: 'POST-CABIN',
+    crewType: 'CABIN',
+    ownerEmail: 'poster@jejuair.net',
+    deleteToken: 'secret',
+    status: 'active',
+    offered: { patternName: '8/2 국제선', days: [2] },
+    ownerValidationRoster: [{ month: '2026-08', day: 1, type: 'OFF' }],
+  };
+  const env = { POSTS: createKv({ 'idx:posts': [post] }) };
+
+  const response = await worker.fetch(new Request('https://example.test/api/posts-get'), env, {});
+  assert.equal(response.status, 200);
+  const publicPost = (await response.json()).posts[0];
+  assert.equal(publicPost.ownerValidationRoster, undefined);
+  assert.equal(publicPost.ownerEmail, undefined);
+  assert.equal(publicPost.deleteToken, undefined);
+
+  const mineResponse = await worker.fetch(
+    new Request('https://example.test/api/posts-get-mine?email=poster%40jejuair.net'),
+    env,
+    {},
+  );
+  assert.equal(mineResponse.status, 200);
+  assert.equal((await mineResponse.json()).posts[0].ownerValidationRoster, undefined);
+});

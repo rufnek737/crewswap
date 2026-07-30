@@ -6,8 +6,10 @@ import {
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import '../mogiji-policy.js';
+import '../cabin-policy.js';
 
 const mogijiPolicy = globalThis.CrewSwapMogijiPolicy;
+const cabinPolicy = globalThis.CrewSwapCabinPolicy;
 
 // CrewSwap API — Cloudflare Workers
 // 라우팅: /api/send-verify, /api/check-verify, /api/posts-get,
@@ -205,6 +207,7 @@ async function handleUserDelete(request, env) {
     await Promise.all([
       ...plan.postsToDelete.map(post => env.POSTS.delete(`post:${post.id}`)),
       ...plan.requestsToDelete.map(req => env.POSTS.delete(`req:${req.id}`)),
+      ...plan.requestsToDelete.map(req => env.POSTS.delete(`reqval:${req.id}`)),
     ]);
     await Promise.all([
       savePostsIndex(env, plan.remainingPosts),
@@ -458,7 +461,7 @@ async function handlePostsGet(env) {
   try {
     const idx = await getPostsIndex(env);
     const posts = idx.filter(p => p && p.status === 'active').map(p => {
-      const { deleteToken, ownerEmail, ...pub } = p;
+      const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
       return pub;
@@ -475,7 +478,9 @@ async function handlePostsGetMine(request, env) {
   if (!email) return json({ error: 'email 필요' }, 400);
   try {
     const idx = await getPostsIndex(env);
-    const mine = idx.filter(p => p && p.ownerEmail === email && p.status === 'active');
+    const mine = idx
+      .filter(p => p && p.ownerEmail === email && p.status === 'active')
+      .map(({ ownerValidationRoster, ...post }) => post);
     return json({ posts: mine });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -485,7 +490,7 @@ async function handlePostsGetMine(request, env) {
 const POST_FIELDS = [
   'id', 'deleteToken', 'registeredAt',
   'airline', 'crewType', 'ownerRole', 'ownerNick', 'ownerRating', 'ownerBase', 'ownerEmail',
-  'offered', 'wanted',
+  'offered', 'wanted', 'ownerValidationRoster',
   'deadlineDay', 'deadlineMonth', 'watchers', 'status', 'creditSpent',
 ];
 
@@ -543,7 +548,11 @@ const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const { postId, fromEmail, fromNick, fromBase, fromRole, fromRealName, fromEmployeeId, fromPhone, type, message, offered, openRoster, lockedDays } = body || {};
+  const {
+    postId, fromEmail, fromNick, fromBase, fromRole,
+    fromRealName, fromEmployeeId, fromPhone,
+    type, message, offered, openRoster, lockedDays, validationRoster,
+  } = body || {};
   if (!postId || !fromEmail || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
   // 새 모델: offered 대신 openRoster(공개 로스터)를 첨부. 둘 중 하나는 있어야 함.
@@ -577,6 +586,9 @@ async function handleRequestsCreate(request, env) {
       createdAt: new Date().toISOString(),
     };
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    if (Array.isArray(validationRoster) && validationRoster.length) {
+      await env.POSTS.put(`reqval:${id}`, JSON.stringify(validationRoster));
+    }
     const idx = await getRequestsIndex(env);
     idx.push(rec);
     await saveRequestsIndex(env, idx);
@@ -636,7 +648,7 @@ function markerEntries(markers) {
 }
 
 function validateMogijiExchange(rec, post, selectedOffered) {
-  if (!mogijiPolicy) return null;
+  if (!mogijiPolicy || post?.crewType === 'CABIN') return null;
   const selectedDays = new Set(selectedOffered?.days || []);
   const requesterGives = (rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
   const requesterViolation = mogijiPolicy.findProtectedRestViolation(
@@ -653,12 +665,40 @@ function validateMogijiExchange(rec, post, selectedOffered) {
   return posterViolation ? { side: '내 일정', issue: posterViolation } : null;
 }
 
+function validateCabinExchange(rec, post, selectedOffered, requesterValidationRoster) {
+  if (!cabinPolicy || post?.crewType !== 'CABIN') return null;
+  const selectedDays = new Set(selectedOffered?.days || []);
+  const requesterGives = (rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
+  const posterGives = scheduleEntriesFromPost(post);
+  const requesterViolation = cabinPolicy.findRestViolation(
+    requesterValidationRoster || rec.openRoster || [],
+    requesterGives,
+    posterGives,
+  );
+  if (requesterViolation) return { side: '상대 일정', issue: requesterViolation };
+
+  const posterViolation = cabinPolicy.findRestViolation(
+    post.ownerValidationRoster || [],
+    posterGives,
+    requesterGives,
+  );
+  return posterViolation ? { side: '내 일정', issue: posterViolation } : null;
+}
+
 function mogijiViolationResponse(violation) {
   const [, restMonth, restDay] = violation.issue.dayKey.split('-').map(Number);
   const [, arrivalMonth, arrivalDay] = violation.issue.arrivalDate.split('-').map(Number);
   return json({
     error: `${violation.side}에서 ${restMonth}월 ${restDay}일은 ${arrivalMonth}월 ${arrivalDay}일 모기지 도착 후 필요한 휴식일입니다.`,
     code: 'MOGIJI_REST_VIOLATION',
+  }, 409);
+}
+
+function cabinRestViolationResponse(violation) {
+  const issue = violation.issue;
+  return json({
+    error: `${violation.side}의 객실 휴식시간이 ${Math.max(0, issue.gapMinutes)}분으로, ${issue.routeKey} 기준 최소 ${issue.requiredMinutes}분보다 부족합니다.`,
+    code: 'CABIN_REST_VIOLATION',
   }, 409);
 }
 
@@ -677,6 +717,11 @@ async function handleRequestsPosterSelect(request, env) {
     if (rec.openRoster && !offered.days.every(d => openDays.has(d)))
       return json({ error: '공개된 근무가 아닙니다' }, 400);
     const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+    const requesterValidationRoster = post?.crewType === 'CABIN'
+      ? await env.POSTS.get(`reqval:${id}`, { type: 'json' })
+      : null;
+    const cabinViolation = validateCabinExchange(rec, post, offered, requesterValidationRoster);
+    if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, offered);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
@@ -707,6 +752,11 @@ async function handleRequestsRequesterAccept(request, env) {
     if (!rec.posterSelected || !rec.offered || (rec.stage || 1) !== 2)
       return json({ error: '최종 승인할 일정 선택이 없습니다' }, 409);
     const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+    const requesterValidationRoster = post?.crewType === 'CABIN'
+      ? await env.POSTS.get(`reqval:${id}`, { type: 'json' })
+      : null;
+    const cabinViolation = validateCabinExchange(rec, post, rec.offered, requesterValidationRoster);
+    if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.stage = 3;
@@ -717,6 +767,7 @@ async function handleRequestsRequesterAccept(request, env) {
     rec.fromPhone = phone || rec.fromPhone || '';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
+    await env.POSTS.delete(`reqval:${id}`);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -796,6 +847,7 @@ async function handleRequestsDecline(request, env) {
     rec.declinedAt = new Date().toISOString();
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
+    await env.POSTS.delete(`reqval:${id}`);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -851,7 +903,10 @@ async function handleRequestsDelete(request, env) {
     if (!rec) return json({ ok: true, alreadyGone: true });
     if (rec.fromEmail !== email && rec.toEmail !== email)
       return json({ error: '삭제 권한이 없습니다' }, 403);
-    await env.POSTS.delete(`req:${id}`);
+    await Promise.all([
+      env.POSTS.delete(`req:${id}`),
+      env.POSTS.delete(`reqval:${id}`),
+    ]);
     const idx = await getRequestsIndex(env);
     await saveRequestsIndex(env, idx.filter(r => r.id !== id));
     return json({ ok: true });
@@ -905,9 +960,10 @@ function stripHtml(s) {
 function fmtTime(s) {
   const t = (s || '').trim();
   if (!t) return null;
+  const suffix = /\+1/.test(t) ? '+1' : '';
   const clean = t.replace('+1', '').trim();
-  if (/^\d{4}$/.test(clean)) return `${clean.slice(0, 2)}:${clean.slice(2)}`;
-  if (/^\d{1,2}:\d{2}/.test(clean)) return clean.slice(0, 5);
+  if (/^\d{4}$/.test(clean)) return `${clean.slice(0, 2)}:${clean.slice(2)}${suffix}`;
+  if (/^\d{1,2}:\d{2}/.test(clean)) return `${clean.slice(0, 5)}${suffix}`;
   return null;
 }
 function blhToMin(s) {
@@ -954,9 +1010,11 @@ function mapColumns(headerRow) {
     if (exact >= 0) return exact;
     return headers.findIndex(h => t.length >= 3 && h.includes(t));
   };
+  const iSTD = find('STDL');
   return {
     iDate: find('Date'), iPair: find('Pairing'), iAct: find('Activity'),
     iFrom: find('From'), iTo: find('To'), iCI: find('CIL'), iCO: find('COL'),
+    iSTD: iSTD >= 0 ? iSTD : find('STD'),
     iSTA: find('STAL'), iAC: find('ACHotel'), iBLH: find('BLH'),
     iCC: find('CC'), iPos: find('Pos'),
   };
@@ -1008,7 +1066,11 @@ function parseRosterToSchedules(html, userNameHint) {
     const day = parseInt(dayM[1], 10); if (day < 1 || day > 31) return;
     const activity = (p[cols.iAct] || '').trim(); const pairing = (p[cols.iPair] || '').trim();
     let type, title;
-    if (STBY_CODES.test(activity) || STBY_CODES.test(pairing) || /STBY/i.test(activity + ' ' + pairing)) {
+    const restrictedType = cabinPolicy?.preserveRestrictedType(activity, pairing);
+    if (restrictedType) {
+      type = restrictedType;
+      title = restrictedType;
+    } else if (STBY_CODES.test(activity) || STBY_CODES.test(pairing) || /STBY/i.test(activity + ' ' + pairing)) {
       type = 'STBY'; const sc = STBY_CODES.test(activity) ? activity : STBY_CODES.test(pairing) ? pairing : 'STBY'; title = `STBY ${sc}`;
     } else if (/^OFF/i.test(activity) || /^OFF/i.test(pairing)) { type = 'OFF'; title = 'OFF'; }
     else if (VAC_CODES.test(activity) || VAC_CODES.test(pairing)) { type = 'VAC'; title = '휴가'; }
@@ -1024,6 +1086,7 @@ function parseRosterToSchedules(html, userNameHint) {
       } else { type = 'UNKNOWN'; title = renameF(pairing) || activity || '-'; }
     }
     const ciR = allRowsG.find(r => r[cols.iCI] && !/^\|$/.test(r[cols.iCI]));
+    const stdR = allRowsG.find(r => cols.iSTD >= 0 && r[cols.iSTD] && !/^\|$/.test(r[cols.iSTD]));
     const coR = [...allRowsG].reverse().find(r => r[cols.iCO] && !/^\|$/.test(r[cols.iCO]));
     const staR = [...allRowsG].reverse().find(r => r[cols.iSTA] && !/^\|$/.test(r[cols.iSTA]));
     const acR = allRowsG.find(r => r[cols.iAC] && !/^\|$/.test(r[cols.iAC]));
@@ -1057,6 +1120,7 @@ function parseRosterToSchedules(html, userNameHint) {
       }
     } else if (type === 'LAYOV') { const m = /LAYOV\s*\(?([A-Z]{3})/i.exec(activity + ' ' + pairing); if (m) e.layoverAirport = m[1]; }
     if (ciR) e.reportTime = fmtTime(ciR[cols.iCI]);
+    if (stdR) e.departureTime = fmtTime(stdR[cols.iSTD]);
     if (staR) e.arrivalTime = fmtTime(staR[cols.iSTA]);
     if (coR) e.releaseTime = fmtTime(coR[cols.iCO]);
     if (aircraft) e.aircraft = aircraft;

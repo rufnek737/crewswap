@@ -337,6 +337,14 @@
               </span>
               <b>열기 →</b>
             </button>
+            <button type="button" id="openMyPostsManager" class="flow-choice-card is-manage">
+              <span class="flow-choice-icon">📋</span>
+              <span>
+                <strong>내가 올린 스왑 관리</strong>
+                <small id="myPostMenuCount">서버에서 내 게시글을 확인합니다.</small>
+              </span>
+              <b>목록 →</b>
+            </button>
           </div>
         </div>
       </section>
@@ -603,7 +611,10 @@
 
         <!-- 이미 올린 스케줄 (맨 아래) -->
         <div id="myPostSection" class="my-post-section" hidden>
-          <h3 class="my-post-title">📋 이미 올린 스케줄</h3>
+          <div class="my-post-heading">
+            <h3 id="myPostTitle" class="my-post-title">📋 이미 올린 스케줄</h3>
+            <button id="closeMyPostsManager" type="button" class="link-button" hidden>스왑 메뉴로</button>
+          </div>
           <div id="myPostList" class="my-post-list"></div>
         </div>
       </section>
@@ -906,6 +917,7 @@
     <script src="post-dates.js"></script>
     <script src="schedule-continuity.js"></script>
     <script src="mogiji-policy.js"></script>
+    <script src="cabin-policy.js"></script>
     <script src="app.js"></script>
     <script>
       if ('serviceWorker' in navigator) {
