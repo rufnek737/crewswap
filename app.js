@@ -3599,13 +3599,13 @@ function requestCard(r) {
   const isAsk = r.type === "ask";
   const isSentV = state.reqViewMode === "sent";
   // 새 모델: 요청자가 로스터만 열고 offered 미확정 → 받는 사람(글작성자)이 날짜를 골라야 함
-  const isOpenPending = state.reqViewMode === "received" && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  const isOpenPending = !r.declined && state.reqViewMode === "received" && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
   const fixedMogijiViolation = isOpenPending ? requesterFixedMogijiViolation(r) : null;
-  const isWaitingSent = isSentV && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
-  const needsRequesterApproval = isSentV && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
-  const posterWaitingApproval = state.reqViewMode === "received" && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
+  const isWaitingSent = !r.declined && isSentV && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  const needsRequesterApproval = !r.declined && isSentV && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
+  const posterWaitingApproval = !r.declined && state.reqViewMode === "received" && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
   // 구버전(offered 즉시 첨부) 수락 버튼 경로 — offered가 있을 때만
-  const needsResponse = state.reqViewMode === "received" && !!r.offered && !r.posterSelected && (isAsk ? !r.askAccepted : !accepted);
+  const needsResponse = !r.declined && state.reqViewMode === "received" && !!r.offered && !r.posterSelected && (isAsk ? !r.askAccepted : !accepted);
 
   // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
   // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 후 확인.
@@ -3640,9 +3640,9 @@ function requestCard(r) {
         </div>
         <span class="badge ${badgeCls}">${r.status || (isOpenPending ? "바꿀 날 고르기" : isWaitingSent ? "상대가 고르는 중" : needsRequesterApproval ? "내 최종 승인 필요" : "진행 중")}</span>
       </div>
-      ${r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
+      ${!r.declined && r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
       ${r.declined && r.declineMsg ? `<div class="notice" style="margin-bottom:10px;border-color:#e53e3e;background:#fff5f5;">${r.declineReason === "MOGIJI_REST_CONFLICT" ? "⚠️" : "💔"} ${escapeHtml(r.declineMsg)}</div>` : ""}
-      ${r.offered ? `<div class="req-exchange">
+      ${!r.declined && r.offered ? `<div class="req-exchange">
         <div class="req-ex-side"><span>${!isSent?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
         <div class="req-ex-arrow">⇄</div>
         <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
@@ -3657,15 +3657,19 @@ function requestCard(r) {
       ${isWaitingSent ? `<div class="notice" style="margin-bottom:10px;">⏳ 내 스케줄을 열어 보냈습니다. 상대(글 작성자)가 바꿀 날을 고르는 중입니다.${(r.lockedDays && r.lockedDays.length) ? ` (🔒 ${r.lockedDays.length}일 잠금 제외)` : ""}</div>` : ""}
       ${needsRequesterApproval ? `<div class="approval-notice">🔔 글 작성자가 위 일정을 선택했습니다. 교환 내용을 확인하고 최종 승인해주세요.</div>` : ""}
       ${posterWaitingApproval ? `<div class="approval-notice waiting">⏳ 선택한 일정을 상대에게 보냈습니다. 상대의 최종 승인을 기다리는 중입니다.</div>` : ""}
-      <div class="disclosed-info">
+      ${!r.declined ? `<div class="disclosed-info">
         <h4>공개 정보</h4>
         <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"; })()}</strong></div>
         <div class="info-row"><span>기종/자격</span><strong>${r.aircraft} / ${r.quals}</strong></div>
         <div class="info-row"><span>베이스</span><strong>${r.base && r.base !== "비공개" ? r.base : "GMP"}</strong></div>
         <div class="info-row"><span>닉네임</span><strong>${r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)"}</strong></div>
         <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? `✓ ${contactLine}` : "🔒 상호 수락 후 공개"}</strong></div>
-      </div>
-      ${accepted ? (() => {
+      </div>` : ""}
+      ${r.declined
+        ? `<div class="decline-closed-note">${r.declineReason === "MOGIJI_REST_CONFLICT"
+            ? "이 요청은 모기지 휴무 규정 불일치로 종료되었습니다."
+            : "이 요청은 거절되어 종료되었습니다."}</div>`
+        : accepted ? (() => {
         const rules = currentRules();
         const menu = rules.submitMenu || "회사 시스템 → 스케줄 변경 신청";
         const contact = rules.submitContact || "회사 운항편조팀";
