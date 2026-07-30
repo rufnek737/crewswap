@@ -421,6 +421,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 button.cmp-cell.has-req { background: #dbe8ff; border-color: #a7c3ee; cursor: pointer; }
 button.cmp-cell.has-req.is-picked { background: var(--primary); border-color: var(--primary); }
 button.cmp-cell.has-req.is-picked .cmp-day, button.cmp-cell.has-req.is-picked .cmp-take, button.cmp-cell.has-req.is-picked .cmp-take em { color: #fff; }
+button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; filter: grayscale(0.7); }
 .cmp-detail-panel { display: grid; gap: 6px; margin-top: 8px; }
 .cmp-detail-panel[hidden] { display: none; }
 .cmp-detail-card { padding: 9px; border: 1px solid #b8cae8; border-radius: 7px; background: #f4f8ff; }
@@ -434,6 +435,7 @@ button.cmp-cell.has-req.is-picked .cmp-day, button.cmp-cell.has-req.is-picked .c
 .cmp-detail-times small { color: var(--muted); font-size: 8px; }
 .cmp-detail-times b { margin-top: 1px; color: var(--text); font-size: 10px; }
 .roster-pick-msg { margin-top: 8px; padding: 9px; border-radius: 7px; background: #fff; font-size: 11px; font-weight: 600; color: var(--muted); }
+.roster-pick-msg.is-blocked { border: 1px solid #ef9a9a; background: #fff5f5; color: #c53030; line-height: 1.55; }
 .compare-exchange-summary { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 7px; margin-bottom: 7px; }
 .compare-exchange-summary span { min-width: 0; }
 .compare-exchange-summary small, .compare-exchange-summary strong { display: block; }

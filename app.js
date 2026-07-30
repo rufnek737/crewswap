@@ -3188,7 +3188,7 @@ function renderRequests() {
     updateCompareOwnDetail(reqId);
   });
   // 열린 로스터 달력 날짜 선택 (글작성자가 바꿀 날 고르기 + 세부 일정 표시)
-  $$("#requestList .cmp-cell.has-req").forEach(b => b.onclick = () => {
+  $$("#requestList .cmp-cell.has-req:not(:disabled)").forEach(b => b.onclick = () => {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
     if (!_posterPick[reqId]) _posterPick[reqId] = new Set();
     const set = _posterPick[reqId];
@@ -3204,8 +3204,9 @@ function renderRequests() {
   $$("#requestList .requester-approve-btn").forEach(b => b.onclick = () => approvePosterSelection(b.dataset.reqId));
   $$("#requestList .requester-repick-btn").forEach(b => b.onclick = () => rejectPosterSelection(b.dataset.reqId));
   // 25초 폴링으로 카드가 다시 그려져도 선택 조합과 규정 판정 문구를 복원한다.
+  // 고정 모기지 충돌은 날짜를 고르기 전부터 안내해야 하므로 열린 요청은 모두 갱신한다.
   reqs.forEach(r => {
-    if ((_posterPick[r.id]?.size || 0) > 0) updatePosterPickMsg(r.id);
+    if (document.getElementById(`rosterMsg-${r.id}`)) updatePosterPickMsg(r.id);
   });
 }
 
@@ -3268,6 +3269,8 @@ function renderCompareCalendar(r) {
   const lockedDays = new Set(r.lockedDays || []);
   const picked = _posterPick[r.id] || new Set();
   const myPost = (state.myPosts || []).find(p => p.id === r.postId);
+  const fixedMogijiViolation = requesterFixedMogijiViolation(r, myPost);
+  if (fixedMogijiViolation && picked.size) picked.clear();
   const postedDays = new Set(myPost?.offered?.days || []);
   const inspectedOwnDay = _compareOwnInspect[r.id];
   const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t;
@@ -3292,7 +3295,7 @@ function renderCompareCalendar(r) {
     if (req) {
       const on = picked.has(d) ? " is-picked" : "";
       const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
-      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}">
+      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}${fixedMogijiViolation ? " is-swap-blocked" : ""}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}"${fixedMogijiViolation ? ' disabled aria-disabled="true" title="내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹칩니다."' : ""}>
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
       </button>`;
@@ -3314,7 +3317,7 @@ function renderCompareCalendar(r) {
     </section>
     <section class="cmp-cal cmp-request-cal">
       <h5><span class="cmp-owner-dot take"></span> 상대가 공개한 스케줄</h5>
-      <p>교환받고 싶은 날짜를 누르세요.</p>
+      <p>${fixedMogijiViolation ? "내가 내놓은 근무가 상대방의 필수 휴무와 겹쳐 선택할 수 없습니다." : "교환받고 싶은 날짜를 누르세요."}</p>
       ${weekday}
       <div class="cmp-grid">${requestCells}</div>
       <div id="cmpRequestDetail-${r.id}" class="cmp-detail-panel" ${picked.size ? "" : "hidden"}>
@@ -3348,29 +3351,60 @@ function protectedMogijiIssueMessage(issue, ownerLabel) {
   return `❌ ${ownerLabel} ${restDate[0]}월 ${restDate[1]}일은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 필요한 휴식일입니다. 이 교환으로 근무가 들어가 규정에 맞지 않습니다.`;
 }
 
+function requesterFixedMogijiViolation(request, myPost) {
+  const policy = window.CrewSwapMogijiPolicy;
+  if (!policy || !request) return null;
+  const post = myPost || (state.myPosts || []).find(item => item.id === request.postId);
+  return policy.findProtectedRestViolation(
+    request.openRoster || [],
+    schedulesOfferedByPost(post),
+  );
+}
+
+function requesterFixedMogijiMessage(issue) {
+  if (!issue) return null;
+  const restDate = issue.dayKey.split("-").slice(1).map(Number);
+  const arrivalDate = issue.arrivalDate.split("-").slice(1).map(Number);
+  const incomingMonth = issue.incoming?.month || issue.dayKey.slice(0, 7);
+  const incomingDate = issue.incoming
+    ? `${parseInt(incomingMonth.split("-")[1], 10)}월 ${issue.incoming.day}일`
+    : `${restDate[0]}월 ${restDate[1]}일`;
+  const incomingDuty = issue.incoming?.title || issue.incoming?.type || "근무";
+  return `❌ 선택한 날짜의 문제가 아닙니다.<br>상대방은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 ${restDate[0]}월 ${restDate[1]}일이 필수 휴무이지만, 내가 내놓은 ${incomingDate} ${escapeHtml(incomingDuty)} 근무를 받게 됩니다.<br><strong>따라서 상대 달력에서 다른 날짜를 선택해도 이 요청자와는 교환할 수 없습니다.</strong>`;
+}
+
 function posterPickRestCheck(reqId) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
+  if (!r) return { offered: null, msg: null, fixed: false };
+  const myPost = (state.myPosts || []).find(p => p.id === r.postId);
+  const fixedViolation = requesterFixedMogijiViolation(r, myPost);
+  if (fixedViolation) {
+    return { offered: null, msg: requesterFixedMogijiMessage(fixedViolation), fixed: true };
+  }
   const days = [...(_posterPick[reqId] || [])];
-  if (!r || !days.length) return { offered: null, msg: null };
+  if (!days.length) return { offered: null, msg: null, fixed: false };
   const entries = (r.openRoster || []).filter(s => days.includes(s.day));
   const offered = offeredFromRosterDays(entries);
-  const myPost = (state.myPosts || []).find(p => p.id === r.postId);
   const givenDays = myPost ? (myPost.offered.days || []) : [];
   const policy = window.CrewSwapMogijiPolicy;
   const myIncomingViolation = policy?.findProtectedRestViolation(state.schedules, entries);
-  const requesterIncoming = schedulesOfferedByPost(myPost);
-  const requesterIncomingViolation = policy?.findProtectedRestViolation(r.openRoster || [], requesterIncoming);
   const msg =
     protectedMogijiIssueMessage(myIncomingViolation, "내 일정에서") ||
-    protectedMogijiIssueMessage(requesterIncomingViolation, "상대 일정에서") ||
     restIssueMessage(restCheckIncoming(offered, givenDays)) ||
     mogijiIssueMessage(mogijiRestCheckIncoming(offered, givenDays));
-  return { offered, msg };
+  return { offered, msg, fixed: false };
 }
 function updatePosterPickMsg(reqId) {
   const el = document.getElementById(`rosterMsg-${reqId}`);
   if (!el) return;
-  const { offered, msg } = posterPickRestCheck(reqId);
+  const { offered, msg, fixed } = posterPickRestCheck(reqId);
+  if (fixed) {
+    if (_posterPick[reqId]) _posterPick[reqId].clear();
+    el.classList.add("is-blocked");
+    el.innerHTML = msg;
+    return;
+  }
+  el.classList.remove("is-blocked");
   if (!offered) {
     el.innerHTML = `<span>상대 달력에서 받을 근무를 선택하면 교환 내용이 여기에 표시됩니다.</span>`;
     return;
@@ -3382,7 +3416,7 @@ function updatePosterPickMsg(reqId) {
     <b>⇄</b>
     <span><small>상대에게 받을 근무</small><strong>${escapeHtml(offered.patternName || "-")}</strong></span>
   </div>`;
-  if (msg) { el.innerHTML = `<span style="color:#c53030;">${msg}<br><small>이 조합은 휴식 기준 위반 — 다른 날을 고르세요.</small></span>`; }
+  if (msg) { el.innerHTML = `<span style="color:#c53030;">${msg}<br><small>선택한 날짜 조합이 휴식 기준에 맞지 않습니다. 다른 날을 고르세요.</small></span>`; }
   else { el.innerHTML = `${exchange}<span style="color:#1a7a3f;">✓ ${offered.days.map(d=>d+"일").join(", ")} 선택됨 — 휴식 기준 통과</span>`; }
 }
 
@@ -3390,7 +3424,8 @@ async function posterSelectDays(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   const r = (state.requests.received || []).find(x => x.id === reqId);
   if (!r) return;
-  const { offered, msg } = posterPickRestCheck(reqId);
+  const { offered, msg, fixed } = posterPickRestCheck(reqId);
+  if (fixed) { showToast("내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹쳐 이 요청자와는 교환할 수 없습니다."); return; }
   if (!offered) { showToast("바꿀 날을 하나 이상 선택하세요."); return; }
   if (msg) { showToast("휴식 기준 위반 — 다른 날을 선택하세요."); return; }
   try {
@@ -3555,6 +3590,7 @@ function requestCard(r) {
   const isSentV = state.reqViewMode === "sent";
   // 새 모델: 요청자가 로스터만 열고 offered 미확정 → 받는 사람(글작성자)이 날짜를 골라야 함
   const isOpenPending = state.reqViewMode === "received" && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
+  const fixedMogijiViolation = isOpenPending ? requesterFixedMogijiViolation(r) : null;
   const isWaitingSent = isSentV && !r.offered && Array.isArray(r.openRoster) && r.openRoster.length > 0;
   const needsRequesterApproval = isSentV && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
   const posterWaitingApproval = state.reqViewMode === "received" && !!r.posterSelected && !!r.offered && (r.stage || 1) < 3;
@@ -3665,7 +3701,7 @@ function requestCard(r) {
       ${isOpenPending
         ? `<div class="req-respond-buttons">
              <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
-             <button class="primary-button poster-select-btn" data-req-id="${r.id}">이 일정으로 승인 요청</button>
+             <button class="primary-button poster-select-btn" data-req-id="${r.id}"${fixedMogijiViolation ? " disabled" : ""}>${fixedMogijiViolation ? "필수 휴무 충돌 · 교환 불가" : "이 일정으로 승인 요청"}</button>
            </div>`
         : ""}
       ${needsRequesterApproval
