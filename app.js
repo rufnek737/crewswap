@@ -1109,7 +1109,8 @@ function calcCumulative() {
 }
 
 function dDayInfo(day, month) {
-  // 마감: 패턴 시작일 기준 영업일 역산 (조종사 D-2 17시 / 객실 D-3)
+  // 회사 근무교환 신청 마감: 패턴 시작일 기준 영업일 역산
+  // (조종사 2영업일 전 17시 / 객실 3영업일 전)
   const rules = currentRules();
   const bDays = (rules.deadline && rules.deadline.businessDays) || 2;
   const deadlineHour = (rules.deadline && rules.deadline.hour) || 17;
@@ -1121,6 +1122,31 @@ function dDayInfo(day, month) {
   const days = Math.floor(diffMs / 86400000);
   const hours = Math.floor((diffMs % 86400000) / 3600000);
   return { expired: false, days, hours, deadlineDate: deadline };
+}
+
+function sameCalendarDate(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function companyDeadlineDueText(dd) {
+  if (!dd?.deadlineDate) return "회사 제출 시각 확인 필요";
+  const deadline = dd.deadlineDate;
+  const hour = String(deadline.getHours()).padStart(2, "0");
+  const minute = String(deadline.getMinutes()).padStart(2, "0");
+  const time = minute === "00" ? `${Number(hour)}시` : `${hour}:${minute}`;
+  if (sameCalendarDate(deadline, today())) return `오늘 ${time}`;
+  return `${deadline.getMonth() + 1}/${deadline.getDate()} ${time}`;
+}
+
+function companyDeadlineText(day, month, dd) {
+  const target = dayToDate(day, month);
+  const targetLabel = `${target.getMonth() + 1}/${target.getDate()} 근무교환`;
+  const due = companyDeadlineDueText(dd);
+  return dd?.expired
+    ? `${targetLabel} 회사 제출 마감됨 (${due})`
+    : `${targetLabel} 회사 제출: ${due}까지`;
 }
 
 function crewPairingCheck(s) {
@@ -1204,7 +1230,7 @@ function checkRulesCabin(ss, rules) {
   // 이 체크는 스왑 상대방 정보가 필요해서 여기선 Info 안내만 표시
   const hasStby = ss.some(s => s.type === "STBY" || s.type === "RSV");
 
-  const deadlineLabel = `신청 마감 (D-${rules.deadline.businessDays} 영업일)`;
+  const deadlineLabel = "회사 근무교환 신청 마감";
 
   // 방송등급 미보유 → RSV/STBY 불가
   const noBroadcast = !state.user.hasBroadcastRating;
@@ -1230,8 +1256,8 @@ function checkRulesCabin(ss, rules) {
   return [
     { label: deadlineLabel,
       status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
-      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()})`,
-      ref: "Swap Guide p.47 — 스왑 신청은 변경 시작일 기준 D-3 영업일 이내에 신청해야 합니다. (예: 수요일 변경일 → 전전주 금요일까지)" },
+      detail: companyDeadlineText(firstDay, ss[0].month, dd),
+      ref: `Swap Guide p.47 — 스왑 성사 후 회사 시스템에 근무교환 신청서를 변경 시작일의 ${rules.deadline.businessDays}영업일 전까지 제출해야 합니다. 마감 이후에는 회사 접수가 불가합니다.` },
     { label:`연속 근무일 (${consecLimit}일 미만)`,
       status: consecFail ? "FAIL" : consecWarn ? "WARN" : "PASS",
       detail:`최대 ${cum.maxConsec}일`,
@@ -1345,9 +1371,9 @@ function checkRulesForSelection() {
     { label:"CAT II/III 조건", status: needsCat3 && !state.user.cat3 ? "WARN" : "PASS",
       detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음",
       ref: "CAT II/III — 저시정(안개 등) 착륙 자격. 특정 기상 조건이 예상되는 비행 편에 지정. 미보유 시 해당 비행 스왑 가능하나 기상 악화 시 운항 제한될 수 있어 편조팀 확인 권장." },
-    { label:"신청 마감 (D-2 17시)", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
-      detail: dd.expired ? "이미 마감 — 등록 불가" : `D-${dd.days} ${dd.hours}h 남음 (${dd.deadlineDate.getMonth()+1}/${dd.deadlineDate.getDate()} 17시)`,
-      ref: "조종사 스왑 신청 마감 — 변경 시작일 기준 2영업일 전(D-2) 17:00까지. 예: 수요일 비행 → 전주 월요일 17시까지. 마감 이후 접수 불가." },
+    { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
+      detail: companyDeadlineText(firstDay, ss[0].month, dd),
+      ref: "스왑 성사 후 J-CREW에 근무교환 신청서를 변경 시작일의 2영업일 전 17:00까지 제출해야 합니다. 예: 수요일 비행 변경 건은 전주 월요일 17시까지이며, 이후에는 회사 접수가 불가합니다." },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
       ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
@@ -1848,18 +1874,19 @@ function renderMetrics() {
     .filter(x => !x.dd.expired && x.dd.days <= 7)
     .sort((a,b) => a.dd.days - b.dd.days)[0];
   if (upcoming) {
-    const monthNum = parseInt((upcoming.mon || state.currentMonth).split("-")[1]);
-    $("#nextDeadline").textContent = `${monthNum}/${upcoming.day} 마감 D-${upcoming.dd.days} ${upcoming.dd.hours}h`;
+    $("#nextDeadline").textContent = companyDeadlineText(upcoming.day, upcoming.mon, upcoming.dd);
     $("#nextDeadline").className = "deadline-text" + (upcoming.dd.days >= 3 ? " calm" : "");
   } else {
-    $("#nextDeadline").textContent = "임박 마감 없음";
+    $("#nextDeadline").textContent = "임박한 회사 제출 건 없음";
     $("#nextDeadline").className = "deadline-text calm";
   }
 
   // 요약 바: 경고가 있을 때만 빨갛게, 없으면 정상
   const warns = [];
   if (c.maxConsec >= consecLimit) warns.push(`연속근무 ${c.maxConsec}일`);
-  if (upcoming && upcoming.dd.days <= 1) warns.push(`마감 D-${upcoming.dd.days}`);
+  if (upcoming && upcoming.dd.days <= 1) {
+    warns.push(`${parseInt((upcoming.mon || state.currentMonth).split("-")[1])}/${upcoming.day} 회사 제출 ${companyDeadlineDueText(upcoming.dd)}`);
+  }
   if (hPct >= 95) warns.push("승무시간 한도 임박");
   const sumEl = $("#metricsSummary");
   const sumTxt = $("#metricsSummaryText");
@@ -2000,7 +2027,7 @@ function renderSelection() {
   const totalBlockMin = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
   const totalDutyMin = ss.reduce((sum, s) => sum + dutyMinutesOf(s), 0);
   const dd = dDayInfo(ss[0].day, ss[0].month);
-  const ddText = dd.expired ? "지남" : `D-${dd.days} ${dd.hours}h`;
+  const ddText = dd.expired ? "마감됨" : `${companyDeadlineDueText(dd)}까지`;
 
   $("#selectedSummary").className = "";
   $("#selectedSummary").innerHTML = `
@@ -2010,7 +2037,7 @@ function renderSelection() {
         <span>승무(BLH) <b>${formatHM(totalBlockMin)}</b></span>
         <span>근무 <b>${formatHM(totalDutyMin)}</b></span>
         <span>일수 <b>${ss.length}일</b></span>
-        <span>마감 <b>${ddText}</b></span>
+        <span>회사 제출 <b>${ddText}</b></span>
       </div>
     </div>
     <div class="selected-list">
@@ -2396,7 +2423,7 @@ function renderMatches() {
             ${post.offered.cat3 ? `<span class="badge">CAT III</span>` : ""}
           </div>
         </div>
-        <div class="match-deadline ${dd.days<=1?"urgent":""}">${dd.expired?"마감 지남":`마감 D-${dd.days}`}</div>
+        <div class="match-deadline ${dd.days<=1?"urgent":""}">회사 제출<br>${dd.expired?"마감됨":`${companyDeadlineDueText(dd)}까지`}</div>
       </div>
 
       ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${wantedTxt}</div>` : ""}
@@ -3596,7 +3623,9 @@ function requestCard(r) {
         const rules = currentRules();
         const menu = rules.submitMenu || "회사 시스템 → 스케줄 변경 신청";
         const contact = rules.submitContact || "회사 운항편조팀";
-        const deadline = rules.deadline ? `D-${rules.deadline.businessDays}일 ${rules.deadline.hour}시까지` : "회사 마감 시각까지";
+        const deadline = rules.deadline
+          ? `변경 시작일의 ${rules.deadline.businessDays}영업일 전 ${rules.deadline.hour || 17}시까지`
+          : "회사 마감 시각까지";
         // 회사 상신 주체 = 글을 올린 사람(포스트 작성자). received 뷰 = 내가 작성자.
         const iAmPoster = !isSent;
         const myId = state.user.nickname || "나";
@@ -3623,7 +3652,7 @@ function requestCard(r) {
           <ol>
             <li><strong>${menu}</strong> 메뉴 접속</li>
             <li>본인과 상대방 정보, 변경 일자/패턴 입력</li>
-            <li>변경 시작일 <strong>${deadline}</strong> 신청서 작성·제출</li>
+            <li><strong>${deadline}</strong> 회사 근무교환 신청서 작성·제출</li>
             <li>승인/반려 여부는 회사 시스템 알림으로 확인</li>
           </ol>
           <p class="hint">📞 문의: ${contact}</p>
