@@ -3370,7 +3370,7 @@ function requesterFixedMogijiMessage(issue) {
     ? `${parseInt(incomingMonth.split("-")[1], 10)}월 ${issue.incoming.day}일`
     : `${restDate[0]}월 ${restDate[1]}일`;
   const incomingDuty = issue.incoming?.title || issue.incoming?.type || "근무";
-  return `❌ 선택한 날짜의 문제가 아닙니다.<br>상대방은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 ${restDate[0]}월 ${restDate[1]}일이 필수 휴무이지만, 내가 내놓은 ${incomingDate} ${escapeHtml(incomingDuty)} 근무를 받게 됩니다.<br><strong>따라서 상대 달력에서 다른 날짜를 선택해도 이 요청자와는 교환할 수 없습니다.</strong>`;
+  return `❌ 상대방은 ${arrivalDate[0]}월 ${arrivalDate[1]}일 모기지 도착 후 ${restDate[0]}월 ${restDate[1]}일이 필수 휴무이지만, 내가 내놓은 ${incomingDate} ${escapeHtml(incomingDuty)} 근무를 받게 됩니다.<br><strong>따라서 상대 달력에서 다른 날짜를 선택해도 이 요청자와는 교환할 수 없습니다.</strong>`;
 }
 
 function posterPickRestCheck(reqId) {
