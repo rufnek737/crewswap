@@ -56,6 +56,17 @@
         return;
       }
 
+      // 이미 발송된 공개 로스터는 현재 월만 담겨 전월 마지막 편조가 없을 수 있다.
+      // CrewConnex의 월초 도착 shadow(24:00) 뒤가 OFF라면 전월 편조 도착일로 분류한다.
+      if (!previous && Number(entry.day) === 1 && entry.arrivalTime === "24:00" && next?.type === "OFF") {
+        entry.type = "ARRIVAL";
+        entry.title = "← 전월 편조 도착";
+        entry.arrivalTime = null;
+        entry.routeSummary = "전월 편조 도착";
+        changed++;
+        return;
+      }
+
       let layoverAirport = null;
       // 전날 도착지와 다음날 출발지가 같으면 중간 UNKNOWN은 체류일이다.
       // CJU처럼 다른 승무원의 베이스가 될 수 있는 공항도 현재 사용자의

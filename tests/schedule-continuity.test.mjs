@@ -15,6 +15,18 @@ test("first day of a month becomes ARRIVAL after a previous-month overnight flig
   assert.equal(schedules[1].arrivalTime, "02:20");
 });
 
+test("an already-shared month-only roster still recognizes its first-day arrival shadow", () => {
+  const schedules = [
+    { month:"2026-08", day:1, type:"UNKNOWN", title:"-", arrivalTime:"24:00" },
+    { month:"2026-08", day:2, type:"OFF", title:"OFF" },
+  ];
+  assert.equal(normalizeScheduleContinuity(schedules), 1);
+  assert.equal(schedules[0].type, "ARRIVAL");
+  assert.equal(schedules[0].title, "← 전월 편조 도착");
+  assert.equal(schedules[0].routeSummary, "전월 편조 도착");
+  assert.equal(schedules[0].arrivalTime, null);
+});
+
 test("unknown middle day between outbound and inbound flights becomes LAYOV", () => {
   const schedules = [
     { month:"2026-08", day:7, type:"국제선", title:"7C5303", dep:"ICN", arr:"DPS", patternId:"P2" },
