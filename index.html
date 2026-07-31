@@ -912,12 +912,34 @@
       </div>
     </div>
 
+    <!-- 새 버전 최초 실행 시 1회 표시되는 업데이트 안내 -->
+    <div id="releaseNoticeOverlay" class="generic-modal-overlay" hidden></div>
+    <div id="releaseNoticeDialog" class="generic-modal release-notice-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="releaseNoticeTitle">
+      <div class="dialog-body">
+        <div class="release-notice-badge">업데이트</div>
+        <div class="release-notice-heading">
+          <div>
+            <h3 id="releaseNoticeTitle">CrewSwap이 새로워졌습니다</h3>
+            <p id="releaseNoticeSummary"></p>
+          </div>
+          <div class="release-notice-meta">
+            <strong id="releaseNoticeVersion"></strong>
+            <span id="releaseNoticeDate"></span>
+          </div>
+        </div>
+        <ul id="releaseNoticeChanges" class="release-notice-changes"></ul>
+        <p class="release-notice-hint">이 내용은 알림의 <strong>공지</strong>에서 언제든 다시 볼 수 있습니다.</p>
+        <button id="releaseNoticeConfirm" class="primary-button" type="button">확인하고 시작하기</button>
+      </div>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="credit-policy.js"></script>
     <script src="post-dates.js"></script>
     <script src="schedule-continuity.js"></script>
     <script src="mogiji-policy.js"></script>
     <script src="cabin-policy.js"></script>
+    <script src="release-notice.js"></script>
     <script src="app.js"></script>
     <script>
       if ('serviceWorker' in navigator) {

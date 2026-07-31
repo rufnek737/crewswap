@@ -735,6 +735,31 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .import-progress { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 8px; background: var(--blue-soft); }
 .import-progress span { width: 18px; height: 18px; border: 3px solid #93a9da; border-top-color: #2e5cc9; border-radius: 999px; animation: spin 0.8s linear infinite; }
 
+/* ===== 버전 업데이트 안내 ===== */
+.release-notice-dialog { max-width: 460px; }
+.release-notice-dialog .dialog-body { gap: 16px; padding: 24px; }
+.release-notice-badge {
+  justify-self: start; padding: 5px 10px; border-radius: 999px;
+  background: var(--primary); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+}
+.release-notice-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.release-notice-heading h3 { margin: 0 0 7px; font-size: 20px; color: var(--text); }
+.release-notice-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.release-notice-meta { flex: 0 0 auto; display: grid; justify-items: end; gap: 3px; color: var(--primary); }
+.release-notice-meta strong { font-size: 13px; }
+.release-notice-meta span { color: var(--muted); font-size: 11px; }
+.release-notice-changes {
+  display: grid; gap: 10px; margin: 0; padding: 16px 16px 16px 34px;
+  border: 1px solid #c8d6ef; border-radius: 10px; background: var(--blue-soft);
+  color: #1d3a7a; font-size: 13px; line-height: 1.55;
+}
+.release-notice-hint { margin: 0; color: var(--muted); font-size: 11px; text-align: center; }
+.release-notice-dialog .primary-button { width: 100%; min-height: 46px; }
+@media (max-width: 420px) {
+  .release-notice-heading { display: grid; }
+  .release-notice-meta { display: flex; justify-items: initial; gap: 8px; }
+}
+
 /* ===== 임포트 다이얼로그 (div 모달 내부 컨텐츠) ===== */
 .import-dialog { width: 100%; box-sizing: border-box; }
 .notice { padding: 10px 12px; background: var(--blue-soft); border: 1px solid #c8d6ef; border-radius: 6px; font-size: 12px; color: #1d3a7a; line-height: 1.5; }

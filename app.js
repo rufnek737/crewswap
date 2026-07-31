@@ -350,7 +350,7 @@ function createMockRequests() {
 }
 
 function createMockAlerts() {
-  return [
+  const alerts = [
     { id:"guide", kind:"announce", title:"📢 CrewSwap 사용 안내", date:"2026.06.28",
       body:"CrewSwap은 승무원 스케줄 스왑을 더 쉽게 찾고 요청할 수 있는 서비스입니다.\n\n내 근무 확인\n내 근무에서 스케줄을 확인하고, 바꾸고 싶은 근무를 선택할 수 있습니다.\n\n스왑 찾기\n스왑하기에서 다른 사용자가 올린 스왑 글을 확인하세요.\n\n요청하기\n원하는 스왑 글을 찾았다면 요청하기를 누르고, 내가 대신 줄 근무를 선택해 제안할 수 있습니다.\n\n요청 확인\n요청함에서 내가 보낸 요청과 받은 요청을 확인할 수 있습니다.\n\n수락 후 진행\n상대가 요청을 수락하면 상세 정보를 확인한 뒤 회사 절차에 따라 스케줄 변경을 진행하면 됩니다.\n\n현재 베타 기간에는 일부 기능이 변경될 수 있습니다.\n사용 중 불편한 점이나 오류가 있으면 언제든 피드백 부탁드립니다.",
       time:"공지" },
@@ -358,6 +358,9 @@ function createMockAlerts() {
       body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n일반 거절은 상대방에게 개인 사정으로 인한 양해 메세지가 전달됩니다. 모기지 휴무 등 자동 규정 판정으로 교환할 수 없는 경우에는 개인 사유가 아니라 충돌 날짜와 규정 사유가 상대방에게 정확히 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청·스왑 등록에 1개씩 차감됩니다(의향묻기는 무료). 매월 첫 실행 시 기본 3개로 재설정되며 남은 크레딧과 광고 보상 크레딧은 다음 달로 이월되지 않습니다. 3개 이상이 더 필요하면 보상형 광고를 한 번 볼 때마다 1개를 받을 수 있습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.\n\nQ8. 무료와 프리미엄(구독)은 뭐가 다른가요?\n스왑을 찾고, 올리고, 요청·수락해서 성사시키는 핵심 기능은 전부 무료입니다. PRO는 \"내가 앱을 열지 않아도 서버가 조건에 맞는 새 글을 찾아주는\" 유료 구독 기능입니다.\n· 무료: 스왑 둘러보기·올리기·요청·성사, 내 거래 알림, 휴식시간 규정 체크\n· PRO 구독: 목적지·유형·박수 조건 저장, 조건 수 무제한, 앱이 꺼져 있어도 새 글 즉시 푸시\n※ 베타 기간에는 조건 저장과 웹/PWA 백그라운드 푸시를 무료로 검증합니다. iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.\n\nQ9. 달력 날짜 위 아이콘(👀 ⚠️ 🔒)은 무슨 뜻인가요?\n👀 (숫자): 다른 사용자가 해당 날짜의 근무를 내놓은 스왑 글 개수입니다.\n⚠️ : 그 날짜까지 연속 근무일수가 회사 규정 한도(운항 5일·객실 7일)에 임박했다는 경고입니다. 그 위에 근무를 더 얹는 스왑은 주의하세요.\n🔒 : 특수공항 자격 갱신 비행 등 회사 규정상 SWAP이 불가한 근무입니다.",
       time:"공지" },
   ];
+  const releaseAnnouncement = window.CrewSwapReleaseNotice?.announcement();
+  if (releaseAnnouncement) alerts.unshift(releaseAnnouncement);
+  return alerts;
 }
 
 function createMockSavedSearches() {
@@ -4983,6 +4986,7 @@ function bindEvents() {
   $("#pendingActionNext")?.addEventListener("click", () => confirmPendingAction());
 
   $("#bellButton").addEventListener("click", () => setAlertPanel(true));
+  $("#releaseNoticeConfirm")?.addEventListener("click", acknowledgeReleaseNotice);
   // 알림창 좌측 배경(backdrop) 클릭 시 닫힘 (우측 상단 X 대체)
   $("#alertBackdrop")?.addEventListener("click", () => setAlertPanel(false));
   document.getElementById("clearAllAlerts")?.addEventListener("click", () => {
@@ -5155,6 +5159,36 @@ function closeGenericModal(dialogId, overlayId) {
   document.body.classList.remove("no-scroll");
 }
 
+function showReleaseNoticeIfNeeded() {
+  const api = window.CrewSwapReleaseNotice;
+  if (!state.user.hasSignedUp || !state.user.serverAuthed || !api?.shouldShow(localStorage)) return;
+  const release = api.current;
+  const version = document.getElementById("releaseNoticeVersion");
+  const date = document.getElementById("releaseNoticeDate");
+  const summary = document.getElementById("releaseNoticeSummary");
+  const changes = document.getElementById("releaseNoticeChanges");
+  if (version) version.textContent = `v${release.version}`;
+  if (date) date.textContent = release.date;
+  if (summary) summary.textContent = release.summary;
+  if (changes) {
+    changes.replaceChildren(...release.changes.map(change => {
+      const item = document.createElement("li");
+      item.textContent = change;
+      return item;
+    }));
+  }
+  openGenericModal("releaseNoticeDialog", "releaseNoticeOverlay");
+}
+
+function acknowledgeReleaseNotice() {
+  window.CrewSwapReleaseNotice?.markSeen(localStorage);
+  closeGenericModal("releaseNoticeDialog", "releaseNoticeOverlay");
+}
+
+function queueReleaseNotice() {
+  setTimeout(showReleaseNoticeIfNeeded, 450);
+}
+
 function openSignupModal() {
   const sp = document.getElementById("signupPanel");
   const ov = document.getElementById("signupOverlay");
@@ -5222,6 +5256,7 @@ function applyLoggedInProfile(email, profile) {
   renderAll();
   fetchRequests();
   syncPremiumAlertSettings();
+  queueReleaseNotice();
 }
 
 // 내 정보 변경을 서버 계정에 반영 (실패해도 로컬은 이미 저장됨)
@@ -5257,6 +5292,7 @@ function maybeAutoShowSignup() {
 // 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
 if (!document.getElementById("splashScreen")) {
   setTimeout(maybeAutoShowSignup, 150);
+  if (state.user.hasSignedUp && state.user.serverAuthed) queueReleaseNotice();
 }
 
 /* ====== 스플래시 화면 (영상 + 로그인/회원가입) ====== */
@@ -5277,7 +5313,7 @@ if (!document.getElementById("splashScreen")) {
 
   // 이미 로그인된(서버 계정 인증된) 사용자 — 스플래시 없이 바로 현재 화면 유지
   if (state.user.hasSignedUp && state.user.serverAuthed) {
-    hideSplash();
+    hideSplash(queueReleaseNotice);
     return;
   }
 
