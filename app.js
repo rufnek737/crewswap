@@ -4045,7 +4045,8 @@ function switchTab(name) {
   const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
-  document.querySelector(".topbar")?.classList.toggle("is-compact", name !== "profile");
+  // 사용자·크레딧 헤더는 모든 메뉴에서 숨기고 알림종만 화면에 고정한다.
+  document.querySelector(".topbar")?.classList.add("is-compact");
   // 스왑하기 서브탭 상태 동기화
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
   if (name === "find") { fetchPosts(); renderSavedSearches(); }

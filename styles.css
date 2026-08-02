@@ -96,17 +96,24 @@ button { cursor: pointer; }
 .topbar.is-compact {
   min-height: 46px;
   justify-content: flex-end;
-  margin-bottom: 8px;
-  padding: 4px 0;
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  width: auto;
+  margin: 0;
+  padding: 0;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
   pointer-events: none;
+  z-index: 90;
 }
 .topbar.is-compact .brand,
 .topbar.is-compact .credit-pill { display: none; }
 .topbar.is-compact .status-strip,
 .topbar.is-compact .bell-button { pointer-events: auto; }
+.topbar.is-compact .bell-button { margin-right: 0; }
+.app > .view { padding-top: 54px; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 800; font-size: 20px; }
 .brand strong { display: block; font-size: 16px; }
@@ -1134,7 +1141,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
   .topbar.is-compact { flex-direction: row; align-items: center; }
-  .topbar.is-compact .status-strip { width: 100%; justify-content: flex-end; }
+  .topbar.is-compact .status-strip { width: auto; justify-content: flex-end; }
   .match-flight-times { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bottom-tabs { gap: 4px; padding: 6px 4px max(6px, env(safe-area-inset-bottom)); }
   .tab { font-size: 10px; padding: 0 4px; }
