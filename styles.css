@@ -88,10 +88,25 @@ button { cursor: pointer; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   margin-bottom: 18px; padding: 14px 16px; flex-wrap: wrap;
+  position: sticky; top: env(safe-area-inset-top); z-index: 20;
   border: 1px solid rgba(203, 214, 227, 0.92); border-radius: 18px;
   background: linear-gradient(135deg, rgba(255, 249, 242, 0.96), rgba(238, 245, 252, 0.94));
   box-shadow: 0 14px 36px rgba(38, 52, 72, 0.09);
 }
+.topbar.is-compact {
+  min-height: 46px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.topbar.is-compact .brand,
+.topbar.is-compact .credit-pill { display: none; }
+.topbar.is-compact .status-strip,
+.topbar.is-compact .bell-button { pointer-events: auto; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 800; font-size: 20px; }
 .brand strong { display: block; font-size: 16px; }
@@ -517,6 +532,21 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .match-deadline.urgent { color: var(--c-fail); }
 .match-wanted { padding: 10px 12px; background: #f6f8fb; border-radius: 8px; font-size: 13px; color: var(--text); line-height: 1.5; }
 .match-wanted strong { color: var(--muted); font-size: 11px; font-weight: 700; margin-right: 6px; }
+.match-flight-detail { border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+.match-flight-detail > summary { padding: 11px 13px; cursor: pointer; color: var(--text); font-size: 13px; font-weight: 800; list-style: none; }
+.match-flight-detail > summary::-webkit-details-marker { display: none; }
+.match-flight-detail[open] > summary { border-bottom: 1px solid var(--line); background: #f7f9fc; }
+.match-flight-detail-list { display: grid; gap: 8px; padding: 10px; }
+.match-flight-detail-row { padding: 11px; border: 1px solid #dde5ee; border-radius: 8px; background: #fbfcfe; }
+.match-flight-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.match-flight-detail-head strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.match-flight-detail-head span { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-weight: 700; }
+.match-flight-detail-row > p { margin: 5px 0 9px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.match-flight-times { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.match-flight-times span { display: grid; gap: 3px; padding: 7px 5px; border-radius: 6px; background: #eef3f8; text-align: center; }
+.match-flight-times small { color: var(--muted); font-size: 9px; font-weight: 700; white-space: nowrap; }
+.match-flight-times b { color: var(--text); font-size: 12px; }
+.match-flight-no-time { margin-top: 7px; color: var(--muted); font-size: 11px; }
 .match-card .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .match-card .badge { padding: 3px 8px; border-radius: 4px; background: var(--c-intl-bg); color: var(--c-intl); font-size: 11px; font-weight: 700; }
 .match-card .badge.dom { background: var(--c-dom-bg); color: var(--c-dom); }
@@ -662,6 +692,19 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 /* ===== 내 정보 / 평판 ===== */
 .profile-grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr) minmax(0, 320px); gap: 18px; align-items: start; }
 .profile-card { padding: 20px; }
+.profile-side-stack { display: grid; gap: 18px; }
+.swap-usage-card { display: grid; gap: 12px; }
+.swap-usage-status { color: var(--text); font-size: 18px; }
+.swap-usage-counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.swap-usage-counts > div { display: grid; gap: 4px; padding: 12px; border-radius: 12px; background: #eef3f8; }
+.swap-usage-counts span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.swap-usage-warning { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.swap-usage-card.is-limit { border-color: #efbd72; background: #fff9ef; }
+.swap-usage-card.is-limit .swap-usage-status,
+.swap-usage-card.is-limit .swap-usage-warning { color: #a85b00; }
+.swap-usage-card.is-over { border-color: #e7a39a; background: #fff3f1; }
+.swap-usage-card.is-over .swap-usage-status,
+.swap-usage-card.is-over .swap-usage-warning { color: #b83224; }
 .rating-card { text-align: center; }
 .profile-email-display { padding: 14px; background: #f6f8fb; border-radius: 8px; margin-top: 8px; }
 .profile-email-display span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
@@ -959,6 +1002,19 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   transition: background 0.15s;
 }
 .cancel-post-button:hover { background: #fdecea; }
+.delete-post-history-button {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.delete-post-history-button:hover { border-color: var(--c-fail); color: var(--c-fail); }
 
 /* ===== 등록 버튼 행 ===== */
 .post-footer-btns {
@@ -1077,6 +1133,9 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   .app { padding: 16px 16px 16px; padding-top: calc(16px + env(safe-area-inset-top)); overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
   .status-strip { justify-content: flex-start; }
+  .topbar.is-compact { flex-direction: row; align-items: center; }
+  .topbar.is-compact .status-strip { width: 100%; justify-content: flex-end; }
+  .match-flight-times { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bottom-tabs { gap: 4px; padding: 6px 4px max(6px, env(safe-area-inset-bottom)); }
   .tab { font-size: 10px; padding: 0 4px; }
   .metrics-strip { grid-template-columns: 1fr; }

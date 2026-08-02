@@ -794,8 +794,8 @@ function renderPendingBar() {
       <span class="pending-target-sub">${escapeHtml(target.offered.summary || target.offered.type || "")} · ${(target.offered.days || []).length}일</span>
     </span>` : "";
   const guide = n > 0
-    ? `🔒 ${n}일 잠금(비공개) — 나머지 전체가 상대에게 열립니다. 다음을 누르세요 (${label})`
-    : `내 스케줄 전체가 상대에게 열립니다. 열기 싫은 근무만 달력에서 '잠금' 후 다음 (${label})`;
+    ? `🙈 내 스케줄 ${n}일 숨김 — 나머지 일정만 상대에게 보여집니다. 다음을 누르세요 (${label})`
+    : `상대에게 보여주기 싫은 근무는 달력에서 눌러 '내 스케줄 숨기기'로 선택하세요. (${label})`;
   $("#pendingActionText").innerHTML = `${targetHtml}<span class="pending-guide">${guide}</span>`;
   $("#pendingActionNext").disabled = false; // 잠금 0개(전체 공개)도 진행 가능
   bar.hidden = false;
@@ -1620,11 +1620,9 @@ function renderAll() {
 function renderFlowUi() {
   const postFlow = state.guideFlow === "post";
   const findFlow = state.guideFlow === "find";
-  const schedGuide = document.getElementById("postGuideSchedule");
   const postGuide = document.getElementById("postGuideDetails");
   const findGuide = document.getElementById("findGuide");
   const findView = document.getElementById("find");
-  if (schedGuide) schedGuide.hidden = !postFlow;
   if (postGuide) postGuide.hidden = !postFlow;
   if (findGuide) findGuide.hidden = !findFlow;
   if (findView) findView.classList.toggle("is-guided", findFlow);
@@ -1873,70 +1871,22 @@ function startRewardAd() {
 }
 
 function renderMetrics() {
-  const isCabinUser = state.user.crewType === "CABIN";
-  const rules = currentRules();
-  const hoursLimit = rules.monthlyHoursLimit || 90; // 운항 90h / 객실 100h
-  const c = calcCumulative();
-  const hPct = Math.min(100, (c.totalHours / hoursLimit) * 100);
-  $("#hoursBar").style.width = hPct + "%";
-  $("#hoursBar").className = "metric-fill" + (hPct >= 95 ? " danger" : hPct >= 80 ? " warn" : "");
-  $("#hoursText").textContent = `${formatHM(c.totalHours * 60)} / ${hoursLimit}:00`;
-
-  const consecLimit = rules.dutyConsecLimit || (isCabinUser ? 7 : 5);
-  const cPct = Math.min(100, (c.maxConsec / consecLimit) * 100);
-  $("#consecBar").style.width = cPct + "%";
-  $("#consecBar").className = "metric-fill" + (c.maxConsec >= consecLimit ? " danger" : c.maxConsec >= consecLimit - 1 ? " warn" : "");
-  $("#consecText").textContent = `${c.maxConsec} / ${consecLimit}일`;
-
-  if (isCabinUser) {
-    const monthlyLimit = rules.swapLimitMonthly || 2;
-    const yearlyLimit  = rules.swapLimitYearly  || 12;
-    const monthlyUsed  = state.user.monthlySwapUsed || 0;
-    const yearlyUsed   = state.user.yearlySwapUsed  || 0;
-    const sPct = Math.min(100, (monthlyUsed / monthlyLimit) * 100);
-    $("#swapBar").style.width = sPct + "%";
-    $("#swapBar").className = "metric-fill" + (sPct >= 100 ? " danger" : sPct >= 50 ? " warn" : "");
-    const swapLabelEl = document.querySelector(".metric-label[data-swap]");
-    if (swapLabelEl) swapLabelEl.textContent = "월 SWAP 횟수";
-    $("#swapText").textContent = `${monthlyUsed}/${monthlyLimit}회 · 연 ${yearlyUsed}/${yearlyLimit}`;
-  } else {
-    // 운항승무원 — 스왑 횟수 제한 없음
-    $("#swapBar").style.width = "0%";
-    $("#swapBar").className = "metric-fill";
-    $("#swapText").textContent = "무제한";
+  const usage = window.CrewSwapUsage?.summary(state.user.crewType, state.user, currentRules());
+  if (!usage) return;
+  const card = document.getElementById("profileSwapCard");
+  const status = document.getElementById("profileSwapStatus");
+  const counts = document.getElementById("profileSwapCounts");
+  const warning = document.getElementById("profileSwapWarning");
+  if (!card || !status || !counts || !warning) return;
+  card.classList.toggle("is-limit", usage.level === "limit");
+  card.classList.toggle("is-over", usage.level === "over");
+  status.textContent = usage.status;
+  counts.hidden = !usage.limited;
+  if (usage.limited) {
+    document.getElementById("profileSwapMonthly").textContent = `${usage.monthly.used} / ${usage.monthly.limit}회`;
+    document.getElementById("profileSwapYearly").textContent = `${usage.yearly.used} / ${usage.yearly.limit}회`;
   }
-
-  // 다음 마감 (이번 주 내 가장 가까운 패턴 시작일)
-  const upcoming = state.schedules.filter(s => s.type !== "OFF" && !s.lockReason)
-    .map(s => ({ day:s.day, mon:s.month, dd:dDayInfo(s.day, s.month) }))
-    .filter(x => !x.dd.expired && x.dd.days <= 7)
-    .sort((a,b) => a.dd.days - b.dd.days)[0];
-  if (upcoming) {
-    $("#nextDeadline").textContent = companyDeadlineText(upcoming.day, upcoming.mon, upcoming.dd);
-    $("#nextDeadline").className = "deadline-text" + (upcoming.dd.days >= 3 ? " calm" : "");
-  } else {
-    $("#nextDeadline").textContent = "임박한 회사 제출 건 없음";
-    $("#nextDeadline").className = "deadline-text calm";
-  }
-
-  // 요약 바: 경고가 있을 때만 빨갛게, 없으면 정상
-  const warns = [];
-  if (c.maxConsec >= consecLimit) warns.push(`연속근무 ${c.maxConsec}일`);
-  if (upcoming && upcoming.dd.days <= 1) {
-    warns.push(`${parseInt((upcoming.mon || state.currentMonth).split("-")[1])}/${upcoming.day} 회사 제출 ${companyDeadlineDueText(upcoming.dd)}`);
-  }
-  if (hPct >= 95) warns.push("승무시간 한도 임박");
-  const sumEl = $("#metricsSummary");
-  const sumTxt = $("#metricsSummaryText");
-  if (sumEl && sumTxt) {
-    if (warns.length) {
-      sumEl.classList.add("has-warn");
-      sumTxt.textContent = "⚠ " + warns.join(" · ");
-    } else {
-      sumEl.classList.remove("has-warn");
-      sumTxt.textContent = "이번 달 정상";
-    }
-  }
+  warning.textContent = usage.limited ? usage.warning : "운항승무원은 별도 SWAP 횟수 제한이 없습니다.";
 }
 
 function renderAvailableMonths() {
@@ -2273,7 +2223,7 @@ function renderMyPosts() {
   if (closeButton) closeButton.hidden = !managing;
   if (menuCount) {
     menuCount.textContent = state.myPosts.length
-      ? `현재 ${state.myPosts.length}건 · 수정하거나 등록을 취소할 수 있습니다.`
+      ? `현재 ${state.myPosts.length}건 · 진행 중인 글은 수정·취소하고, 환급 완료 기록은 삭제할 수 있습니다.`
       : "등록한 스왑이 있는지 서버에서 확인합니다.";
   }
   if (state.myPosts.length === 0) {
@@ -2292,7 +2242,8 @@ function renderMyPosts() {
     const refundGranted = Object.prototype.hasOwnProperty.call(p, "refundGranted")
       ? p.refundGranted
       : (p.creditSpent || 1) * 0.5;
-    const statusHtml = p.status === "expired"
+    const refundedHistory = window.CrewSwapPostHistory.isRefundedHistory(p);
+    const statusHtml = refundedHistory
       ? `<span class="my-post-status expired">마감됨${p.refunded ? (refundGranted > 0 ? ` · ${refundGranted}크레딧 환급` : " · 환급 상한 도달") : ""}</span>`
       : `<span class="my-post-status done">등록 완료</span>`;
     return `
@@ -2316,8 +2267,9 @@ function renderMyPosts() {
           <div><dt>희망 조건</dt><dd>${wantedSummary(p.wanted)}</dd></div>
         </dl>
       </details>
-      ${(p.status === "expired" || p.refunded)
-        ? `<p class="hint" style="margin:8px 0 0;">이미 마감되어 크레딧이 환급된 글입니다. 수정·취소할 수 없습니다.</p>`
+      ${refundedHistory
+        ? `<p class="hint" style="margin:8px 0 0;">이미 마감되어 크레딧 처리가 끝난 글입니다.</p>
+          ${managing ? `<button class="delete-post-history-button" data-my-post-id="${p.id}">기록 삭제</button>` : ""}`
         : `<div class="my-post-btn-row">
         <button class="secondary-button edit-post-button" data-my-post-id="${p.id}">희망 조건 수정</button>
         <button class="cancel-post-button" data-my-post-id="${p.id}">등록 취소 · 최대 ${p.creditSpent || 1}크레딧 환급</button>
@@ -2358,6 +2310,28 @@ function renderMyPosts() {
       showToast(refund > 0
         ? `등록 취소 완료 — ${refund}크레딧 환급됨`
         : "등록 취소 완료 — 기본 크레딧 상한(3개)이라 추가 환급 없음");
+    };
+  });
+  el.querySelectorAll(".delete-post-history-button").forEach(b => {
+    b.onclick = async () => {
+      const pid = b.dataset.myPostId;
+      const post = state.myPosts.find(x => x.id === pid);
+      if (!window.CrewSwapPostHistory.isRefundedHistory(post)) return;
+      if (!confirm(`"${post.offered.patternName}" 환급 완료 기록을 삭제하시겠습니까?\n크레딧은 변동되지 않습니다.`)) return;
+      if (post.deleteToken) {
+        try {
+          await fetch(`${API_BASE}/api/posts-delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
+          });
+        } catch (e) { console.warn("refunded post history delete failed:", e); }
+      }
+      _deletedPostIds.add(pid);
+      state.myPosts = window.CrewSwapPostHistory.remove(state.myPosts, pid);
+      saveState();
+      renderMyPosts();
+      showToast("환급 완료 기록을 삭제했습니다. 크레딧은 변동되지 않습니다.");
     };
   });
 }
@@ -2442,6 +2416,35 @@ function renderPostFooter() {
   `;
 }
 
+function matchPostDetailsHtml(offered) {
+  const rows = window.CrewSwapPostDetails.rows(offered);
+  return `
+    <details class="match-flight-detail">
+      <summary>운항 상세 보기 ▾</summary>
+      <div class="match-flight-detail-list">
+        ${rows.map(row => {
+          const times = [
+            [row.fallback ? "첫 Show-up" : "Show-up", row.reportTime],
+            [row.fallback ? "첫 STD" : "STD", row.departureTime],
+            [row.fallback ? "마지막 STA" : "STA", row.arrivalTime],
+            [row.fallback ? "마지막 Check-out" : "Check-out", row.releaseTime],
+          ].filter(([, value]) => value);
+          return `
+            <div class="match-flight-detail-row">
+              <div class="match-flight-detail-head">
+                <strong>${escapeHtml(row.date)} · ${escapeHtml(row.title)}</strong>
+                <span>${escapeHtml(row.type)}</span>
+              </div>
+              ${row.route ? `<p>${escapeHtml(row.route)}</p>` : ""}
+              ${times.length ? `<div class="match-flight-times">
+                ${times.map(([label, value]) => `<span><small>${label}</small><b>${escapeHtml(value)}</b></span>`).join("")}
+              </div>` : `<div class="match-flight-no-time">추가 시간 정보가 없습니다.</div>`}
+            </div>`;
+        }).join("")}
+      </div>
+    </details>`;
+}
+
 function renderMatches() {
   const list = $("#matchList");
   const items = visiblePosts();
@@ -2478,6 +2481,8 @@ function renderMatches() {
       </div>
 
       ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${wantedTxt}</div>` : ""}
+
+      ${matchPostDetailsHtml(post.offered)}
 
       <div class="card-actions">
         ${post.contactable === false
@@ -2719,16 +2724,27 @@ function validationRosterSnapshot() {
 
 // 잠금(선택)한 날을 제외한 '해당 월 전체 로스터'를 상대에게 공개용으로 요약
 function buildOpenRoster() {
-  const locked = new Set([...state.selectedDays]); // selectedDays = 잠금한 날
+  // 공개 대상은 현재 월 하나이므로 일자를 직접 비교한다. 화면 전환 중 월 기준이
+  // 달라져도 사용자가 숨긴 날이 다시 공개 목록에 포함되지 않게 한다.
+  const lockedDays = new Set([...state.selectedDays].map(key => parseDayKey(key).day));
   return validationRosterSnapshot()
     .filter(s => (s.month || state.currentMonth) === state.currentMonth)
-    .filter(s => !locked.has(dayKey(s.day)))
+    .filter(s => !lockedDays.has(Number(s.day)))
     .sort((a, b) => a.day - b.day)
     .map(s => ({
       ...s,
       aircraft: s.aircraft || null,
       requiresEdto: !!s.requiresEdto, requiresCat3: !!s.requiresCat3,
     }));
+}
+
+function exactMatchedOffer(post) {
+  const entries = window.CrewSwapRequestDisclosure?.exactFlightEntries(
+    post,
+    validationRosterSnapshot(),
+    state.currentMonth,
+  );
+  return entries?.length ? offeredFromRosterDays(entries) : null;
 }
 
 // 공개 로스터 항목 배열 → offered 요약 객체 (상대가 고른 날들로 만듦; 휴식/표시용)
@@ -2742,6 +2758,20 @@ function offeredFromRosterDays(rosterEntries) {
     summary: routes,
     type: ss[0].type,
     days: ss.map(s => s.day),
+    dateKeys: ss.map(s => dayKey(s.day, s.month || state.currentMonth)),
+    daySchedules: ss.map(s => ({
+      month: s.month || state.currentMonth,
+      day: s.day,
+      type: s.type,
+      title: s.title || null,
+      dep: s.dep || null,
+      arr: s.arr || null,
+      routeSummary: s.routeSummary || null,
+      reportTime: s.reportTime || null,
+      departureTime: s.departureTime || null,
+      arrivalTime: s.arrivalTime || null,
+      releaseTime: s.releaseTime || null,
+    })),
     aircraft: ss[0].aircraft || null,
     reportTime: (ss.find(s => s.reportTime && /^\d/.test(s.reportTime)) || {}).reportTime || null,
     firstDepartureTime: (ss.find(s => s.departureTime && /^\d/.test(s.departureTime)) || {}).departureTime || null,
@@ -2761,7 +2791,13 @@ function requestSwap(postId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  const directOffer = exactMatchedOffer(p);
+  if (directOffer) {
+    openRequestModal(postId, directOffer);
+    return;
+  }
   // 바꿔줄 내 근무를 고르도록 항상 내 근무 화면으로 이동 — 여러 날을 고른 뒤 "다음"으로 직접 넘어가게 함
+  state.selectedDays.clear();
   state.pendingRequestPostId = postId;
   state.pendingRequestType = "request";
   switchTab("schedule");
@@ -2773,6 +2809,12 @@ function askAboutPost(postId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 의향을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  const directOffer = exactMatchedOffer(p);
+  if (directOffer) {
+    openAskModal(postId, directOffer);
+    return;
+  }
+  state.selectedDays.clear();
   state.pendingRequestPostId = postId;
   state.pendingRequestType = "ask";
   switchTab("schedule");
@@ -2783,26 +2825,35 @@ function askAboutPost(postId) {
 function openRosterSummaryHtml(roster, lockedCount) {
   const n = roster.length;
   const preview = roster.slice(0, 6).map(s => `${schedMonthNumFromEntry(s)}/${s.day} ${s.type}`).join(" · ");
-  return `<strong>📂 내 스케줄 전체 공개 (${n}일)</strong>
+  return `<strong>📂 내 스케줄 공개 (${n}일)</strong>
     <div>${escapeHtml(preview)}${n > 6 ? " …" : ""}</div>
-    <div class="hint" style="margin-top:4px;">${lockedCount > 0 ? `🔒 ${lockedCount}일 잠금(비공개) 제외 · ` : ""}상대가 원하는 날을 직접 고릅니다</div>`;
+    <div class="hint" style="margin-top:4px;">${lockedCount > 0 ? `🙈 ${lockedCount}일 숨김 · ` : ""}상대가 바꿀 날을 직접 고릅니다</div>`;
 }
 
-function openAskModal(postId) {
+function directOfferSummaryHtml(offered) {
+  return `<strong>🎯 1:1 날짜 매칭 · 이 비행만 공개</strong>
+    <div>${escapeHtml(offered.patternName || "비행 일정")}</div>
+    <div class="hint" style="margin-top:4px;">${escapeHtml(offered.summary || offered.type || "")}</div>`;
+}
+
+function openAskModal(postId, directOffer = null) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const roster = buildOpenRoster();
   const lockedCount = state.selectedDays.size;
   const askD = document.getElementById("askDialog");
   askD._postId = postId;
+  askD._directOffer = directOffer;
   document.getElementById("askDialogTitle").textContent = `💬 ${p.ownerNick || "상대"} 님에게 의향 표시`;
-  document.getElementById("askMine").innerHTML = openRosterSummaryHtml(roster, lockedCount);
+  document.getElementById("askMine").innerHTML = directOffer
+    ? directOfferSummaryHtml(directOffer)
+    : openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("askTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
   const askHint = document.getElementById("askHint");
-  askHint.textContent = "내 스케줄 전체가 상대에게 열립니다 · 상대가 바꿀 날을 고릅니다 · 신상정보는 상호수락 후 공개 · 크레딧 없음";
+  askHint.textContent = window.CrewSwapRequestDisclosure.disclosureHint("ask", !!directOffer);
   askHint.style.color = "";
-  document.getElementById("askSendButton").disabled = roster.length === 0;
+  document.getElementById("askSendButton").disabled = !directOffer && roster.length === 0;
   openGenericModal("askDialog", "askOverlay");
 }
 
@@ -2811,14 +2862,15 @@ async function sendAskInterest() {
   const postId = askD._postId;
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  const directOffer = askD._directOffer || null;
   const roster = buildOpenRoster();
-  if (roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 잠금됨)."); return; }
-  await sendOpenSwap(postId, "ask", roster);
+  if (!directOffer && roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 숨김)."); return; }
+  await sendOpenSwap(postId, "ask", directOffer ? null : roster, directOffer);
   closeGenericModal("askDialog", "askOverlay");
 }
 
 // 요청/의향 공통 전송 — 공개 로스터를 첨부 (offered는 상대가 고른 뒤 확정)
-async function sendOpenSwap(postId, type, roster) {
+async function sendOpenSwap(postId, type, roster, offered = null) {
   const lockedDays = [...state.selectedDays].map(k => parseDayKey(k).day);
   try {
     const res = await fetch(`${API_BASE}/api/requests-create`, {
@@ -2829,6 +2881,7 @@ async function sendOpenSwap(postId, type, roster) {
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
         fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
+        offered,
         openRoster: roster,
         lockedDays,
         validationRoster: validationRosterSnapshot(),
@@ -2842,26 +2895,29 @@ async function sendOpenSwap(postId, type, roster) {
   renderCalendar && renderCalendar();
   fetchRequests();
   showToast(type === "ask"
-    ? "의향을 보냈습니다 — 내 스케줄이 상대에게 열렸습니다. 상대가 바꿀 날을 고르면 알려드려요."
-    : "요청을 보냈습니다 — 내 스케줄이 상대에게 열렸습니다. 상대가 바꿀 날을 고르면 알려드려요.");
+    ? (offered ? "의향을 보냈습니다 — 1:1 매칭 비행만 상대에게 전달했습니다." : "의향을 보냈습니다 — 숨긴 날을 제외한 내 스케줄이 상대에게 열렸습니다.")
+    : (offered ? "요청을 보냈습니다 — 1:1 매칭 비행만 상대에게 전달했습니다." : "요청을 보냈습니다 — 숨긴 날을 제외한 내 스케줄이 상대에게 열렸습니다."));
   return true;
 }
 
-function openRequestModal(postId) {
+function openRequestModal(postId, directOffer = null) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const roster = buildOpenRoster();
   const lockedCount = state.selectedDays.size;
   const reqD = document.getElementById("reqDialog");
   reqD._postId = postId;
+  reqD._directOffer = directOffer;
   document.getElementById("reqDialogTitle").textContent = `${p.ownerNick || "상대"} 님에게 스왑 요청`;
-  document.getElementById("reqMine").innerHTML = openRosterSummaryHtml(roster, lockedCount);
+  document.getElementById("reqMine").innerHTML = directOffer
+    ? directOfferSummaryHtml(directOffer)
+    : openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("reqTheirs").innerHTML =
     `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
   const hintEl = document.getElementById("reqHint");
-  hintEl.textContent = "요청 1건당 1크레딧 · 내 스케줄 전체가 상대에게 열립니다 · 상대가 바꿀 날을 고른 뒤 상호 수락하면 연락처 공개.";
+  hintEl.textContent = window.CrewSwapRequestDisclosure.disclosureHint("request", !!directOffer);
   hintEl.style.color = "";
-  document.getElementById("reqConfirmButton").disabled = roster.length === 0 || state.credits < 1;
+  document.getElementById("reqConfirmButton").disabled = (!directOffer && roster.length === 0) || state.credits < 1;
   openGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -2871,9 +2927,10 @@ async function sendSwapRequest() {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   if (state.credits < 1) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
+  const directOffer = reqD._directOffer || null;
   const roster = buildOpenRoster();
-  if (roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 잠금됨)."); return; }
-  const ok = await sendOpenSwap(postId, "request", roster);
+  if (!directOffer && roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 숨김)."); return; }
+  const ok = await sendOpenSwap(postId, "request", directOffer ? null : roster, directOffer);
   if (ok) closeGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -3635,7 +3692,7 @@ async function proceedToRequestFromAsk(reqId) {
   }
   renderCalendar();
   renderSelection();
-  openRequestModal(r.postId);
+  openRequestModal(r.postId, r.offered);
 }
 
 // 받은 의향 문의에 "관심 수락" — 자유 텍스트 답장 없이 구조화된 응답만 허용
@@ -3988,6 +4045,7 @@ function switchTab(name) {
   const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
+  document.querySelector(".topbar")?.classList.toggle("is-compact", name !== "profile");
   // 스왑하기 서브탭 상태 동기화
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
   if (name === "find") { fetchPosts(); renderSavedSearches(); }
@@ -4467,17 +4525,6 @@ function bindEvents() {
 
   $("#importScheduleButton").addEventListener("click", openImportDialog);
 
-  // 메트릭 요약 바 → 상세 펼치기/접기
-  $("#metricsSummary")?.addEventListener("click", () => {
-    const strip = document.getElementById("metricsStrip");
-    const chev = document.getElementById("metricsChevron");
-    const btn = document.getElementById("metricsSummary");
-    if (!strip) return;
-    const show = strip.hidden;
-    strip.hidden = !show;
-    if (chev) chev.textContent = show ? "▴" : "▾";
-    if (btn) btn.setAttribute("aria-expanded", show ? "true" : "false");
-  });
   $("#crewCloseButton")?.addEventListener("click", () => closeGenericModal("crewDialog", "crewOverlay"));
 
   // (import-tab 전환 핸들러 제거 — 단일 모드 사용)

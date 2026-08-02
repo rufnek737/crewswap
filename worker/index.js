@@ -545,6 +545,23 @@ function randId() {
 // 메시지에 연락처/신상정보 포함 시 차단 (크레딧 우회 직거래 방지) — 실제 보안 경계는 서버
 const PERSONAL_INFO_RE = /(01[0-9][-.\s]?\d{3,4}[-.\s]?\d{4})|(\d{6}[-.\s]?[1-4]\d{6})|(카카오\s?(아이디|id|톡)?\s?[:：]?\s?[a-zA-Z0-9_.]{2,})|(010|011|016|017|018|019)\s*[-.\s]?\s*\d/;
 
+function normalizedLockedDays(value) {
+  return new Set((Array.isArray(value) ? value : [])
+    .map(Number)
+    .filter(day => Number.isInteger(day) && day >= 1 && day <= 31));
+}
+
+function publicOpenRoster(openRoster, lockedDays) {
+  const hidden = normalizedLockedDays(lockedDays);
+  return (Array.isArray(openRoster) ? openRoster : [])
+    .filter(entry => !hidden.has(Number(entry?.day)));
+}
+
+function requestWithPrivateDaysRemoved(record) {
+  if (!record || !Array.isArray(record.openRoster)) return record;
+  return { ...record, openRoster: publicOpenRoster(record.openRoster, record.lockedDays) };
+}
+
 async function handleRequestsCreate(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -555,8 +572,10 @@ async function handleRequestsCreate(request, env) {
   } = body || {};
   if (!postId || !fromEmail || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
+  const safeLockedDays = [...normalizedLockedDays(lockedDays)];
+  const safeOpenRoster = publicOpenRoster(openRoster, safeLockedDays);
   // 새 모델: offered 대신 openRoster(공개 로스터)를 첨부. 둘 중 하나는 있어야 함.
-  if (!offered && !(Array.isArray(openRoster) && openRoster.length))
+  if (!offered && !safeOpenRoster.length)
     return json({ error: '공개할 근무가 없습니다' }, 400);
   if (PERSONAL_INFO_RE.test(message || ''))
     return json({ error: '연락처/신상정보는 보낼 수 없습니다 (상호 수락 후 공개)' }, 400);
@@ -578,8 +597,8 @@ async function handleRequestsCreate(request, env) {
       fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
       fromRealName: fromRealName || '', fromEmployeeId: fromEmployeeId || '', fromPhone: fromPhone || '',
       offered: offered || null,             // 상대가 날짜를 고르면 확정됨 (구버전은 즉시 값 있음)
-      openRoster: Array.isArray(openRoster) ? openRoster : null, // 요청자가 공개한 전체 로스터
-      lockedDays: Array.isArray(lockedDays) ? lockedDays : [],
+      openRoster: Array.isArray(openRoster) ? safeOpenRoster : null, // 비공개 날짜를 서버에서도 강제 제거
+      lockedDays: safeLockedDays,
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
       status: offered ? (type === 'ask' ? '의향 문의' : '요청 대기') : '상대가 바꿀 날 고르는 중',
       stage: 1,
@@ -606,6 +625,12 @@ async function handleRequestsAccept(request, env) {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
     if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403);
+    const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
+    const requesterValidationRoster = await env.POSTS.get(`reqval:${id}`, { type: 'json' });
+    const cabinViolation = validateCabinExchange(rec, post, rec.offered, requesterValidationRoster);
+    if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
+    const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
+    if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
@@ -615,6 +640,7 @@ async function handleRequestsAccept(request, env) {
     rec.toPhone = phone || '';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
+    await env.POSTS.delete(`reqval:${id}`);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -647,12 +673,13 @@ function markerEntries(markers) {
   }).filter(entry => entry.month && entry.day);
 }
 
-function validateMogijiExchange(rec, post, selectedOffered) {
+function validateMogijiExchange(rec, post, selectedOffered, requesterValidationRoster) {
   if (!mogijiPolicy || post?.crewType === 'CABIN') return null;
   const selectedDays = new Set(selectedOffered?.days || []);
-  const requesterGives = (rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
+  const requesterRoster = requesterValidationRoster || rec.openRoster || [];
+  const requesterGives = requesterRoster.filter(entry => selectedDays.has(entry.day));
   const requesterViolation = mogijiPolicy.findProtectedRestViolation(
-    rec.openRoster || [],
+    requesterRoster,
     scheduleEntriesFromPost(post),
   );
   if (requesterViolation) return { side: '상대 일정', issue: requesterViolation };
@@ -668,7 +695,7 @@ function validateMogijiExchange(rec, post, selectedOffered) {
 function validateCabinExchange(rec, post, selectedOffered, requesterValidationRoster) {
   if (!cabinPolicy || post?.crewType !== 'CABIN') return null;
   const selectedDays = new Set(selectedOffered?.days || []);
-  const requesterGives = (rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
+  const requesterGives = (requesterValidationRoster || rec.openRoster || []).filter(entry => selectedDays.has(entry.day));
   const posterGives = scheduleEntriesFromPost(post);
   const requesterViolation = cabinPolicy.findRestViolation(
     requesterValidationRoster || rec.openRoster || [],
@@ -713,16 +740,15 @@ async function handleRequestsPosterSelect(request, env) {
     if (rec.toEmail !== email) return json({ error: '선택 권한이 없습니다 (글 작성자만)' }, 403);
     if ((rec.stage || 1) >= 3) return json({ error: '이미 상호 수락된 요청입니다' }, 409);
     // 공개 로스터에 없는 날을 고르는 부정 방지
-    const openDays = new Set((rec.openRoster || []).map(r => r.day));
+    const visibleRoster = publicOpenRoster(rec.openRoster, rec.lockedDays);
+    const openDays = new Set(visibleRoster.map(r => r.day));
     if (rec.openRoster && !offered.days.every(d => openDays.has(d)))
       return json({ error: '공개된 근무가 아닙니다' }, 400);
     const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
-    const requesterValidationRoster = post?.crewType === 'CABIN'
-      ? await env.POSTS.get(`reqval:${id}`, { type: 'json' })
-      : null;
+    const requesterValidationRoster = await env.POSTS.get(`reqval:${id}`, { type: 'json' });
     const cabinViolation = validateCabinExchange(rec, post, offered, requesterValidationRoster);
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
-    const mogijiViolation = validateMogijiExchange(rec, post, offered);
+    const mogijiViolation = validateMogijiExchange(rec, post, offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
     rec.stage = 2;
@@ -752,12 +778,10 @@ async function handleRequestsRequesterAccept(request, env) {
     if (!rec.posterSelected || !rec.offered || (rec.stage || 1) !== 2)
       return json({ error: '최종 승인할 일정 선택이 없습니다' }, 409);
     const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
-    const requesterValidationRoster = post?.crewType === 'CABIN'
-      ? await env.POSTS.get(`reqval:${id}`, { type: 'json' })
-      : null;
+    const requesterValidationRoster = await env.POSTS.get(`reqval:${id}`, { type: 'json' });
     const cabinViolation = validateCabinExchange(rec, post, rec.offered, requesterValidationRoster);
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
-    const mogijiViolation = validateMogijiExchange(rec, post, rec.offered);
+    const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
     rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
@@ -922,8 +946,9 @@ async function handleRequestsGet(request, env) {
 
   try {
     const idx = await getRequestsIndex(env);
-    const sent = idx.filter(r => r.fromEmail === email);
-    const received = idx.filter(r => r.toEmail === email);
+    // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
+    const sent = idx.filter(r => r.fromEmail === email).map(requestWithPrivateDaysRemoved);
+    const received = idx.filter(r => r.toEmail === email).map(requestWithPrivateDaysRemoved);
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }

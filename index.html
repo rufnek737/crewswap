@@ -26,7 +26,7 @@
 
     <main class="app">
       <div id="pullRefreshIndicator" class="pull-refresh-indicator"></div>
-      <header class="topbar">
+      <header class="topbar is-compact">
         <div class="brand">
           <div class="brand-mark">C</div>
           <div>
@@ -224,15 +224,6 @@
 
       <!-- ===================== 내 스케줄 ===================== -->
       <section id="schedule" class="view is-active">
-        <div id="postGuideSchedule" class="flow-guide-banner" hidden>
-          <div class="flow-guide-copy">
-            <div>
-              <strong>바꾸고 싶은 내 근무를 선택하세요</strong>
-              <p>날짜를 선택하면 바로 스왑 등록을 이어갈 수 있습니다.</p>
-            </div>
-            <button type="button" id="openSwapMenuFromSchedule" class="secondary-button flow-menu-button">🔄 스왑하기</button>
-          </div>
-        </div>
         <div class="section-head">
           <div>
             <h2>내 근무</h2>
@@ -249,32 +240,6 @@
             <button class="secondary-button" id="pendingActionCancel">취소</button>
             <button class="primary-button" id="pendingActionNext">다음 →</button>
           </div>
-        </div>
-
-        <!-- 요약 바: 평소엔 정상, 룰 경고가 있을 때만 강조 -->
-        <button type="button" id="metricsSummary" class="metrics-summary" aria-expanded="false">
-          <span id="metricsSummaryText">이번 달 정상</span>
-          <span class="metrics-summary-toggle">자세히 <span id="metricsChevron">▾</span></span>
-        </button>
-
-        <!-- 누적 진행바 (기본 접힘) -->
-        <div class="metrics-strip" id="metricsStrip" hidden>
-          <div class="metric">
-            <span class="metric-label">월 승무시간</span>
-            <div class="metric-bar"><div id="hoursBar" class="metric-fill"></div></div>
-            <strong id="hoursText">0h / 90h</strong>
-          </div>
-          <div class="metric">
-            <span class="metric-label">최대 연속 근무</span>
-            <div class="metric-bar"><div id="consecBar" class="metric-fill"></div></div>
-            <strong id="consecText">0 / 5일</strong>
-          </div>
-          <div class="metric">
-            <span class="metric-label">월 SWAP 횟수</span>
-            <div class="metric-bar"><div id="swapBar" class="metric-fill"></div></div>
-            <strong id="swapText">0 / 3회</strong>
-          </div>
-          <strong id="nextDeadline" class="deadline-text" hidden>계산 중...</strong>
         </div>
 
         <div class="schedule-layout">
@@ -734,12 +699,24 @@
             <button class="primary-button" type="submit">내 정보 저장</button>
           </form>
 
-          <div class="profile-card">
-            <h3>크레딧</h3>
-            <div class="credit-balance"><strong id="profileCredits">3</strong> 크레딧</div>
-            <p id="creditRegenHint" class="hint" style="margin:6px 0 0;"></p>
-            <p class="hint" style="margin-top:8px;">💡 매월 첫 실행 시 <strong>기본 3개</strong>로 재설정됩니다. 광고 보상은 1회당 1개이며 다음 달로 이월되지 않습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.</p>
-            <button id="watchAdButtonProfile" class="secondary-button rewarded-ad-button" type="button">📺 테스트 광고 보고 +1 크레딧</button>
+          <div class="profile-side-stack">
+            <div id="profileSwapCard" class="profile-card swap-usage-card">
+              <h3>SWAP 이용 현황</h3>
+              <strong id="profileSwapStatus" class="swap-usage-status">횟수 제한 없음</strong>
+              <div id="profileSwapCounts" class="swap-usage-counts" hidden>
+                <div><span>이번 달</span><strong id="profileSwapMonthly">0 / 2회</strong></div>
+                <div><span>올해</span><strong id="profileSwapYearly">0 / 12회</strong></div>
+              </div>
+              <p id="profileSwapWarning" class="swap-usage-warning"></p>
+            </div>
+
+            <div class="profile-card">
+              <h3>크레딧</h3>
+              <div class="credit-balance"><strong id="profileCredits">3</strong> 크레딧</div>
+              <p id="creditRegenHint" class="hint" style="margin:6px 0 0;"></p>
+              <p class="hint" style="margin-top:8px;">💡 매월 첫 실행 시 <strong>기본 3개</strong>로 재설정됩니다. 광고 보상은 1회당 1개이며 다음 달로 이월되지 않습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.</p>
+              <button id="watchAdButtonProfile" class="secondary-button rewarded-ad-button" type="button">📺 테스트 광고 보고 +1 크레딧</button>
+            </div>
           </div>
         </div>
 
@@ -937,6 +914,10 @@
     <script src="credit-policy.js?v=1.1.2"></script>
     <script src="post-dates.js?v=1.1.2"></script>
     <script src="schedule-continuity.js?v=1.1.2"></script>
+    <script src="request-disclosure.js?v=1.1.2"></script>
+    <script src="swap-usage.js?v=1.1.2"></script>
+    <script src="post-history.js?v=1.1.2"></script>
+    <script src="post-details.js?v=1.1.2"></script>
     <script src="mogiji-policy.js?v=1.1.2"></script>
     <script src="cabin-policy.js?v=1.1.2"></script>
     <script src="release-notice.js?v=1.1.2"></script>

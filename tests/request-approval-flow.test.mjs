@@ -80,6 +80,106 @@ test('poster selection waits for requester final approval', async () => {
   assert.equal(accepted.fromRealName, '요청자');
 });
 
+test('direct 1:1 request keeps the full validation roster private and still validates it', async () => {
+  const direct = {
+    id: 'REQ-DIRECT',
+    postId: 'POST-DIRECT',
+    fromEmail: 'requester@jejuair.net',
+    toEmail: 'poster@jejuair.net',
+    stage: 1,
+    offered: { patternName: '8/24 국내선', days: [24] },
+    openRoster: null,
+  };
+  const post = {
+    id: 'POST-DIRECT',
+    crewType: 'PILOT',
+    offered: {
+      days: [24],
+      daySchedules: [{ month: '2026-08', day: 24, type: '국내선', title: '7C129' }],
+    },
+  };
+  const privateRoster = [
+    { month: '2026-08', day: 21, type: '국제선' },
+    { month: '2026-08', day: 22, type: 'LAYOV' },
+    { month: '2026-08', day: 23, type: 'ARRIVAL' },
+    { month: '2026-08', day: 24, type: 'OFF', mogijiRest: { dayKey:'2026-08-24', arrivalDate:'2026-08-23' } },
+  ];
+  const env = { POSTS: createKv({
+    'req:REQ-DIRECT': direct,
+    'post:POST-DIRECT': post,
+    'reqval:REQ-DIRECT': privateRoster,
+    'idx:requests': [direct],
+  }) };
+
+  const response = await worker.fetch(api('/api/requests-accept', {
+    id: 'REQ-DIRECT',
+    email: 'poster@jejuair.net',
+  }), env, {});
+
+  assert.equal(response.status, 409);
+  const stored = await env.POSTS.get('req:REQ-DIRECT', { type: 'json' });
+  assert.equal(stored.openRoster, null);
+  assert.equal(stored.stage, 1);
+});
+
+test('hidden days are removed when a roster request is created and fetched', async () => {
+  const post = { id:'POST-HIDE', ownerEmail:'poster@jejuair.net', ownerNick:'poster', offered:{ patternName:'8/13 국내선' } };
+  const env = { POSTS: createKv({
+    'post:POST-HIDE': post,
+    'idx:requests': [],
+  }) };
+  const createResponse = await worker.fetch(api('/api/requests-create', {
+    postId:'POST-HIDE',
+    fromEmail:'requester@jejuair.net',
+    fromNick:'requester',
+    type:'ask',
+    openRoster:[
+      { month:'2026-08', day:17, type:'국제선' },
+      { month:'2026-08', day:18, type:'RSV' },
+      { month:'2026-08', day:19, type:'RSV' },
+      { month:'2026-08', day:20, type:'OFF' },
+    ],
+    lockedDays:[17, 18, 19],
+    validationRoster:[{ month:'2026-08', day:17, type:'국제선' }],
+  }), env, {});
+  assert.equal(createResponse.status, 200);
+
+  const response = await worker.fetch(new Request('https://example.test/api/requests-get?email=poster@jejuair.net'), env, {});
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.received[0].openRoster.map(item => item.day), [20]);
+  assert.deepEqual(body.received[0].lockedDays, [17, 18, 19]);
+});
+
+test('legacy requests are sanitized on read and hidden days cannot be selected', async () => {
+  const legacy = {
+    ...pendingRequest(),
+    postId:'POST-LEGACY',
+    openRoster:[
+      { month:'2026-08', day:17, type:'국제선' },
+      { month:'2026-08', day:20, type:'OFF' },
+    ],
+    lockedDays:[17],
+  };
+  const post = { id:'POST-LEGACY', offered:{ days:[13], daySchedules:[{ month:'2026-08', day:13, type:'국내선' }] } };
+  const env = { POSTS: createKv({
+    'req:REQ-1': legacy,
+    'post:POST-LEGACY': post,
+    'idx:requests': [legacy],
+  }) };
+
+  const getResponse = await worker.fetch(new Request('https://example.test/api/requests-get?email=poster@jejuair.net'), env, {});
+  const body = await getResponse.json();
+  assert.deepEqual(body.received[0].openRoster.map(item => item.day), [20]);
+
+  const selectResponse = await worker.fetch(api('/api/requests-poster-select', {
+    id:'REQ-1',
+    email:'poster@jejuair.net',
+    offered:{ patternName:'8/17 국제선', days:[17] },
+  }), env, {});
+  assert.equal(selectResponse.status, 400);
+});
+
 test('requester can reject only the selected combination and ask for another date', async () => {
   const original = {
     ...pendingRequest(),
