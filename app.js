@@ -164,6 +164,7 @@ const state = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   })(),
   selectedDays: new Set(),
+  selectionPurpose: null, // null | "post" | "request" | "ask" — 선택값이 다른 작업으로 섞이지 않게 범위 지정
   schedules: [],
   posts: [],
   myPosts: [],      // 내가 등록한 글
@@ -736,12 +737,33 @@ function dayKey(day, month) {
 function parseDayKey(key) {
   return { month: key.slice(0, 7), day: parseInt(key.slice(8), 10) };
 }
+
+function refreshScheduleSelectionUi() {
+  renderCalendar();
+  renderSelection();
+  renderRuleCheck();
+  syncOfferedSlot();
+  renderPendingBar();
+}
+
+function resetScheduleSelection(render = true) {
+  window.CrewSwapSelectionFlow?.reset(state);
+  if (render) refreshScheduleSelectionUi();
+}
+
+function beginScheduleSelection(purpose, postId = null, render = false) {
+  window.CrewSwapSelectionFlow?.begin(state, purpose, postId);
+  if (render) refreshScheduleSelectionUi();
+}
 function areConsecCalendarDays(k1, k2) {
   return (new Date(k2) - new Date(k1)) === 86400000;
 }
 
 
 function selectPattern(day) {
+  if (!state.selectionPurpose) {
+    state.selectionPurpose = state.pendingRequestType || "post";
+  }
   let s = getSchedule(day);
   if (!s) {
     // 파싱 데이터가 없는 날(예: 다음 달로 넘어간 직후)도 선택은 가능하게 —
@@ -802,19 +824,14 @@ function renderPendingBar() {
 }
 
 function cancelPendingAction() {
-  state.pendingRequestPostId = null;
-  state.pendingRequestType = null;
-  renderPendingBar();
+  resetScheduleSelection();
 }
 
 function confirmPendingAction() {
-  const pid = state.pendingRequestPostId;
-  const type = state.pendingRequestType;
+  const { postId: pid, type } = window.CrewSwapSelectionFlow?.detachPending(state) || {};
   if (!pid) return;
-  state.pendingRequestPostId = null;
-  state.pendingRequestType = null;
   renderPendingBar();
-  switchTab("find");
+  switchTab("find", { preserveSelection: true });
   setTimeout(() => {
     if (type === "ask") openAskModal(pid);
     else openRequestModal(pid);
@@ -1639,6 +1656,7 @@ function renderFlowUi() {
 }
 
 function exitGuideFlow(target = "swapGuide") {
+  resetScheduleSelection(false);
   state.guideFlow = null;
   state.managingMyPosts = false;
   state.findGuideStep = 1;
@@ -1655,14 +1673,13 @@ function startPostGuide() {
     return;
   }
   state.guideFlow = "post";
-  state.selectedDays.clear();
-  state.pendingRequestPostId = null;
-  state.pendingRequestType = null;
+  beginScheduleSelection("post");
   renderAll();
-  switchTab("schedule");
+  switchTab("schedule", { preserveSelection: true });
 }
 
 async function openMyPostsManager() {
+  resetScheduleSelection(false);
   state.guideFlow = null;
   state.managingMyPosts = true;
   renderFlowUi();
@@ -1675,23 +1692,16 @@ async function openMyPostsManager() {
 }
 
 function openPremiumAlertManager() {
+  resetScheduleSelection(false);
   state.guideFlow = null;
   state.managingMyPosts = false;
   renderFlowUi();
-  switchTab("find");
-  const body = document.getElementById("savedSearchBody");
-  const toggle = document.getElementById("savedSearchToggle");
-  const arrow = document.getElementById("savedSearchArrow");
-  if (body) body.hidden = false;
-  if (toggle) toggle.setAttribute("aria-expanded", "true");
-  if (arrow) arrow.textContent = "▴";
+  switchTab("premiumAlerts");
   renderSavedSearches();
-  requestAnimationFrame(() => {
-    document.querySelector(".saved-search-box")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
 }
 
 function startFindGuide() {
+  resetScheduleSelection(false);
   state.managingMyPosts = false;
   state.guideFlow = "find";
   state.findGuideStep = 1;
@@ -2185,7 +2195,7 @@ function syncOfferedSlot() {
       <div>달력에서 패턴을 선택하면 자동 입력됩니다.</div>
       <button class="link-button" id="goToCalendar">달력으로 이동 →</button>
     `;
-    $("#goToCalendar").onclick = () => switchTab("schedule");
+    $("#goToCalendar").onclick = () => switchTab("schedule", { preserveSelection: true });
   } else {
     const totalBlock = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
     slot.className = "slot-card filled";
@@ -2204,7 +2214,7 @@ function syncOfferedSlot() {
       </div>
       <button class="link-button" id="editOfferedSlot" style="margin-top:8px;">✏️ 선택 수정하러 가기 →</button>
     `;
-    document.getElementById("editOfferedSlot").onclick = () => switchTab("schedule");
+    document.getElementById("editOfferedSlot").onclick = () => switchTab("schedule", { preserveSelection: true });
   }
   renderPostFooter();
 }
@@ -2356,6 +2366,7 @@ function renderMyPosts() {
 function enterEditPostMode(postId) {
   const post = state.myPosts.find(p => p.id === postId);
   if (!post) return;
+  resetScheduleSelection(false);
   state.editingPostId = postId;
   switchTab("post");
   syncOfferedSlot();
@@ -2809,15 +2820,13 @@ function requestSwap(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const directOffer = exactMatchedOffer(p);
+  beginScheduleSelection("request", directOffer ? null : postId);
   if (directOffer) {
     openRequestModal(postId, directOffer);
     return;
   }
   // 바꿔줄 내 근무를 고르도록 항상 내 근무 화면으로 이동 — 여러 날을 고른 뒤 "다음"으로 직접 넘어가게 함
-  state.selectedDays.clear();
-  state.pendingRequestPostId = postId;
-  state.pendingRequestType = "request";
-  switchTab("schedule");
+  switchTab("schedule", { preserveSelection: true });
   renderPendingBar();
 }
 
@@ -2827,14 +2836,12 @@ function askAboutPost(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const directOffer = exactMatchedOffer(p);
+  beginScheduleSelection("ask", directOffer ? null : postId);
   if (directOffer) {
     openAskModal(postId, directOffer);
     return;
   }
-  state.selectedDays.clear();
-  state.pendingRequestPostId = postId;
-  state.pendingRequestType = "ask";
-  switchTab("schedule");
+  switchTab("schedule", { preserveSelection: true });
   renderPendingBar();
 }
 
@@ -2908,8 +2915,7 @@ async function sendOpenSwap(postId, type, roster, offered = null) {
     if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return false; }
   } catch (e) { showToast("전송 실패 — 네트워크 오류"); return false; }
   if (type === "request") { state.credits--; saveState(); renderCredits(); }
-  state.selectedDays.clear();
-  renderCalendar && renderCalendar();
+  resetScheduleSelection();
   fetchRequests();
   showToast(type === "ask"
     ? (offered ? "의향을 보냈습니다 — 1:1 매칭 비행만 상대에게 전달했습니다." : "의향을 보냈습니다 — 숨긴 날을 제외한 내 스케줄이 상대에게 열렸습니다.")
@@ -3698,7 +3704,7 @@ async function proceedToRequestFromAsk(reqId) {
   if (!post) { showToast("상대 글이 마감되었거나 삭제되었습니다."); return; }
   // 내가 의향 표시했던 근무를 로스터에서 다시 선택
   const days = r.offered.days || [];
-  state.selectedDays.clear();
+  beginScheduleSelection("request");
   state.schedules.forEach(s => {
     if (days.includes(s.day) && scheduleInCurrentMonth(s)) state.selectedDays.add(dayKey(s.day, s.month));
   });
@@ -4056,9 +4062,13 @@ function updateBellBadge() {
 }
 
 /* ====== 9. 이벤트 ====== */
-function switchTab(name) {
+function switchTab(name, { preserveSelection = false } = {}) {
+  const currentView = document.querySelector(".view.is-active")?.id;
+  if (!preserveSelection && currentView && currentView !== name && state.selectionPurpose) {
+    resetScheduleSelection(false);
+  }
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
-  const SWAP_VIEWS = ["swapGuide", "find", "post"];
+  const SWAP_VIEWS = ["swapGuide", "find", "post", "premiumAlerts"];
   const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
@@ -4066,7 +4076,8 @@ function switchTab(name) {
   document.querySelector(".topbar")?.classList.add("is-compact");
   // 스왑하기 서브탭 상태 동기화
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
-  if (name === "find") { fetchPosts(); renderSavedSearches(); }
+  if (name === "find") fetchPosts();
+  if (name === "premiumAlerts") renderSavedSearches();
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
   if (name === "swapGuide") fetchMyPosts();
@@ -4164,7 +4175,11 @@ function initPullToRefresh() {
 }
 
 function bindEvents() {
-  $$(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+  $$(".tab").forEach(t => t.addEventListener("click", () => {
+    const current = document.querySelector(".view.is-active")?.id;
+    if (current !== t.dataset.tab) resetScheduleSelection(false);
+    switchTab(t.dataset.tab);
+  }));
   $("#watchAdButton")?.addEventListener("click", openRewardAd);
   $("#watchAdButtonProfile")?.addEventListener("click", openRewardAd);
   $("#rewardAdStartButton")?.addEventListener("click", startRewardAd);
@@ -4174,6 +4189,7 @@ function bindEvents() {
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
   $("#openMyPostsManager")?.addEventListener("click", openMyPostsManager);
   $("#openPremiumAlertManager")?.addEventListener("click", openPremiumAlertManager);
+  $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;
     renderMyPosts();
@@ -4202,22 +4218,12 @@ function bindEvents() {
   });
   // 스왑하기 서브탭 (바꿀 근무 찾기 / 스왑 요청 올리기)
   $$(".swap-subtab").forEach(b => b.addEventListener("click", () => {
+    resetScheduleSelection(false);
     state.managingMyPosts = false;
     switchTab(b.dataset.swaptab);
   }));
   // 스왑 찾기 새로고침
   $("#refreshFindBtn")?.addEventListener("click", () => { fetchPosts(); showToast("최신 글을 불러왔습니다."); });
-  // 🔔 스왑 알림(저장검색) 섹션 펼치기/접기
-  $("#savedSearchToggle")?.addEventListener("click", () => {
-    const body = document.getElementById("savedSearchBody");
-    const arrow = document.getElementById("savedSearchArrow");
-    const open = body.hidden;
-    body.hidden = !open;
-    if (arrow) arrow.textContent = open ? "▴" : "▾";
-    $("#savedSearchToggle").setAttribute("aria-expanded", String(open));
-    if (open) renderSavedSearches();
-  });
-
   // 직군 변경 → 직책 옵션 동적 전환 (가입 팝업 + 프로필 탭)
   const signupCT = $("#signupCrewType");
   if (signupCT) {
@@ -4649,7 +4655,7 @@ function bindEvents() {
     saveState();
     closeGenericModal("crewDialog", "crewOverlay");
     renderAll();
-    if (state.guideFlow === "post") switchTab("schedule");
+    if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
     const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
     const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
     showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
@@ -4713,7 +4719,7 @@ function bindEvents() {
   $("#registerSelectionButton").addEventListener("click", () => {
     // 의향묻기/요청하기로 진입한 상태면 진행, 아니면 스왑 올리기 화면으로
     if (state.pendingRequestPostId) confirmPendingAction();
-    else switchTab("post");
+    else switchTab("post", { preserveSelection: true });
   });
 
   // 필터 접기/펼치기
@@ -4930,7 +4936,7 @@ function bindEvents() {
     }
 
     state.postDraft = null;
-    state.selectedDays.clear();
+    resetScheduleSelection(false);
     saveState();
     renderAll();
     showToast(needed > 1
@@ -5053,10 +5059,16 @@ function bindEvents() {
 
   // 알림
   // 양도 의향 묻기 dialog
-  $("#askCancelButton").addEventListener("click", () => closeGenericModal("askDialog", "askOverlay"));
+  $("#askCancelButton").addEventListener("click", () => {
+    closeGenericModal("askDialog", "askOverlay");
+    resetScheduleSelection();
+  });
   $("#askSendButton").addEventListener("click", () => sendAskInterest());
   // 스왑 요청 확인 모달
-  $("#reqCancelButton")?.addEventListener("click", () => closeGenericModal("reqDialog", "reqOverlay"));
+  $("#reqCancelButton")?.addEventListener("click", () => {
+    closeGenericModal("reqDialog", "reqOverlay");
+    resetScheduleSelection();
+  });
   $("#reqConfirmButton")?.addEventListener("click", () => sendSwapRequest());
   // 줄 근무 선택 중 하단 진행 바
   $("#pendingActionCancel")?.addEventListener("click", () => cancelPendingAction());
@@ -5328,7 +5340,7 @@ function applyLoggedInProfile(email, profile) {
   });
   // 다른 계정으로 로그인했을 수 있으니 기기 로컬 스케줄/선택 초기화
   state.schedules = [];
-  state.selectedDays.clear();
+  resetScheduleSelection(false);
   syncFormsFromState();
   saveState();
   renderAll();
@@ -5472,7 +5484,7 @@ state.lang = localStorage.getItem("jjswap_lang") || "KO";
 function applyLang() {
   const t = I18N[state.lang] || I18N.KO;
   // 하단 탭 라벨
-  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
+  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", premiumAlerts:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
   document.querySelectorAll(".tab[data-tab]").forEach(b => {
     const k = tabMap[b.dataset.tab];
     if (k && t[k]) b.textContent = t[k];
@@ -5512,7 +5524,7 @@ initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");
-const _validTabs = ["schedule", "swapGuide", "find", "post", "requests", "profile"];
+const _validTabs = ["schedule", "swapGuide", "find", "premiumAlerts", "post", "requests", "profile"];
 if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
 
 document.getElementById("langToggle")?.addEventListener("click", () => {
@@ -5536,7 +5548,7 @@ if (quickBtn) {
       if (!arr[0].day || !arr[0].type) { showToast("스케줄 형식이 아닙니다 (day/type 필수)."); return; }
       window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(arr);
       state.schedules = arr;
-      state.selectedDays.clear();
+      resetScheduleSelection(false);
       const monthsAvail = [...new Set(arr.map(s => s.month).filter(Boolean))].sort();
       if (monthsAvail.length > 0 && !monthsAvail.includes(state.currentMonth)) {
         state.currentMonth = monthsAvail[0];
@@ -5559,7 +5571,7 @@ window.loadRoster = function(json) {
     if (!Array.isArray(arr)) throw new Error("최상위는 배열이어야 함");
     window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(arr);
     state.schedules = arr;
-    state.selectedDays.clear();
+    resetScheduleSelection(false);
     const monthsAvail = [...new Set(arr.map(s => s.month).filter(Boolean))].sort();
     if (monthsAvail.length > 0 && !monthsAvail.includes(state.currentMonth)) {
       state.currentMonth = monthsAvail[0];
@@ -5585,7 +5597,7 @@ window.JJ = {
   state, renderAll,
   load: window.loadRoster,
   dump: window.dumpRoster,
-  clear: () => { state.schedules = []; state.selectedDays.clear(); renderAll(); console.log('🗑️ 스케줄 삭제됨'); },
+  clear: () => { state.schedules = []; resetScheduleSelection(false); renderAll(); console.log('🗑️ 스케줄 삭제됨'); },
   showProfile: () => console.log(state.user),
 };
 

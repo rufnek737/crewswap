@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.3" />
+    <link rel="stylesheet" href="styles.css?v=1.1.4" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -322,6 +322,22 @@
         </div>
       </section>
 
+      <!-- ===================== 스왑하기: PRO 자동 알림 ===================== -->
+      <section id="premiumAlerts" class="view">
+        <div class="premium-alert-page-head">
+          <button type="button" id="premiumAlertBack" class="secondary-button">← 스왑하기</button>
+          <div>
+            <h2>원하는 스케줄 알림받기 <span class="pro-badge">PRO</span></h2>
+            <p>원하는 조건을 저장하면 앱을 열지 않아도 새 글을 알려드립니다.</p>
+          </div>
+        </div>
+        <div class="saved-search-box premium-feature premium-alert-page-box">
+          <p class="premium-note">👑 <strong>유료 구독 전용 기능</strong> — 목적지·유형·박수 조건을 서버에 저장하고, 조건에 맞는 새 스왑이 올라오면 백그라운드 푸시로 알려드립니다. 베타에서는 PRO 기능을 무료로 미리 검증합니다.</p>
+          <div id="savedList" class="saved-list"></div>
+          <div id="savedAddForm" class="saved-add-form"></div>
+        </div>
+      </section>
+
       <!-- ===================== 스왑하기: 가능한 스왑 보기 ===================== -->
       <section id="find" class="view">
         <div class="swap-subtabs">
@@ -403,19 +419,6 @@
               <button type="button" id="findGuideEdit" class="secondary-button">조건 수정</button>
               <button type="button" class="secondary-button find-guide-cancel">처음으로</button>
             </div>
-          </div>
-        </div>
-
-        <!-- 🔔 스왑 알림 (저장검색) — 프리미엄 기능 -->
-        <div class="saved-search-box premium-feature">
-          <button type="button" class="saved-search-head" id="savedSearchToggle" aria-expanded="false">
-            <span>🔔 자동 스왑 알림 <span class="pro-badge">PRO</span> — 앱을 열지 않아도 새 글 알림</span>
-            <span id="savedSearchArrow">▾</span>
-          </button>
-          <div id="savedSearchBody" hidden>
-            <p class="premium-note">👑 <strong>유료 구독 전용 기능</strong> — 목적지·유형·박수 조건을 서버에 저장하고, 조건에 맞는 새 스왑이 올라오면 백그라운드 푸시로 알려드립니다. 베타에서는 PRO 기능을 무료로 미리 검증합니다.</p>
-            <div id="savedList" class="saved-list"></div>
-            <div id="savedAddForm" class="saved-add-form"></div>
           </div>
         </div>
 
@@ -929,7 +932,8 @@
     <script src="mogiji-policy.js?v=1.1.2"></script>
     <script src="cabin-policy.js?v=1.1.2"></script>
     <script src="release-notice.js?v=1.1.3"></script>
-    <script src="app.js?v=1.1.4"></script>
+    <script src="selection-flow.js?v=1.0.0"></script>
+    <script src="app.js?v=1.1.5"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
