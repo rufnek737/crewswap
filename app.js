@@ -1683,12 +1683,9 @@ async function openMyPostsManager() {
   state.guideFlow = null;
   state.managingMyPosts = true;
   renderFlowUi();
-  switchTab("post");
+  switchTab("myPostsManager");
   await fetchMyPosts();
   renderMyPosts();
-  requestAnimationFrame(() => {
-    document.getElementById("myPostSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
 }
 
 function openPremiumAlertManager() {
@@ -4067,8 +4064,9 @@ function switchTab(name, { preserveSelection = false } = {}) {
   if (!preserveSelection && currentView && currentView !== name && state.selectionPurpose) {
     resetScheduleSelection(false);
   }
+  state.managingMyPosts = name === "myPostsManager";
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
-  const SWAP_VIEWS = ["swapGuide", "find", "post", "premiumAlerts"];
+  const SWAP_VIEWS = ["swapGuide", "find", "post", "myPostsManager", "premiumAlerts"];
   const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
@@ -4078,6 +4076,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
   if (name === "find") fetchPosts();
   if (name === "premiumAlerts") renderSavedSearches();
+  if (name === "myPostsManager") fetchMyPosts();
   if (name === "requests") fetchRequests();
   if (name === "post") fetchMyPosts();
   if (name === "swapGuide") fetchMyPosts();
@@ -4206,6 +4205,21 @@ function bindEvents() {
     syncGuideTypeChips();
   }));
   $("#findGuideNext1")?.addEventListener("click", () => setFindGuideStep(2));
+  $("#findGuideShowAll")?.addEventListener("click", () => {
+    state.filters = {
+      direction: "all",
+      types: [],
+      date: "all",
+      time: "all",
+      arrTime: "all",
+      region: "all",
+      layover: "all",
+      airports: [],
+    };
+    syncGuideTypeChips();
+    syncMainFilterControls();
+    setFindGuideStep(3);
+  });
   $("#findGuideBack1")?.addEventListener("click", () => setFindGuideStep(1));
   $("#findGuideEdit")?.addEventListener("click", () => setFindGuideStep(2));
   $("#findGuideNext2")?.addEventListener("click", () => {
@@ -5484,7 +5498,7 @@ state.lang = localStorage.getItem("jjswap_lang") || "KO";
 function applyLang() {
   const t = I18N[state.lang] || I18N.KO;
   // 하단 탭 라벨
-  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", premiumAlerts:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
+  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", myPostsManager:"탭.찾기", premiumAlerts:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
   document.querySelectorAll(".tab[data-tab]").forEach(b => {
     const k = tabMap[b.dataset.tab];
     if (k && t[k]) b.textContent = t[k];
@@ -5524,7 +5538,7 @@ initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");
-const _validTabs = ["schedule", "swapGuide", "find", "premiumAlerts", "post", "requests", "profile"];
+const _validTabs = ["schedule", "swapGuide", "find", "myPostsManager", "premiumAlerts", "post", "requests", "profile"];
 if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
 
 document.getElementById("langToggle")?.addEventListener("click", () => {

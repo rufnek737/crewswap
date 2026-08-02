@@ -1211,3 +1211,15 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 }
 .splash-login-btn { background: #FDBF03; border: none; color: #021D45; }
 .splash-signup-btn { background: rgba(2, 29, 69, 0.55); border: 1.5px solid #fff; color: #fff; }
+
+.guide-show-all-button {
+  width: 100%;
+  margin-top: 10px;
+  border-color: #f7a66c;
+  color: #c9550a;
+  background: #fff8f2;
+  font-weight: 800;
+}
+
+#myPostsManager .my-post-section { margin-top: 0; }
+#myPostsManager .my-post-heading { align-items: center; }

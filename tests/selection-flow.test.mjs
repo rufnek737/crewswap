@@ -52,3 +52,19 @@ test("the PRO alert page is separate from the normal swap result list", () => {
   assert.match(find, /id="matchList"/);
   assert.doesNotMatch(find, /id="savedList"|id="savedAddForm"/);
 });
+
+test("my swap management is separate from the post form", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const manager = html.match(/<section id="myPostsManager"[\s\S]*?<\/section>/)?.[0] || "";
+  const post = html.match(/<section id="post"[\s\S]*?<section id="myPostsManager"/)?.[0] || "";
+
+  assert.match(manager, /id="myPostList"/);
+  assert.doesNotMatch(manager, /swap-subtabs|id="offeredSlot"|id="postMemo"/);
+  assert.match(post, /id="offeredSlot"|id="postMemo"/);
+  assert.doesNotMatch(post, /id="myPostList"/);
+});
+
+test("guided search exposes a direct all-schedules action", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /id="findGuideShowAll"[^>]*>[\s\S]*?모든 스케줄 보기/);
+});
