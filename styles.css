@@ -1,17 +1,17 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7fa;
-  --panel: #ffffff;
-  --text: #17202e;
-  --muted: #637083;
-  --line: #dce3ec;
+  --bg: #e2eaf3;
+  --panel: rgba(248, 251, 254, 0.93);
+  --text: #182231;
+  --muted: #667386;
+  --line: #cbd6e3;
   --primary: #F07820;
   --primary-dark: #C45E08;
   --green: #157a4a;
   --green-soft: #e2f6eb;
   --yellow-soft: #fff3d7;
   --blue-soft: #e8f0ff;
-  --shadow: 0 16px 44px rgba(24, 32, 45, 0.08);
+  --shadow: 0 18px 48px rgba(31, 44, 62, 0.075), 0 2px 10px rgba(31, 44, 62, 0.04);
 
   /* 스케줄 유형 색상 */
   --c-off: #9ba6b7;
@@ -46,7 +46,10 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 96% -6%, rgba(240, 120, 32, 0.23) 0, rgba(240, 120, 32, 0.07) 24%, transparent 44%),
+    radial-gradient(circle at -12% 43%, rgba(63, 105, 158, 0.17) 0, transparent 38%),
+    linear-gradient(180deg, #f4f7fa 0%, #e8eef5 48%, #dce6f0 100%);
   color: var(--text);
   font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   touch-action: pan-x pan-y;
@@ -82,7 +85,13 @@ button { cursor: pointer; }
 }
 
 /* ===== 헤더 ===== */
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 18px; padding: 14px 16px; flex-wrap: wrap;
+  border: 1px solid rgba(203, 214, 227, 0.92); border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 249, 242, 0.96), rgba(238, 245, 252, 0.94));
+  box-shadow: 0 14px 36px rgba(38, 52, 72, 0.09);
+}
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 800; font-size: 20px; }
 .brand strong { display: block; font-size: 16px; }
@@ -126,10 +135,11 @@ p { color: var(--muted); }
 /* ===== 패널 공통 ===== */
 .signup-panel, .calendar-panel, .side-panel, .form-panel, .filter-panel, .profile-form, .profile-card, .match-card, .request-card, .saved-searches, .bidirectional-form, .post-footer {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--panel));
   box-shadow: var(--shadow);
 }
+.calendar-panel { background: #fff; }
 
 /* ===== 회원가입 (모달) ===== */
 .signup-overlay {
@@ -672,11 +682,19 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
   display: grid; grid-template-columns: repeat(4, 1fr);
   width: 100%; margin: 0; padding: 6px 4px max(6px, env(safe-area-inset-bottom));
   border: 0; border-top: 1px solid var(--line); border-radius: 0;
-  background: var(--panel); box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  background: rgba(244, 248, 252, 0.86);
+  border-top-color: rgba(188, 201, 216, 0.9);
+  box-shadow: 0 -10px 30px rgba(31, 44, 62, 0.12);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
 }
 .tab { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 700; font-size: 12px; white-space: nowrap; overflow: visible; position: relative; }
 .tab-badge { display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 10px; font-weight: 800; vertical-align: top; }
-.tab.is-active { background: #243449; color: #fff; }
+.tab.is-active {
+  background: linear-gradient(145deg, #2d4058, #1e2d40);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(30, 45, 64, 0.18);
+}
 
 /* ===== 알림 패널 ===== */
 .alert-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.28); z-index: 99; }

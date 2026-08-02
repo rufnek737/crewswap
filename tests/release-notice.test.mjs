@@ -20,14 +20,14 @@ test("shows a release once and shows again when the release id changes", () => {
   assert.equal(releaseNotice.markSeen(storage), true);
   assert.equal(releaseNotice.shouldShow(storage), false);
 
-  const nextRelease = { ...releaseNotice.current, id: "1.1.1-20260801" };
+  const nextRelease = { ...releaseNotice.current, id: "1.1.2-20260801" };
   assert.equal(releaseNotice.shouldShow(storage, nextRelease), true);
 });
 
 test("keeps the current release notes in the announcement list", () => {
   const item = releaseNotice.announcement();
   assert.equal(item.kind, "announce");
-  assert.match(item.title, /v1\.1\.0/);
-  assert.match(item.body, /객실승무원 휴식시간/);
-  assert.equal(item.releaseVersion, "1.1.0");
+  assert.match(item.title, /v1\.1\.1/);
+  assert.match(item.body, /블루그레이 배경/);
+  assert.equal(item.releaseVersion, "1.1.1");
 });
