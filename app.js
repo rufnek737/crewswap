@@ -83,6 +83,15 @@ const AIRLINE_LABELS = {
 };
 const CREWTYPE_LABELS = { PILOT: "조종사", CABIN: "객실 승무원" };
 
+// 기종 표기 — NG=737-800, MAX=737-8. (올해까지 전원 MAX 교육 전이라 자격 구분 필요)
+function aircraftLabel(ac) {
+  if (!ac) return "";
+  if (ac === "NG") return "737-800";
+  if (ac === "MAX") return "MAX";
+  if (ac === "NG_MAX") return "737-800/MAX";
+  return ac;
+}
+
 // 역할 → Position 표기 (카드 배지용)
 function positionLabel(roleType) {
   if (!roleType) return "";
@@ -2460,7 +2469,7 @@ function renderMatches() {
           <div class="badges">
             <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${post.offered.type}</span>
             <span class="badge badge-position">${positionLabel(post.ownerRole)}</span>
-            ${post.offered.aircraft ? `<span class="badge">${post.offered.aircraft}</span>` : ""}
+            ${post.offered.aircraft ? `<span class="badge badge-aircraft">✈ ${aircraftLabel(post.offered.aircraft)}</span>` : ""}
             ${post.offered.edto ? `<span class="badge">EDTO</span>` : ""}
             ${post.offered.cat3 ? `<span class="badge">CAT III</span>` : ""}
           </div>
@@ -3361,6 +3370,7 @@ function renderCompareCalendar(r) {
       <span class="cmp-day">${d}</span>
       <span class="cmp-own-duty">${escapeHtml(dutyShort(mine.type))}</span>
       ${mine.routeSummary ? `<em>${escapeHtml(mine.routeSummary)}</em>` : ""}
+      ${mine.aircraft ? `<span class="cmp-ac">✈ ${aircraftLabel(mine.aircraft)}</span>` : ""}
       ${isPosted ? `<small>내가 내놓음</small>` : ""}
     </button>` : `<div class="cmp-cell cmp-own-cell"><span class="cmp-day">${d}</span></div>`;
     if (req) {
@@ -3369,6 +3379,7 @@ function renderCompareCalendar(r) {
       requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}${fixedMogijiViolation ? " is-swap-blocked" : ""}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}"${fixedMogijiViolation ? ' disabled aria-disabled="true" title="내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹칩니다."' : ""}>
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
+        ${req.aircraft ? `<span class="cmp-ac">✈ ${aircraftLabel(req.aircraft)}</span>` : ""}
       </button>`;
     } else {
       const locked = lockedDays.has(d);
