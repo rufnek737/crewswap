@@ -31,3 +31,24 @@ test("keeps the current release notes in the announcement list", () => {
   assert.match(item.body, /블루그레이 배경/);
   assert.equal(item.releaseVersion, "1.1.1");
 });
+
+test("replaces old update notices while preserving all other alerts", () => {
+  const alerts = [
+    { id: "release-1.0.0", kind: "announce", title: "🆕 CrewSwap v1.0.0 업데이트", releaseVersion: "1.0.0" },
+    { id: "legacy-update", kind: "announce", title: "CrewSwap 기능 업데이트" },
+    { id: "guide", kind: "announce", title: "📢 CrewSwap 사용 안내" },
+    { id: "qna", kind: "announce", title: "❓ 자주 묻는 질문 (Q&A)" },
+    { id: "match-1", kind: "match", title: "매칭 알림" },
+    { id: "urgent-1", kind: "urgent", title: "마감 알림" },
+  ];
+
+  const result = releaseNotice.keepLatestAnnouncement(alerts);
+  const updates = result.filter(releaseNotice.isReleaseAnnouncement);
+
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].id, `release-${releaseNotice.current.id}`);
+  assert.deepEqual(
+    result.filter(item => !releaseNotice.isReleaseAnnouncement(item)).map(item => item.id),
+    ["guide", "qna", "match-1", "urgent-1"],
+  );
+});

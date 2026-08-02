@@ -51,11 +51,30 @@
     };
   }
 
+  function isReleaseAnnouncement(item) {
+    if (!item || item.kind !== "announce") return false;
+    return Boolean(
+      item.releaseVersion ||
+      /^release-/.test(String(item.id || "")) ||
+      /업데이트/.test(String(item.title || ""))
+    );
+  }
+
+  // 새 버전 공지를 등록할 때 이전 버전 공지만 제거한다.
+  // 사용 안내·Q&A와 요청/매칭/마감 알림은 그대로 보존한다.
+  function keepLatestAnnouncement(alerts, release = current) {
+    const latest = announcement(release);
+    const preserved = (Array.isArray(alerts) ? alerts : []).filter(item => !isReleaseAnnouncement(item));
+    return latest ? [latest, ...preserved] : preserved;
+  }
+
   return {
     SEEN_RELEASE_KEY,
     current,
     shouldShow,
     markSeen,
     announcement,
+    isReleaseAnnouncement,
+    keepLatestAnnouncement,
   };
 });

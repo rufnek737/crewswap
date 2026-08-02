@@ -1674,6 +1674,23 @@ async function openMyPostsManager() {
   });
 }
 
+function openPremiumAlertManager() {
+  state.guideFlow = null;
+  state.managingMyPosts = false;
+  renderFlowUi();
+  switchTab("find");
+  const body = document.getElementById("savedSearchBody");
+  const toggle = document.getElementById("savedSearchToggle");
+  const arrow = document.getElementById("savedSearchArrow");
+  if (body) body.hidden = false;
+  if (toggle) toggle.setAttribute("aria-expanded", "true");
+  if (arrow) arrow.textContent = "▴";
+  renderSavedSearches();
+  requestAnimationFrame(() => {
+    document.querySelector(".saved-search-box")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function startFindGuide() {
   state.managingMyPosts = false;
   state.guideFlow = "find";
@@ -4156,6 +4173,7 @@ function bindEvents() {
   $("#startPostFlow")?.addEventListener("click", startPostGuide);
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
   $("#openMyPostsManager")?.addEventListener("click", openMyPostsManager);
+  $("#openPremiumAlertManager")?.addEventListener("click", openPremiumAlertManager);
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;
     renderMyPosts();
@@ -5155,15 +5173,16 @@ function loadStateFromStorage() {
       if (state.alerts.some(a => a.title === "🎯 매칭 후보 등장" || a.title === "⏰ 마감 임박")) {
         state.alerts = createMockAlerts();
       }
-      // 공지 안내문 갱신 — id로 매칭해 기존 공지는 최신 내용으로 교체, 없는 공지(신규 추가분)는 append
+      // 공지 안내문 갱신 — 사용 안내·Q&A는 유지하고 업데이트 공지는 최신 1건만 남긴다.
       // 레거시 마이그레이션: id 없던 시절(공지 1개뿐)의 저장분은 "guide"로 간주
       const legacyAnnounces = state.alerts.filter(a => a.kind === "announce" && !a.id);
       if (legacyAnnounces.length === 1) legacyAnnounces[0].id = "guide";
-      createMockAlerts().forEach(latest => {
+      createMockAlerts().filter(latest => !window.CrewSwapReleaseNotice?.isReleaseAnnouncement(latest)).forEach(latest => {
         const idx = state.alerts.findIndex(a => a.kind === "announce" && a.id === latest.id);
         if (idx >= 0) state.alerts[idx] = { ...state.alerts[idx], ...latest };
         else state.alerts.push(latest);
       });
+      state.alerts = window.CrewSwapReleaseNotice?.keepLatestAnnouncement(state.alerts) || state.alerts;
     }
 
     // 복원된 currentMonth에 데이터가 없으면, 데이터 있는 월 중
