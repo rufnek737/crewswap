@@ -325,7 +325,6 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .calendar-day.is-weekend { background: #fafbfd; }
 .calendar-day.is-selected { outline: 3px solid #243449; outline-offset: -3px; z-index: 2; }
 .calendar-day.is-warn-consec::before { content: "⚠"; position: absolute; top: 4px; right: 4px; font-size: 12px; color: var(--c-warn); }
-.calendar-day.is-locked::after { content: "🔒"; position: absolute; top: 4px; right: 4px; font-size: 12px; }
 .calendar-day.is-holiday { background: #fff5f5; }
 
 .date-number { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 800; }
@@ -363,8 +362,6 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .pill-stby { background: var(--c-stby-bg); color: var(--c-stby); }
 .pill-pickup { background: #fdecea; color: var(--c-fail); }
 .pill-arrival { background: #ede4f7; color: #6d4d9c; border: 1px dashed #b16ad8; font-style: italic; }
-
-.pill-locked { opacity: 0.65; }
 
 /* ===== 사이드 패널 ===== */
 .side-panel, .form-panel, .filter-panel, .profile-form { padding: 18px; }

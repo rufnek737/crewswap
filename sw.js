@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v105';
-const SHELL = ['./index.html', './styles.css?v=1.1.5', './credit-policy.js?v=1.1.2', './post-dates.js?v=1.1.2', './schedule-continuity.js?v=1.1.2', './request-disclosure.js?v=1.1.2', './swap-usage.js?v=1.1.2', './post-history.js?v=1.1.2', './post-details.js?v=1.1.2', './mogiji-policy.js?v=1.1.2', './cabin-policy.js?v=1.1.2', './release-notice.js?v=1.1.4', './selection-flow.js?v=1.0.0', './app.js?v=1.1.9', './manifest.json', './privacy.html', './terms.html'];
+const CACHE = 'crewswap-v106';
+const SHELL = ['./index.html', './styles.css?v=1.1.6', './credit-policy.js?v=1.1.2', './post-dates.js?v=1.1.2', './schedule-continuity.js?v=1.1.2', './request-disclosure.js?v=1.1.2', './swap-usage.js?v=1.1.2', './post-history.js?v=1.1.2', './post-details.js?v=1.1.2', './mogiji-policy.js?v=1.1.2', './cabin-policy.js?v=1.1.2', './release-notice.js?v=1.1.4', './selection-flow.js?v=1.0.0', './app.js?v=1.1.10', './manifest.json', './privacy.html', './terms.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {

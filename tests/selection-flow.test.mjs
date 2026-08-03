@@ -96,3 +96,16 @@ test("the usage guide describes the current guided swap flow", () => {
   assert.match(app, /8\. PRO 알림/);
   assert.match(app, /실명·사번·연락처는 상호 수락 후에만 공개/);
 });
+
+test("swap restrictions are checked by rules without a calendar lock icon", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const selectPattern = app.match(/function selectPattern\(day\) \{[\s\S]*?\n\}/)?.[0] || "";
+
+  assert.doesNotMatch(html, /🔒 스왑 불가/);
+  assert.doesNotMatch(styles, /calendar-day\.is-locked|pill-locked/);
+  assert.doesNotMatch(selectPattern, /if \(s\.lockReason\)/);
+  assert.match(app, /const hasLocked = ss\.some\(s => s\.lockReason\)/);
+  assert.match(app, /자격 갱신 지정 비행 포함 — SWAP 불가/);
+});
