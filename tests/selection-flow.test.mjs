@@ -79,3 +79,11 @@ test("policy and contact links use the native-aware service link handler", () =>
   assert.match(app, /Capacitor\.Plugins\.Browser\.open/);
   assert.match(app, /Capacitor\.Plugins\.AppLauncher\.openUrl/);
 });
+
+test("expired swap alerts open the independent my-posts manager", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(app, /kind: "urgent",\s*goTo: "myPostsManager",\s*postId: p\.id/);
+  assert.match(app, /a\.goTo === "myPostsManager" \|\| \(a\.kind === "urgent" && a\.title\?\.includes\("스왑 마감"\)\)/);
+  assert.match(app, /openMyPostsManager\(\);\s*setAlertPanel\(false\);/);
+});

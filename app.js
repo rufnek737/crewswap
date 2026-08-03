@@ -3046,6 +3046,8 @@ async function processExpiredRefunds() {
       p.expiredAlerted = true;
       state.alerts.unshift({
         kind: "urgent",
+        goTo: "myPostsManager",
+        postId: p.id,
         title: refund > 0 ? "⏰ 스왑 마감 · 크레딧 환급" : "⏰ 스왑 마감",
         body: refund > 0
           ? `내가 올린 '${p.offered?.patternName || "스왑"}'이 매칭 없이 마감되어 ${refund}크레딧(50%)이 환급되었습니다.`
@@ -4070,6 +4072,11 @@ function renderAlerts() {
         // 저장검색(관심 스왑) 알림 → 스왑 찾기 탭으로
         switchTab("find");
         setAlertPanel(false);
+      } else if (a.goTo === "myPostsManager" || (a.kind === "urgent" && a.title?.includes("스왑 마감"))) {
+        // 신규 알림은 goTo/postId를 저장하고, 구버전 마감 알림도 제목으로 호환한다.
+        // 서버에서 최신 마감·환급 상태를 다시 읽은 뒤 독립 관리 화면으로 이동한다.
+        openMyPostsManager();
+        setAlertPanel(false);
       } else if (a.kind === "match") {
         const mode = a.viewMode || "received";
         state.reqViewMode = mode;
@@ -4077,7 +4084,7 @@ function renderAlerts() {
         switchTab("requests");
         setAlertPanel(false);
       } else {
-        // 공지·마감 등: 제자리에서 전체 내용 펼치기/접기
+        // 공지 등 이동 대상이 없는 알림: 제자리에서 전체 내용 펼치기/접기
         el.classList.toggle("is-expanded");
         el.classList.remove("is-unread");
         const dot = el.querySelector(".unread-dot"); if (dot) dot.remove();
