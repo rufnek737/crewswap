@@ -87,3 +87,12 @@ test("expired swap alerts open the independent my-posts manager", () => {
   assert.match(app, /a\.goTo === "myPostsManager" \|\| \(a\.kind === "urgent" && a\.title\?\.includes\("스왑 마감"\)\)/);
   assert.match(app, /openMyPostsManager\(\);\s*setAlertPanel\(false\);/);
 });
+
+test("the usage guide describes the current guided swap flow", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(app, /1\. 내 근무 확인/);
+  assert.match(app, /3\. 내 스왑 올리기/);
+  assert.match(app, /4\. 요청과 의향 묻기/);
+  assert.match(app, /8\. PRO 알림/);
+  assert.match(app, /실명·사번·연락처는 상호 수락 후에만 공개/);
+});
