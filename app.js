@@ -381,6 +381,45 @@ function createMockSavedSearches() {
 const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+const SERVICE_LINKS = Object.freeze({
+  privacy: "https://rufnek737.github.io/crewswap/privacy.html",
+  terms: "https://rufnek737.github.io/crewswap/terms.html",
+  contact: "mailto:rufnek737@gmail.com?subject=CrewSwap%20문의",
+});
+
+function isNativeApp() {
+  return !!window.Capacitor?.isNativePlatform?.();
+}
+
+async function openServiceLink(kind) {
+  const url = SERVICE_LINKS[kind];
+  if (!url) return;
+
+  try {
+    if (kind === "contact") {
+      if (isNativeApp() && window.Capacitor?.Plugins?.AppLauncher) {
+        await window.Capacitor.Plugins.AppLauncher.openUrl({ url });
+      } else {
+        window.location.href = url;
+      }
+      return;
+    }
+
+    if (isNativeApp() && window.Capacitor?.Plugins?.Browser) {
+      await window.Capacitor.Plugins.Browser.open({ url });
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  } catch (error) {
+    if (kind === "contact") {
+      try { await navigator.clipboard.writeText("rufnek737@gmail.com"); } catch (_) {}
+      showToast("메일 앱을 열 수 없어 문의 주소를 복사했습니다: rufnek737@gmail.com");
+      return;
+    }
+    showToast("페이지를 열 수 없습니다. 잠시 후 다시 시도해주세요.");
+  }
+}
+
 
 // iOS 핀치 줌 차단 (확대 시 하단 고정바가 떠버리는 문제 방지)
 ["gesturestart", "gesturechange", "gestureend"].forEach(evt =>
@@ -4174,6 +4213,10 @@ function initPullToRefresh() {
 }
 
 function bindEvents() {
+  $$('[data-service-link]').forEach(link => link.addEventListener("click", event => {
+    event.preventDefault();
+    openServiceLink(link.dataset.serviceLink);
+  }));
   $$(".tab").forEach(t => t.addEventListener("click", () => {
     const current = document.querySelector(".view.is-active")?.id;
     if (current !== t.dataset.tab) resetScheduleSelection(false);

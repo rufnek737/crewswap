@@ -68,3 +68,14 @@ test("guided search exposes a direct all-schedules action", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /id="findGuideShowAll"[^>]*>[\s\S]*?모든 스케줄 보기/);
 });
+
+test("policy and contact links use the native-aware service link handler", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.equal((html.match(/data-service-link="privacy"/g) || []).length, 2);
+  assert.equal((html.match(/data-service-link="terms"/g) || []).length, 2);
+  assert.match(html, /href="mailto:rufnek737@gmail\.com[^"]*" data-service-link="contact"/);
+  assert.match(app, /Capacitor\.Plugins\.Browser\.open/);
+  assert.match(app, /Capacitor\.Plugins\.AppLauncher\.openUrl/);
+});
