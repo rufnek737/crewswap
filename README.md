@@ -153,6 +153,16 @@ netlify dev          # http://localhost:8889
 - 다음 작업으로 첫 화면 네트워크 우선 확인, 새 버전 자동 감지, `업데이트` 버튼을 통한 캐시 교체·자동 재실행을 구현해 수동 이중 새로고침 안내를 제거할 예정.
 - 관련 GitHub 커밋: `f4e5c68`, `61a59c9`, `a3583e8`.
 
+#### 기종 표시(737-800/MAX)
+- 올해까지 전 승무원 MAX 교육 전이라 자격 구분이 필요하여, 스왑 글 카드와 의향묻기·요청 비교 달력 양쪽 셀에 기종 배지(`✈ 737-800`/`✈ MAX`)를 표시. `NG→737-800`, `MAX→MAX`, `NG_MAX→737-800/MAX`로 매핑.
+
+#### 지상근무(JCRM)·SIM 훈련을 비행과 구분 파싱
+- CrewConnex가 지상수업·시뮬레이터 훈련을 `GMP-GMP`(7C 편명 없음, 출·도착 동일)로 내려줘 국내선 비행으로 오인되던 문제를 수정.
+- 1차로 수동 파싱(`parseDayBlock`)에서 7C 편명이 없고 출·도착 공항이 같으면 `GND`(지상/훈련)로 분류하고, 서버 자동 불러오기 결과에도 `showPreview`의 `reclassifyGroundDuty` 보정을 추가.
+- 자동 불러오기는 Cloudflare Worker(`worker/index.js`, Netlify 미사용)에서 처리됨을 확인하고, 실제 로스터 Activity 코드(`SIM1`, `JCRM`)를 읽어 SIM 계열(SIM/OPC/LPC/LOFT/SPT)은 `SIM 훈련`, JCRM/GND/GROUND는 `지상근무`로 구분. 둘 다 `lockReason`으로 SWAP 대상에서 제외.
+- 달력에는 회색 점선 `pill-gnd`로 비행과 구분 표시. Worker는 `wrangler`로 배포(Version `05bdf227`), 웹은 `app.js?v=1.1.12`·PWA `crewswap-v111`로 갱신, Kay phone 재설치까지 완료.
+- 관련 GitHub 커밋: `e8edad1`, `40bdeeb`, `05669d5`, `f3a4250`.
+
 ### 2026-08-02 — 스왑 공개 범위·상세 정보·PRO 진입 개선
 
 #### 1:1 매칭 공개 범위와 일정 개인정보 보호
