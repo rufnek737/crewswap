@@ -1090,11 +1090,18 @@ function parseRosterToSchedules(html, userNameHint) {
     const dayM = /(\d{1,2})/.exec(p[cols.iDate]); if (!dayM) return;
     const day = parseInt(dayM[1], 10); if (day < 1 || day > 31) return;
     const activity = (p[cols.iAct] || '').trim(); const pairing = (p[cols.iPair] || '').trim();
-    let type, title;
+    let type, title, ground;
     const restrictedType = cabinPolicy?.preserveRestrictedType(activity, pairing);
+    const actPair = activity + ' ' + pairing;
     if (restrictedType) {
       type = restrictedType;
       title = restrictedType;
+    } else if (/\bSIM\d*\b|\bOPC\b|\bLPC\b|\bLOFT\b|\bSPT\b/i.test(actPair)) {
+      // 시뮬레이터 훈련(SIM1 등) — GMP-GMP 형태지만 비행이 아님. SWAP 불가.
+      type = 'GND'; ground = 'SIM'; title = 'SIM 훈련';
+    } else if (/\bJCRM\b|\bGND\b|GROUND/i.test(actPair)) {
+      // 지상수업(JCRM 등) — 비행 아님. SWAP 불가.
+      type = 'GND'; ground = '지상'; title = '지상근무';
     } else if (STBY_CODES.test(activity) || STBY_CODES.test(pairing) || /STBY/i.test(activity + ' ' + pairing)) {
       type = 'STBY'; const sc = STBY_CODES.test(activity) ? activity : STBY_CODES.test(pairing) ? pairing : 'STBY'; title = `STBY ${sc}`;
     } else if (/^OFF/i.test(activity) || /^OFF/i.test(pairing)) { type = 'OFF'; title = 'OFF'; }
@@ -1144,6 +1151,13 @@ function parseRosterToSchedules(html, userNameHint) {
         if (type === '국제선' && fr.some(r => EDTO_AIRPORTS.has(r[cols.iTo]) || EDTO_AIRPORTS.has(r[cols.iFrom]))) e.requiresEdto = true;
       }
     } else if (type === 'LAYOV') { const m = /LAYOV\s*\(?([A-Z]{3})/i.exec(activity + ' ' + pairing); if (m) e.layoverAirport = m[1]; }
+    else if (type === 'GND') {
+      e.ground = ground;
+      const frG = allRowsG.filter(r => r[cols.iFrom] && !/^\|$/.test(r[cols.iFrom]));
+      if (frG.length) e.station = frG[0][cols.iFrom];
+      e.lockReason = (ground === 'SIM' ? 'SIM 훈련' : '지상근무') + ' — 비행 아님, SWAP 불가';
+      e.crewComposition = '비행 아님 · 회사 지정 근무';
+    }
     if (ciR) e.reportTime = fmtTime(ciR[cols.iCI]);
     if (stdR) e.departureTime = fmtTime(stdR[cols.iSTD]);
     if (staR) e.arrivalTime = fmtTime(staR[cols.iSTA]);
