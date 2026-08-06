@@ -37,10 +37,21 @@ test("missing target date requires roster disclosure", () => {
   assert.equal(exactFlightEntries(post, schedules, "2026-08"), null);
 });
 
-test("RSV and STBY are not treated as direct flight matches", () => {
+test("same-date RSV and STBY are treated as direct 1:1 duties", () => {
   const oneDayPost = { offered: { dateKeys: ["2026-08-17"] } };
-  assert.equal(exactFlightEntries(oneDayPost, [{ month:"2026-08", day:17, type:"RSV" }], "2026-08"), null);
-  assert.equal(exactFlightEntries(oneDayPost, [{ month:"2026-08", day:17, type:"STBY" }], "2026-08"), null);
+  const rsv = [{ month:"2026-08", day:17, type:"RSV" }];
+  const stby = [{ month:"2026-08", day:17, type:"STBY" }];
+  assert.deepEqual(exactFlightEntries(oneDayPost, rsv, "2026-08"), rsv);
+  assert.deepEqual(exactFlightEntries(oneDayPost, stby, "2026-08"), stby);
+});
+
+test("same-date flight plus RSV pattern stays private as a direct 1:1 offer", () => {
+  const schedules = [
+    { month:"2026-08", day:17, type:"국제선", title:"7C1301", patternId:"P17" },
+    { month:"2026-08", day:18, type:"RSV", title:"RSV", patternId:"P17" },
+    { month:"2026-08", day:19, type:"RSV", title:"RSV", patternId:"P17" },
+  ];
+  assert.deepEqual(exactFlightEntries(post, schedules, "2026-08"), schedules);
 });
 
 test("a partial overlap with a longer flight pattern is not a direct match", () => {

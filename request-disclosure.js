@@ -1,6 +1,5 @@
 (function attachCrewSwapRequestDisclosure(root) {
-  const EXCHANGE_DUTY_TYPES = new Set(["국내선", "국제선", "LAYOV", "ARRIVAL"]);
-  const FLIGHT_TYPES = new Set(["국내선", "국제선"]);
+  const EXCHANGE_DUTY_TYPES = new Set(["국내선", "국제선", "LAYOV", "ARRIVAL", "RSV", "STBY"]);
 
   function scheduleDateKey(entry, fallbackMonth) {
     const month = entry?.month || fallbackMonth;
@@ -22,8 +21,8 @@
     return [...new Set((offered.days || []).map(day => scheduleDateKey({ month, day }, month)).filter(Boolean))].sort();
   }
 
-  // 상대가 올린 날짜마다 내 비행 관련 일정이 정확히 존재할 때만 1:1 공개로 처리한다.
-  // OFF·RSV·STBY·휴가·UNKNOWN 등이 하나라도 포함되면 전체 공개/숨기기 흐름으로 보낸다.
+  // 상대가 올린 모든 날짜에 교환 가능한 내 근무가 존재하면 1:1 공개로 처리한다.
+  // OFF·휴가·UNKNOWN 또는 날짜 누락이 있을 때만 전체 공개/숨기기 흐름으로 보낸다.
   function exactFlightEntries(post, schedules, fallbackMonth) {
     const targetKeys = offeredDateKeys(post, fallbackMonth);
     if (!targetKeys.length || !Array.isArray(schedules)) return null;
@@ -34,8 +33,6 @@
     });
     const entries = targetKeys.map(key => byDate.get(key));
     if (entries.some(entry => !entry || !EXCHANGE_DUTY_TYPES.has(entry.type))) return null;
-    if (!entries.some(entry => FLIGHT_TYPES.has(entry.type))) return null;
-    if (entries.some(entry => !entry.patternId)) return null;
 
     // 같은 patternId의 인접 근무까지 합친 '전체 패턴'이 상대 게시글 날짜와 같아야 한다.
     // 예: 17~19일 패턴 중 17일만 날짜가 겹치는 경우는 1:1로 오인하지 않는다.
@@ -43,6 +40,12 @@
     const patternKeys = new Set();
     entries.forEach(anchor => {
       const anchorKey = scheduleDateKey(anchor, fallbackMonth);
+      // RSV·STBY처럼 단일 근무로 저장되어 patternId가 없는 날도 날짜가 정확히
+      // 일치하면 1:1 교환 대상으로 인정한다.
+      if (!anchor.patternId) {
+        patternKeys.add(anchorKey);
+        return;
+      }
       const samePattern = schedules
         .filter(item => item?.patternId === anchor.patternId && EXCHANGE_DUTY_TYPES.has(item.type))
         .map(item => ({ item, key: scheduleDateKey(item, fallbackMonth) }))
