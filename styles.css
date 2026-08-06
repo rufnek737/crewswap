@@ -1096,6 +1096,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .flow-stepper span { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 5px 8px; border-radius: 8px; background: #edf0f4; color: var(--muted); font-size: 11px; font-weight: 700; text-align: center; }
 .flow-stepper span b { display: grid; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: #fff; font-size: 10px; }
 .flow-stepper span.is-active { background: var(--primary); color: #fff; }
+.flow-stepper span.is-active b { color: var(--primary); }
 .flow-stepper span.is-done { background: var(--green-soft); color: var(--green); }
 .flow-guide-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .flow-guide-copy strong { display: block; margin-bottom: 3px; }
