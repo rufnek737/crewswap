@@ -62,9 +62,9 @@ const SPECIAL_AIRPORTS = ["CXR","TAG","BKI"];
 const PILL_CLASS = {
   "OFF":"pill-off", "VAC":"pill-off", "국내선":"pill-dom", "국제선":"pill-intl",
   "LAYOV":"pill-lay", "RSV":"pill-rsv", "STBY":"pill-stby", "PICK UP":"pill-pickup",
-  "ARRIVAL":"pill-arrival",
+  "ARRIVAL":"pill-arrival", "GND":"pill-gnd",
 };
-const BAND_CLASS = { "국내선":"dom", "국제선":"", "LAYOV":"lay", "ARRIVAL":"lay" };
+const BAND_CLASS = { "국내선":"dom", "국제선":"", "LAYOV":"lay", "ARRIVAL":"lay", "GND":"gnd" };
 
 const WANTED_TYPE_OPTIONS = ["OFF","국내선","국제선","LAYOV","RSV","STBY","비행(전체)","아무거나"];
 // 표시용 라벨 (내부 값은 유지, 화면 텍스트만 명확하게)
@@ -962,6 +962,27 @@ function parseDayBlock(block) {
   const route = /([A-Z]{3})\s*[-–]\s*([A-Z]{3})/.exec(full);
   const flight = /(7C\s?\d{3,4})/i.exec(full);
   const times = [...full.matchAll(/(\d{1,2}:\d{2}(?:\+1)?)/g)].map(m => normalizeTime(m[1])).filter(Boolean);
+  // 지상근무·훈련(JCRM 지상수업 / SIM 등): 실제 여객편(7C 편명)이 없고
+  // 출·도착 공항이 같은 반복 형태(GMP-GMP, GMP-GMP-GMP)는 비행이 아니다.
+  // → 국내선으로 오인하지 않도록 별도 분류하고 스왑 대상에서 제외한다.
+  if (route && !flight) {
+    // 공항이 아닌 근무 코드(SIM/OPC 등)를 공항으로 오인하지 않도록 제외
+    const NON_AIRPORT = new Set(["SIM","OPC","LPC","LOFT","SPT","GND","JCRM","RSV","OFF","VAC","REST","STBY","PICK","LAYOV"]);
+    const airports = [...full.matchAll(/\b([A-Z]{3})\b/g)]
+      .map(m => m[1].toUpperCase())
+      .filter(a => !NON_AIRPORT.has(a));
+    const uniqAir = [...new Set(airports)];
+    if (uniqAir.length === 1) {
+      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT)\b/i.test(full);
+      return { ...base, type:"GND", ground: isSim ? "SIM" : "지상",
+        title: isSim ? "SIM 훈련" : "지상근무",
+        station: uniqAir[0],
+        reportTime: times[0] || null,
+        releaseTime: times[times.length-1] || times[0] || null,
+        crewComposition: "비행 아님 · 회사 지정 근무",
+        lockReason: (isSim ? "SIM 훈련" : "지상근무") + " — 비행 아님, SWAP 불가" };
+    }
+  }
   if (route) {
     const [, dep, arr] = [route[0], route[1].toUpperCase(), route[2].toUpperCase()];
     const region = AIRPORT_REGION[arr] || AIRPORT_REGION[dep] || "OTHER";
@@ -1049,7 +1070,7 @@ function fillLayoverGaps(schedules) {
 /* ====== 5c. 파싱 미리보기 / 편집 ====== */
 let previewSchedules = [];
 
-const TYPE_OPTIONS = ["OFF","VAC","국내선","국제선","LAYOV","RSV","STBY","PICK UP","ARRIVAL","UNKNOWN"];
+const TYPE_OPTIONS = ["OFF","VAC","국내선","국제선","LAYOV","RSV","STBY","PICK UP","ARRIVAL","GND","UNKNOWN"];
 const GRADE_OPTIONS = ["","A","B","C"];
 
 function openImportDialog() {
@@ -3472,7 +3493,7 @@ function renderCompareCalendar(r) {
   if (fixedMogijiViolation && picked.size) picked.clear();
   const postedDays = new Set(myPost?.offered?.days || []);
   const inspectedOwnDay = _compareOwnInspect[r.id];
-  const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t;
+  const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t === "GND" ? "지상/훈련" : t;
   const weekday = `<div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>`;
   let myCells = "";
   let requestCells = "";

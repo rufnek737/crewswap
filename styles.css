@@ -334,6 +334,7 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .pattern-band { height: 4px; margin: 0 -6px 4px; background: var(--c-intl); }
 .pattern-band.lay { background: var(--c-lay); }
 .pattern-band.dom { background: var(--c-dom); }
+.pattern-band.gnd { background: #64748b; }
 .pattern-band.start { margin-left: 2px; border-radius: 4px 0 0 4px; }
 .pattern-band.end { margin-right: 2px; border-radius: 0 4px 4px 0; }
 .pattern-band.single { margin: 0 2px 4px; border-radius: 4px; }
@@ -363,6 +364,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .pill-stby { background: var(--c-stby-bg); color: var(--c-stby); }
 .pill-pickup { background: #fdecea; color: var(--c-fail); }
 .pill-arrival { background: #ede4f7; color: #6d4d9c; border: 1px dashed #b16ad8; font-style: italic; }
+/* 지상근무·SIM 훈련(비행 아님) — 회색 계열로 비행과 확실히 구분, 스왑 불가 */
+.pill-gnd { background: #eef1f5; color: #475569; border: 1px dashed #94a3b8; }
 
 /* ===== 사이드 패널 ===== */
 .side-panel, .form-panel, .filter-panel, .profile-form { padding: 18px; }
