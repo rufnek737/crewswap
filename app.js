@@ -1081,9 +1081,34 @@ function openImportDialog() {
   openGenericModal("crewDialog", "crewOverlay");
 }
 
+// CrewConnex 서버 파싱은 지상근무(JCRM)·SIM을 GMP-GMP 형태의 '비행'으로 내려준다.
+// 실제 여객편(7C 편명)이 없고 출·도착 공항이 동일하면 GND(지상/훈련)로 재분류해
+// 국내선 비행으로 오인·스왑되지 않게 한다. (parseDayBlock의 수동 파싱과 동일 기준)
+function reclassifyGroundDuty(s) {
+  if (!s || !["국내선", "국제선", "UNKNOWN"].includes(s.type)) return s;
+  const title = s.title || "";
+  if (/7C\s?\d/i.test(title)) return s; // 실제 여객편은 제외
+  const NON_AIRPORT = new Set(["SIM","OPC","LPC","LOFT","SPT","GND","JCRM","RSV","OFF","VAC","REST","STBY","PICK","LAYOV"]);
+  const codes = [];
+  if (s.dep) codes.push(s.dep);
+  if (s.arr) codes.push(s.arr);
+  `${title} ${s.routeSummary || ""}`.match(/\b[A-Z]{3}\b/g)?.forEach(c => codes.push(c));
+  const air = [...new Set(codes.map(c => c.toUpperCase()).filter(c => !NON_AIRPORT.has(c)))];
+  if (air.length !== 1) return s;
+  const isSim = /\b(SIM|OPC|LPC|LOFT|SPT)\b/i.test(`${title} ${s.routeSummary || ""}`);
+  s.type = "GND";
+  s.ground = isSim ? "SIM" : "지상";
+  s.title = isSim ? "SIM 훈련" : "지상근무";
+  s.station = air[0];
+  s.lockReason = (isSim ? "SIM 훈련" : "지상근무") + " — 비행 아님, SWAP 불가";
+  s.crewComposition = "비행 아님 · 회사 지정 근무";
+  delete s.dep; delete s.arr; delete s.routeSummary; delete s.legs; delete s.aircraft;
+  return s;
+}
+
 function showPreview(schedules) {
   // 월 → 일 순으로 정렬 (다중 월 시 같은 일자가 섞이지 않도록)
-  previewSchedules = schedules.slice().sort((a, b) => {
+  previewSchedules = schedules.map(reclassifyGroundDuty).sort((a, b) => {
     const ma = a.month || "", mb = b.month || "";
     if (ma !== mb) return ma < mb ? -1 : 1;
     return a.day - b.day;
