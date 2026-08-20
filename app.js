@@ -4049,6 +4049,17 @@ function markAlertRead(a) {
   updateBellBadge();
   updateAppBadge();
 }
+// 벨을 열면 '확인'으로 간주 — 공지 제외 모든 알림을 읽음 처리해 배지를 지운다.
+// (기존에는 개별 항목을 탭해야만 읽음 처리돼, 벨만 열면 배지가 안 사라졌음)
+function markAllAlertsRead() {
+  let changed = false;
+  (state.alerts || []).forEach(a => {
+    if (a.kind !== "announce" && !a.read) { a.read = true; changed = true; }
+  });
+  if (changed) saveState();
+  updateBellBadge();
+  updateAppBadge();
+}
 async function updateAppBadge() {
   try {
     const Badge = window.Capacitor?.Plugins?.Badge;
@@ -5185,7 +5196,11 @@ function bindEvents() {
   $("#pendingActionCancel")?.addEventListener("click", () => cancelPendingAction());
   $("#pendingActionNext")?.addEventListener("click", () => confirmPendingAction());
 
-  $("#bellButton").addEventListener("click", () => setAlertPanel(true));
+  $("#bellButton").addEventListener("click", () => {
+    setAlertPanel(true);
+    renderAlerts();      // 현재 미읽음 표시(점)를 보여준 뒤
+    markAllAlertsRead(); // 확인한 것으로 처리해 배지를 지운다
+  });
   $("#releaseNoticeConfirm")?.addEventListener("click", acknowledgeReleaseNotice);
   // 알림창 좌측 배경(backdrop) 클릭 시 닫힘 (우측 상단 X 대체)
   $("#alertBackdrop")?.addEventListener("click", () => setAlertPanel(false));
