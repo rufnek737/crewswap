@@ -588,14 +588,16 @@ async function handlePostsCreate(request, env, ctx, authEmail) {
   clean.ownerEmail = authEmail;
   clean.status = 'active';
   clean.registeredAt = clean.registeredAt || new Date().toISOString();
+  // 등록비는 서버의 PRO 권한을 기준으로 확정한다. 무료 체험과 영구 PRO 모두 무제한이다.
+  clean.creditSpent = (await isPremiumAccount(env, authEmail)) ? 0 : 1;
 
   try {
     await env.POSTS.put(`post:${clean.id}`, JSON.stringify(clean));
     const idx = await getPostsIndex(env);
     idx.push(clean);
     await savePostsIndex(env, idx);
-    if (ctx) ctx.waitUntil(notifyPremiumSubscribers(env, clean));
-    return json({ id: clean.id });
+    if (ctx?.waitUntil) ctx.waitUntil(notifyPremiumSubscribers(env, clean));
+    return json({ id: clean.id, creditSpent: clean.creditSpent });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 

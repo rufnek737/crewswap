@@ -133,6 +133,25 @@ test('the PRO pass starts only on request and cannot be claimed twice', async ()
   assert.equal((await duplicate.json()).code, 'PRO_TRIAL_ALREADY_USED');
 });
 
+test('the server records active trial and lifetime PRO posts with zero credit cost', async () => {
+  const runtime = env({
+    'user:trial@jejuair.net': {
+      email:'trial@jejuair.net',
+      proTrialStartedAt:'2026-08-20T00:00:00.000Z',
+      proTrialExpiresAt:'2099-09-19T00:00:00.000Z',
+    },
+    'user:free@jejuair.net': { email:'free@jejuair.net' },
+    'idx:posts': [],
+  });
+  const post = id => ({ id, deleteToken:`token-${id}`, offered:{ patternName:'TEST' }, wanted:{ memo:'' }, creditSpent:1 });
+
+  assert.equal((await authed('/api/posts-create', 'trial@jejuair.net', post('PRO-POST'), runtime)).status, 200);
+  assert.equal((await authed('/api/posts-create', 'free@jejuair.net', post('FREE-POST'), runtime)).status, 200);
+
+  assert.equal((await runtime.POSTS.get('post:PRO-POST', { type:'json' })).creditSpent, 0);
+  assert.equal((await runtime.POSTS.get('post:FREE-POST', { type:'json' })).creditSpent, 1);
+});
+
 test('verification fails closed when email delivery is not configured', async () => {
   const runtime = env();
   delete runtime.RESEND_API_KEY;

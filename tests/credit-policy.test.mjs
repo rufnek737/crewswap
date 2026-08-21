@@ -41,3 +41,23 @@ test('refunds never increase a balance already above three through ads', () => {
   assert.equal(creditPolicy.grantRefund(wallet, 1, july), 0);
   assert.equal(wallet.credits, 4);
 });
+
+test('active PRO can spend without balance and preserves the free balance', () => {
+  const wallet = { credits: 0, creditMonth: '2026-07', adCreditsThisMonth: 0 };
+  assert.equal(creditPolicy.canSpend(wallet, 5, true), true);
+  assert.equal(creditPolicy.spend(wallet, 5, true), 0);
+  assert.equal(wallet.credits, 0);
+});
+
+test('free accounts require and deduct their numeric credits', () => {
+  const wallet = { credits: 2, creditMonth: '2026-07', adCreditsThisMonth: 0 };
+  assert.equal(creditPolicy.canSpend(wallet, 3, false), false);
+  assert.equal(creditPolicy.spend(wallet, 1, false), 1);
+  assert.equal(wallet.credits, 1);
+});
+
+test('a zero-cost PRO post remains zero-cost for cancellation and expiry', () => {
+  assert.equal(creditPolicy.recordedSpend({ creditSpent: 0 }), 0);
+  assert.equal(creditPolicy.recordedSpend({ creditSpent: null }), 1);
+  assert.equal(creditPolicy.recordedSpend({}), 1);
+});

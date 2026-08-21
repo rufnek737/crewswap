@@ -12,6 +12,7 @@ test('PRO trial waits until the user activates it', () => {
   assert.deepEqual(getProStatus({}, NOW), {
     active: false,
     entitlement: 'none',
+    expiresAt: null,
     trialAvailable: true,
     trialStartedAt: null,
     trialExpiresAt: null,
@@ -24,6 +25,7 @@ test('activating the pass grants exactly 30 days from the chosen time', () => {
   assert.equal(Date.parse(result.status.trialExpiresAt) - Date.parse(result.status.trialStartedAt), PRO_TRIAL_DURATION_MS);
   assert.equal(result.status.active, true);
   assert.equal(result.status.entitlement, 'trial');
+  assert.equal(result.status.expiresAt, result.status.trialExpiresAt);
   assert.equal(result.status.trialAvailable, false);
 });
 

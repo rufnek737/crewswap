@@ -18,6 +18,7 @@ export function getProStatus(user = {}, now = Date.now()) {
   return {
     active,
     entitlement: lifetime ? 'lifetime' : trialActive ? 'trial' : legacyActive ? 'legacy' : 'none',
+    expiresAt: lifetime ? null : trialActive ? trialExpiresAt : legacyActive ? user.premiumUntil : null,
     trialAvailable: !trialStartedAt && !trialExpiresAt,
     trialStartedAt,
     trialExpiresAt,
