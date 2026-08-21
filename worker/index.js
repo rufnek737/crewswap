@@ -6,6 +6,7 @@ import {
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import { activateProTrial, getProStatus } from './pro-entitlement.mjs';
+import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import '../mogiji-policy.js';
 import '../cabin-policy.js';
 
@@ -170,6 +171,18 @@ function pickProfile(src) {
   return p;
 }
 
+async function runWalletCommand(env, email, command = {}) {
+  const key = `wallet:${String(email || '').trim().toLowerCase()}`;
+  const stored = await env.POSTS.get(key, { type: 'json' });
+  const result = applyWalletCommand(stored, command);
+  if (result.ok) await env.POSTS.put(key, JSON.stringify(result.wallet));
+  return { ...result, wallet: publicWallet(result.wallet) };
+}
+
+async function walletStatus(env, email) {
+  return runWalletCommand(env, email, { type: 'status' });
+}
+
 async function handleUserSignup(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -196,7 +209,8 @@ async function handleUserSignup(request, env) {
   };
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   const sessionToken = await issueSessionToken(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  const wallet = await walletStatus(env, email);
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserLogin(request, env) {
@@ -212,7 +226,8 @@ async function handleUserLogin(request, env) {
   const ok = await verifyPassword(password, rec.salt, rec.hash);
   if (!ok) return json({ error: '비밀번호가 올바르지 않습니다.' }, 401);
   const sessionToken = await issueSessionToken(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  const wallet = await walletStatus(env, email);
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserUpdate(request, env, authEmail) {
@@ -224,6 +239,11 @@ async function handleUserUpdate(request, env, authEmail) {
   rec.profile = { ...rec.profile, ...pickProfile(body.profile) };
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   return json({ ok: true, profile: rec.profile });
+}
+
+async function handleCreditsStatus(env, authEmail) {
+  const result = await walletStatus(env, authEmail);
+  return json({ wallet: result.wallet });
 }
 
 async function handleUserResetPassword(request, env) {
@@ -276,7 +296,10 @@ async function handleUserDelete(request, env, authEmail) {
       saveRequestsIndex(env, plan.remainingRequests),
       savePremiumAlertIndex(env, plan.remainingPremiumRecords),
     ]);
-    await env.POSTS.delete(`user:${email}`);
+    await Promise.all([
+      env.POSTS.delete(`user:${email}`),
+      env.POSTS.delete(`wallet:${email}`),
+    ]);
 
     return json({
       ok: true,
@@ -411,7 +434,7 @@ function webPushConfigured(env) {
 async function isPremiumAccount(env, email) {
   if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true') return true;
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
-  return getProStatus(user).active;
+  return getProStatus(user || {}).active;
 }
 
 async function handlePremiumStatus(env, authEmail) {
@@ -589,16 +612,34 @@ async function handlePostsCreate(request, env, ctx, authEmail) {
   clean.status = 'active';
   clean.registeredAt = clean.registeredAt || new Date().toISOString();
   // 등록비는 서버의 PRO 권한을 기준으로 확정한다. 무료 체험과 영구 PRO 모두 무제한이다.
-  clean.creditSpent = (await isPremiumAccount(env, authEmail)) ? 0 : 1;
+  const unlimited = await isPremiumAccount(env, authEmail);
+  clean.creditSpent = unlimited ? 0 : 1;
 
+  let debited = false;
   try {
+    const existing = await env.POSTS.get(`post:${clean.id}`, { type: 'json' });
+    if (existing) {
+      if (existing.ownerEmail !== authEmail) return json({ error: '이미 사용된 글 ID입니다' }, 409);
+      const current = await walletStatus(env, authEmail);
+      return json({ id: existing.id, creditSpent: existing.creditSpent || 0, wallet: current.wallet, duplicate: true });
+    }
+    const debit = await runWalletCommand(env, authEmail, {
+      type: 'spend', operationId: `post:create:${clean.id}`, amount: 1, unlimited,
+    });
+    if (!debit.ok) return json({ error: '크레딧이 부족합니다', code: debit.code, wallet: debit.wallet }, 402);
+    debited = clean.creditSpent > 0;
     await env.POSTS.put(`post:${clean.id}`, JSON.stringify(clean));
     const idx = await getPostsIndex(env);
     idx.push(clean);
     await savePostsIndex(env, idx);
     if (ctx?.waitUntil) ctx.waitUntil(notifyPremiumSubscribers(env, clean));
-    return json({ id: clean.id, creditSpent: clean.creditSpent });
-  } catch (e) { return json({ error: e.message }, 500); }
+    return json({ id: clean.id, creditSpent: clean.creditSpent, wallet: debit.wallet });
+  } catch (e) {
+    if (debited) await runWalletCommand(env, authEmail, {
+      type: 'reverse', operationId: `post:create-reverse:${clean.id}`, amount: clean.creditSpent,
+    }).catch(() => {});
+    return json({ error: e.message }, 500);
+  }
 }
 
 /* ── posts-update (희망 조건만 수정, 오퍼/크레딧 변경 없음) ──── */
@@ -652,7 +693,7 @@ async function handleRequestsCreate(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   const {
-    postId, fromNick, fromBase, fromRole,
+    requestId, postId, fromNick, fromBase, fromRole,
     fromRealName, fromEmployeeId, fromPhone,
     type, message, offered, openRoster, lockedDays, validationRoster,
   } = body || {};
@@ -666,12 +707,31 @@ async function handleRequestsCreate(request, env, authEmail) {
   if (PERSONAL_INFO_RE.test(message || ''))
     return json({ error: '연락처/신상정보는 보낼 수 없습니다 (상호 수락 후 공개)' }, 400);
 
+  let debitSpent = 0;
+  let requestKey = '';
   try {
     const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
 
-    const id = 'REQ-' + Date.now() + '-' + randId();
+    const requestedId = String(requestId || '').trim();
+    const id = /^REQ-[A-Za-z0-9-]{8,100}$/.test(requestedId)
+      ? requestedId
+      : 'REQ-' + Date.now() + '-' + randId();
+    requestKey = `req:${id}`;
+    const existing = await env.POSTS.get(requestKey, { type: 'json' });
+    if (existing) {
+      if (existing.fromEmail !== authEmail) return json({ error: '이미 사용된 요청 ID입니다' }, 409);
+      const current = await walletStatus(env, authEmail);
+      return json({ id, creditSpent: existing.creditSpent || 0, wallet: current.wallet, duplicate: true });
+    }
+    const unlimited = await isPremiumAccount(env, authEmail);
+    const chargeable = type === 'request';
+    const debit = await runWalletCommand(env, authEmail, {
+      type: 'spend', operationId: `request:create:${id}`, amount: chargeable ? 1 : 0, unlimited,
+    });
+    if (!debit.ok) return json({ error: '크레딧이 부족합니다', code: debit.code, wallet: debit.wallet }, 402);
+    debitSpent = chargeable && !unlimited ? 1 : 0;
     const rec = {
       id, postId, type,
       postTitle: post.offered?.patternName || '',
@@ -688,17 +748,23 @@ async function handleRequestsCreate(request, env, authEmail) {
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
       status: offered ? (type === 'ask' ? '의향 문의' : '요청 대기') : '상대가 바꿀 날 고르는 중',
       stage: 1,
+      creditSpent: debitSpent,
       createdAt: new Date().toISOString(),
     };
-    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await env.POSTS.put(requestKey, JSON.stringify(rec));
     if (Array.isArray(validationRoster) && validationRoster.length) {
       await env.POSTS.put(`reqval:${id}`, JSON.stringify(validationRoster));
     }
     const idx = await getRequestsIndex(env);
     idx.push(rec);
     await saveRequestsIndex(env, idx);
-    return json({ id });
-  } catch (e) { return json({ error: e.message }, 500); }
+    return json({ id, creditSpent: debitSpent, wallet: debit.wallet });
+  } catch (e) {
+    if (debitSpent && requestKey) await runWalletCommand(env, authEmail, {
+      type: 'reverse', operationId: `request:create-reverse:${requestKey.slice(4)}`, amount: debitSpent,
+    }).catch(() => {});
+    return json({ error: e.message }, 500);
+  }
 }
 
 /* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
@@ -1048,19 +1114,49 @@ async function handleRequestsGet(request, env, authEmail) {
 
 /* ── posts-delete ───────────────────────────────────────────── */
 
+function postDeadlinePassed(post, now = Date.now()) {
+  const month = /^\d{4}-\d{2}$/.test(String(post?.deadlineMonth || '')) ? post.deadlineMonth : null;
+  const day = Number(post?.deadlineDay);
+  if (!month || !Number.isInteger(day) || day < 1 || day > 31) return false;
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(now));
+  return `${month}-${String(day).padStart(2, '0')}` < today;
+}
+
 async function handlePostsDelete(request, env, authEmail) {
-  let id, deleteToken;
-  try { ({ id, deleteToken } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, deleteToken, reason;
+  try { ({ id, deleteToken, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !deleteToken) return json({ error: '필수 필드 누락' }, 400);
 
   try {
     const post = await env.POSTS.get(`post:${id}`, { type: 'json' });
-    if (!post) return json({ ok: true, alreadyGone: true });
+    if (!post) {
+      const current = await walletStatus(env, authEmail);
+      return json({ ok: true, alreadyGone: true, wallet: current.wallet, refunded: 0 });
+    }
     if (post.ownerEmail !== authEmail || post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
-    await env.POSTS.delete(`post:${id}`);
+    if (post.status !== 'active') {
+      const current = await walletStatus(env, authEmail);
+      return json({ ok: true, alreadyClosed: true, status: post.status, refunded: post.refundGranted || 0, wallet: current.wallet });
+    }
+    const expired = reason === 'expired' || (!reason && postDeadlinePassed(post));
+    const refundRequested = Number(post.creditSpent || 0) * (expired ? 0.5 : 1);
+    const refund = await runWalletCommand(env, authEmail, {
+      type: 'refund',
+      operationId: `post:${expired ? 'expire' : 'cancel'}:${id}`,
+      amount: refundRequested,
+    });
+    post.status = expired ? 'expired' : 'cancelled';
+    post.refunded = true;
+    post.refundGranted = refund.refunded || 0;
+    post.closedAt = new Date().toISOString();
+    await env.POSTS.put(`post:${id}`, JSON.stringify(post));
     const idx = await getPostsIndex(env);
-    await savePostsIndex(env, idx.filter(p => p.id !== id));
-    return json({ ok: true });
+    const index = idx.findIndex(item => item.id === id);
+    if (index >= 0) idx[index] = post;
+    await savePostsIndex(env, idx);
+    return json({ ok: true, status: post.status, refunded: refund.refunded || 0, wallet: refund.wallet });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
@@ -1523,6 +1619,7 @@ export default {
       else if (path === '/api/user-signup') response = await handleUserSignup(request, env);
       else if (path === '/api/user-login') response = await handleUserLogin(request, env);
       else if (path === '/api/user-update') response = await handleUserUpdate(request, env, auth.email);
+      else if (path === '/api/credits-status') response = await handleCreditsStatus(env, auth.email);
       else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
       else if (path === '/api/posts-get') response = await handlePostsGet(env);

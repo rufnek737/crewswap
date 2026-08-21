@@ -107,7 +107,18 @@ test("the final Q&A matches the current privacy, credit, and PRO policies", () =
   assert.match(app, /30일 동안 PRO 알림과 무제한 크레딧/);
   assert.match(app, /기간 종료 후 자동 결제되지 않으며/);
   assert.match(app, /월 2회·연 12회 한도/);
-  assert.match(app, /가져온 전체 근무표와 무료 크레딧은 현재 기기에 저장/);
+  assert.match(app, /PRO 정보와 크레딧은 서버 계정에 연결/);
+});
+
+test("client credit balance follows successful server wallet responses", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(app, /api\/credits-status/);
+  assert.match(app, /if \(data\.wallet\) applyCreditWallet\(data\.wallet\)/);
+  assert.doesNotMatch(app, /CREDIT_POLICY\.spend\(state, 1, unlimitedCredits\)/);
+  assert.match(html, /id="watchAdButton"[^>]*hidden/);
+  assert.match(html, /id="watchAdButtonProfile"[^>]*hidden/);
 });
 
 test("swap restrictions are checked by rules without a calendar lock icon", () => {

@@ -99,6 +99,7 @@ test('signup returns a verifiable session and verification requests are rate lim
     assert.equal((await verifySessionToken(runtime, account.sessionToken)).email, 'new@jejuair.net');
     assert.equal(account.premium.active, false);
     assert.equal(account.premium.trialAvailable, true);
+    assert.equal(account.wallet.credits, 3);
 
     for (let i = 0; i < 4; i++) assert.equal((await verifyRequest()).status, 200);
     assert.equal((await verifyRequest()).status, 429);
@@ -150,6 +151,68 @@ test('the server records active trial and lifetime PRO posts with zero credit co
 
   assert.equal((await runtime.POSTS.get('post:PRO-POST', { type:'json' })).creditSpent, 0);
   assert.equal((await runtime.POSTS.get('post:FREE-POST', { type:'json' })).creditSpent, 1);
+});
+
+test('the server wallet charges once, blocks overspending, and refunds a cancelled post once', async () => {
+  const runtime = env({
+    'user:free@jejuair.net': { email:'free@jejuair.net' },
+    'idx:posts': [],
+  });
+  const post = id => ({ id, deleteToken:`token-${id}`, offered:{ patternName:id }, wanted:{ memo:'' } });
+
+  const first = await authed('/api/posts-create', 'free@jejuair.net', post('POST-1'), runtime);
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).wallet.credits, 2);
+
+  const duplicate = await authed('/api/posts-create', 'free@jejuair.net', post('POST-1'), runtime);
+  assert.equal((await duplicate.json()).wallet.credits, 2);
+  assert.equal((await authed('/api/posts-create', 'free@jejuair.net', post('POST-2'), runtime)).status, 200);
+  assert.equal((await authed('/api/posts-create', 'free@jejuair.net', post('POST-3'), runtime)).status, 200);
+
+  const blocked = await authed('/api/posts-create', 'free@jejuair.net', post('POST-4'), runtime);
+  assert.equal(blocked.status, 402);
+  assert.equal((await blocked.json()).code, 'CREDIT_REQUIRED');
+
+  const cancel = await authed('/api/posts-delete', 'free@jejuair.net', {
+    id:'POST-1', deleteToken:'token-POST-1', reason:'cancelled',
+  }, runtime);
+  const cancelBody = await cancel.json();
+  assert.equal(cancelBody.refunded, 1);
+  assert.equal(cancelBody.wallet.credits, 1);
+
+  const repeated = await authed('/api/posts-delete', 'free@jejuair.net', {
+    id:'POST-1', deleteToken:'token-POST-1', reason:'cancelled',
+  }, runtime);
+  assert.equal((await repeated.json()).wallet.credits, 1);
+
+  const changedReason = await authed('/api/posts-delete', 'free@jejuair.net', {
+    id:'POST-1', deleteToken:'token-POST-1', reason:'expired',
+  }, runtime);
+  assert.equal((await changedReason.json()).wallet.credits, 1);
+});
+
+test('formal requests use server credits while interest checks remain free and idempotent', async () => {
+  const targetPost = { id:'TARGET', ownerEmail:'owner@jejuair.net', ownerNick:'Owner', offered:{ patternName:'TARGET' } };
+  const runtime = env({
+    'user:requester@jejuair.net': { email:'requester@jejuair.net' },
+    'post:TARGET': targetPost,
+    'idx:requests': [],
+  });
+  const base = {
+    postId:'TARGET', fromNick:'Requester', offered:{ patternName:'OFFER', days:[1] },
+  };
+  const request = await authed('/api/requests-create', 'requester@jejuair.net', {
+    ...base, requestId:'REQ-SERVER-0001', type:'request',
+  }, runtime);
+  assert.equal((await request.json()).wallet.credits, 2);
+  const duplicate = await authed('/api/requests-create', 'requester@jejuair.net', {
+    ...base, requestId:'REQ-SERVER-0001', type:'request',
+  }, runtime);
+  assert.equal((await duplicate.json()).wallet.credits, 2);
+  const ask = await authed('/api/requests-create', 'requester@jejuair.net', {
+    ...base, requestId:'REQ-SERVER-0002', type:'ask',
+  }, runtime);
+  assert.equal((await ask.json()).wallet.credits, 2);
 });
 
 test('verification fails closed when email delivery is not configured', async () => {

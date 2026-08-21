@@ -396,6 +396,11 @@ function createMockAlerts() {
       body:"Q1. 스왑 올리기·요청하기·의향 묻기는 어떻게 다른가요?\n‘내 스왑 올리기’는 내가 바꿀 근무를 게시하는 기능입니다. ‘요청하기’는 상대 글에 내 근무를 제안하는 정식 교환 요청이고, ‘의향 묻기’는 크레딧 없이 상대의 교환 의사부터 확인하는 기능입니다.\n\nQ2. 요청할 때 내 스케줄 전체가 상대에게 보이나요?\n같은 날짜끼리 바로 교환할 수 있는 1:1 스왑은 제안한 근무만 보입니다. 날짜가 다르거나 상대가 받을 근무를 직접 골라야 할 때만 공개 달력이 전달되며, ‘내 스케줄 숨기기’로 원하지 않는 날짜를 제외할 수 있습니다.\n\nQ3. 실명·사번·연락처는 언제 공개되나요?\n양쪽이 상호 수락한 뒤에만 공개됩니다. 그전에는 닉네임·베이스·직책 등 공개 정보만 표시됩니다. 공개된 정보는 회사 스왑 진행 목적으로만 사용해야 합니다.\n\nQ4. 규정 경고로 요청할 수 없는 이유는 무엇인가요?\n앱이 휴식시간, 연속 근무, 모기지 휴무, RSV·STBY 패턴, 자격 및 스왑 횟수 등을 자동 확인합니다. 규정과 충돌하면 해당 날짜와 사유를 표시하고 요청을 막습니다. 이 판정은 보조 기능이므로 원본 일정과 최신 회사 규정을 반드시 다시 확인해야 합니다.\n\nQ5. 요청이나 의향을 거절하면 어떤 내용이 전달되나요?\n일반 거절은 개인 사정으로 진행하기 어렵다는 안내가 전달됩니다. 자동 규정 판정으로 불가능한 경우에는 개인 사유가 아니라 충돌 날짜와 규정 사유가 전달됩니다.\n\nQ6. 상호 수락하면 스왑이 끝난 건가요?\n아닙니다. 상호 수락은 두 이용자의 의사 확인이며 회사 승인이 아닙니다. 글을 올린 사람이 회사 시스템에 근무교환을 신청하고 최종 승인 여부를 확인해야 합니다.\n\nQ7. 무료 크레딧은 어떻게 사용되나요?\n무료 이용자는 스왑 글 등록과 정식 요청에 각각 1크레딧을 사용하며 의향 묻기는 무료입니다. 매월 첫 실행 시 기본 3크레딧으로 재설정되고 남은 크레딧과 광고 보상은 다음 달로 이월되지 않습니다. 보상형 광고가 제공되면 시청 1회당 그달에 사용할 1크레딧을 추가로 받을 수 있습니다.\n\nQ8. 취소하거나 마감되면 크레딧이 환급되나요?\n진행 전 등록을 취소하면 사용한 등록 크레딧이 기본 상한 3개까지 복원됩니다. 등록 글이 매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급됩니다. PRO 무제한으로 등록한 글은 처음부터 크레딧을 쓰지 않으므로 환급도 없습니다.\n\nQ9. 무료와 PRO는 무엇이 다른가요?\n스왑 검색·등록·요청·수락과 규정 확인 등 핵심 기능은 무료입니다. PRO는 원하는 목적지·근무 유형·체류조건을 저장해 앱을 열지 않아도 조건에 맞는 새 글 알림을 받고, 스왑 등록과 정식 요청 크레딧을 무제한으로 이용하는 편의 기능입니다.\n\nQ10. PRO 30일 무료 이용권은 언제 시작되나요?\n가입 즉시 시작되지 않습니다. 계정당 한 번, 내가 필요한 시점에 직접 시작하며 활성화 순간부터 30일 동안 PRO 알림과 무제한 크레딧을 동일하게 이용합니다. 결제정보가 필요 없고 기간 종료 후 자동 결제되지 않으며 일시정지하거나 다시 사용할 수 없습니다.\n\nQ11. 앱을 닫아도 PRO 알림이 오나요?\n알림 권한과 백그라운드 알림을 켜고 조건을 서버에 저장하면 앱을 열지 않은 상태에서도 받을 수 있습니다. 기기의 알림 차단, 네트워크 상태나 운영체제 정책에 따라 전달이 늦거나 제한될 수 있습니다.\n\nQ12. 스왑 횟수 제한이 있나요?\n객실승무원은 실제 상호 수락된 스왑을 기준으로 월 2회·연 12회 한도를 확인하며, 한도에 도달하면 경고하고 진행을 막습니다. 운항승무원은 현재 앱에서 별도 횟수 제한을 적용하지 않습니다.\n\nQ13. 달력의 👀·⚠️ 아이콘은 무엇인가요?\n👀 옆 숫자는 다른 사용자가 해당 날짜에 내놓은 스왑 글 수입니다. ⚠️는 연속 근무 등 규정상 주의가 필요한 날짜입니다. 실제 교환 가능 여부는 등록·요청 단계에서 다시 자동 확인합니다.\n\nQ14. 휴대폰을 바꾸거나 앱을 삭제하면 일정과 크레딧이 복원되나요?\n계정·프로필·등록 글·요청·PRO 정보는 서버 계정과 연결되지만, 가져온 전체 근무표와 무료 크레딧은 현재 기기에 저장됩니다. 새 기기에서는 CrewConnex 일정을 다시 가져와야 하며 기기 데이터가 삭제되면 크레딧이 복구되지 않을 수 있습니다. 탈퇴하면 서버 정보와 현재 기기 정보가 함께 삭제됩니다.",
       time:"공지" },
   ];
+  const qna = alerts.find(alert => alert.id === "qna");
+  if (qna) qna.body = qna.body.replace(
+    "계정·프로필·등록 글·요청·PRO 정보는 서버 계정과 연결되지만, 가져온 전체 근무표와 무료 크레딧은 현재 기기에 저장됩니다. 새 기기에서는 CrewConnex 일정을 다시 가져와야 하며 기기 데이터가 삭제되면 크레딧이 복구되지 않을 수 있습니다.",
+    "계정·프로필·등록 글·요청·PRO 정보와 크레딧은 서버 계정에 연결되어 다시 로그인하면 복원됩니다. 가져온 전체 근무표는 현재 기기에만 저장되므로 새 기기에서는 CrewConnex 일정을 다시 가져와야 합니다.",
+  );
   const releaseAnnouncement = window.CrewSwapReleaseNotice?.announcement();
   if (releaseAnnouncement) alerts.unshift(releaseAnnouncement);
   return alerts;
@@ -1928,11 +1933,36 @@ function renderCredits() {
   const adLabel = `📺 테스트 광고 보고 +1 크레딧${adCount ? ` · 이번 달 ${adCount}회` : ""}`;
   if ($("#watchAdButton")) {
     $("#watchAdButton").textContent = adLabel;
-    $("#watchAdButton").hidden = unlimited;
+    $("#watchAdButton").hidden = true;
   }
   if ($("#watchAdButtonProfile")) {
     $("#watchAdButtonProfile").textContent = adLabel;
-    $("#watchAdButtonProfile").hidden = unlimited;
+    $("#watchAdButtonProfile").hidden = true;
+  }
+}
+
+function applyCreditWallet(wallet, shouldRender = true) {
+  if (!wallet || !Number.isFinite(Number(wallet.credits))) return false;
+  state.credits = Number(wallet.credits);
+  state.creditMonth = wallet.creditMonth || CREDIT_POLICY.monthKey();
+  state.adCreditsThisMonth = Number(wallet.adCreditsThisMonth) || 0;
+  state.creditWalletServer = true;
+  saveState();
+  if (shouldRender) renderCredits();
+  return true;
+}
+
+async function refreshCreditWallet() {
+  if (!state.sessionToken || !state.user.serverAuthed) return { ok: false, skipped: true };
+  try {
+    const response = await apiFetch(`${API_BASE}/api/credits-status`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || '크레딧 조회 실패');
+    applyCreditWallet(data.wallet);
+    return { ok: true, wallet: data.wallet };
+  } catch (error) {
+    console.warn('credit wallet refresh failed:', error);
+    return { ok: false, error: error.message };
   }
 }
 
@@ -1943,6 +1973,10 @@ const CREDIT_POLICY = window.CrewSwapCreditPolicy;
 const CREDIT_CAP = CREDIT_POLICY.BASE_MONTHLY_CREDITS;
 
 function regenCredits() {
+  if (state.sessionToken && state.user.serverAuthed) {
+    refreshCreditWallet();
+    return { changed: false, server: true };
+  }
   const result = CREDIT_POLICY.reconcileMonth(state);
   delete state.lastCreditAt;
   if (!result.changed) return result;
@@ -2440,18 +2474,21 @@ function renderMyPosts() {
         ? `기본 크레딧이 3개 미만일 때만 최대 ${creditSpent}크레딧이 환급됩니다.`
         : "PRO 무제한으로 등록한 글이라 크레딧 변동은 없습니다.";
       if (!confirm(`"${post.offered.patternName}" 등록을 취소하시겠습니까?\n${creditNote}`)) return;
-      if (post.deleteToken) {
-        try {
-          await apiFetch(`${API_BASE}/api/posts-delete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
-          });
-        } catch (e) { console.warn("posts-delete failed:", e); }
-      }
+      if (!post.deleteToken) { showToast("구버전 글은 서버에서 취소할 수 없습니다."); return; }
+      let result;
+      try {
+        const response = await apiFetch(`${API_BASE}/api/posts-delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: pid, deleteToken: post.deleteToken, reason: "cancelled" }),
+        });
+        result = await response.json().catch(() => ({}));
+        if (result.wallet) applyCreditWallet(result.wallet);
+        if (!response.ok) { showToast(result.error || "등록 취소 실패 — 다시 시도해주세요."); return; }
+      } catch (e) { showToast("등록 취소 실패 — 네트워크를 확인해주세요."); return; }
       _deletedPostIds.add(pid);
       state.myPosts = state.myPosts.filter(x => x.id !== pid);
-      const refund = CREDIT_POLICY.grantRefund(state, creditSpent);
+      const refund = Number(result.refunded) || 0;
       saveState();
       renderMyPosts();
       renderCredits();
@@ -3009,7 +3046,7 @@ function schedMonthNumFromEntry(s) { return parseInt((s.month || state.currentMo
 
 // 요청하기 진입 — 내 스케줄 전체를 열고(잠금만 선택) 상대가 고르게 함
 function requestSwap(postId) {
-  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
+  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧이 부족합니다 — 다음 달 기본 크레딧 또는 PRO를 이용해주세요."); return; }
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
@@ -3062,6 +3099,7 @@ function openAskModal(postId, directOffer = null) {
   const askD = document.getElementById("askDialog");
   askD._postId = postId;
   askD._directOffer = directOffer;
+  askD._requestId = `REQ-${crypto.randomUUID()}`;
   document.getElementById("askDialogTitle").textContent = `💬 ${p.ownerNick || "상대"} 님에게 의향 표시`;
   document.getElementById("askMine").innerHTML = directOffer
     ? directOfferSummaryHtml(directOffer)
@@ -3083,19 +3121,19 @@ async function sendAskInterest() {
   const directOffer = askD._directOffer || null;
   const roster = buildOpenRoster();
   if (!directOffer && roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 숨김)."); return; }
-  await sendOpenSwap(postId, "ask", directOffer ? null : roster, directOffer);
+  await sendOpenSwap(postId, "ask", directOffer ? null : roster, directOffer, askD._requestId);
   closeGenericModal("askDialog", "askOverlay");
 }
 
 // 요청/의향 공통 전송 — 공개 로스터를 첨부 (offered는 상대가 고른 뒤 확정)
-async function sendOpenSwap(postId, type, roster, offered = null) {
+async function sendOpenSwap(postId, type, roster, offered = null, requestId = null) {
   const lockedDays = [...state.selectedDays].map(k => parseDayKey(k).day);
   try {
     const res = await apiFetch(`${API_BASE}/api/requests-create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        postId, type,
+        requestId: requestId || `REQ-${crypto.randomUUID()}`, postId, type,
         fromEmail: state.user.email, fromNick: state.user.nickname,
         fromBase: state.user.base, fromRole: state.user.roleType,
         fromRealName: state.user.realName || "", fromEmployeeId: state.user.employeeId || "", fromPhone: state.user.phone || "",
@@ -3106,13 +3144,9 @@ async function sendOpenSwap(postId, type, roster, offered = null) {
       }),
     });
     const data = await res.json().catch(() => ({}));
+    if (data.wallet) applyCreditWallet(data.wallet);
     if (!res.ok) { showToast(data.error || "전송 실패 — 다시 시도해주세요."); return false; }
   } catch (e) { showToast("전송 실패 — 네트워크 오류"); return false; }
-  if (type === "request") {
-    CREDIT_POLICY.spend(state, 1, isPremiumUser());
-    saveState();
-    renderCredits();
-  }
   resetScheduleSelection();
   fetchRequests();
   showToast(type === "ask"
@@ -3129,6 +3163,7 @@ function openRequestModal(postId, directOffer = null) {
   const reqD = document.getElementById("reqDialog");
   reqD._postId = postId;
   reqD._directOffer = directOffer;
+  reqD._requestId = `REQ-${crypto.randomUUID()}`;
   document.getElementById("reqDialogTitle").textContent = `${p.ownerNick || "상대"} 님에게 스왑 요청`;
   document.getElementById("reqMine").innerHTML = directOffer
     ? directOfferSummaryHtml(directOffer)
@@ -3149,11 +3184,11 @@ async function sendSwapRequest() {
   const postId = reqD._postId;
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
-  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
+  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧이 부족합니다 — 다음 달 기본 크레딧 또는 PRO를 이용해주세요."); return; }
   const directOffer = reqD._directOffer || null;
   const roster = buildOpenRoster();
   if (!directOffer && roster.length === 0) { showToast("공개할 근무가 없습니다 (모두 숨김)."); return; }
-  const ok = await sendOpenSwap(postId, "request", directOffer ? null : roster, directOffer);
+  const ok = await sendOpenSwap(postId, "request", directOffer ? null : roster, directOffer, reqD._requestId);
   if (ok) closeGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -3179,31 +3214,38 @@ async function fetchMyPosts() {
 
 // 마감일이 지났는데 매칭되지 않은 내 스왑 글 → 사용 크레딧 50% 자동 환급
 async function processExpiredRefunds() {
-  let refundTotal = 0, count = 0;
-  const newlyExpired = [];   // 이번에 새로 환급된 글 (서버 삭제 대상)
-  const toAlert = [];        // '마감' 알림을 아직 안 띄운 만료 글 (소급 포함)
-  state.myPosts.forEach(p => {
-    if (p.matched) return;
+  let refundTotal = 0, count = 0, changed = false;
+  const newlyExpired = [];
+  for (const p of state.myPosts) {
+    if (p.matched) continue;
     const dd = dDayInfo(p.deadlineDay, postDeadlineMonth(p));
-    if (!dd.expired) return;
-    // 아직 환급 안 됐으면 환급 처리
+    if (!dd.expired) continue;
     if (!p.refunded && p.status !== "expired") {
-      const requestedRefund = CREDIT_POLICY.recordedSpend(p) * 0.5;
-      const refund = CREDIT_POLICY.grantRefund(state, requestedRefund);
+      if (!p.deleteToken) continue;
+      let result;
+      try {
+        const response = await apiFetch(`${API_BASE}/api/posts-delete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken, reason: "expired" }),
+        });
+        result = await response.json().catch(() => ({}));
+        if (result.wallet) applyCreditWallet(result.wallet);
+        if (!response.ok) continue;
+      } catch (error) {
+        console.warn("expired post 서버 처리 실패:", error);
+        continue;
+      }
+      const refund = Number(result.refunded) || 0;
       p.refundGranted = refund;
       p.refunded = true;
       p.status = "expired";
       refundTotal += refund;
       count++;
       newlyExpired.push(p);
+      changed = true;
     }
-    // 마감 알림을 아직 안 띄운 글이면 알림 큐에 (이 수정 이전에 환급된 글도 1회 소급)
-    if (!p.expiredAlerted) toAlert.push(p);
-  });
-  if (toAlert.length > 0) {
-    if (count > 0) state.credits = Math.round(state.credits * 10) / 10;
-    // 만료된 글마다 '마감' 알림(urgent) 추가 — 벨의 마감 탭에 남고 배지에 집계됨
-    toAlert.forEach(p => {
+    if (!p.expiredAlerted && (p.refunded || p.status === "expired")) {
       const refund = Object.prototype.hasOwnProperty.call(p, "refundGranted")
         ? p.refundGranted
         : CREDIT_POLICY.recordedSpend(p) * 0.5;
@@ -3221,7 +3263,10 @@ async function processExpiredRefunds() {
         time: "방금",
         createdAt: new Date().toISOString(),
       });
-    });
+      changed = true;
+    }
+  }
+  if (changed) {
     saveState();
     renderCredits();
     renderMyPosts();
@@ -3234,15 +3279,6 @@ async function processExpiredRefunds() {
           ? `마감된 미매칭 스왑 ${count}건 — PRO 등록이라 크레딧 변동 없음`
           : `마감된 미매칭 스왑 ${count}건 — 기본 크레딧 상한(3개)이라 추가 환급 없음`);
     }
-    // 서버(KV)에서도 실제로 제거 — 안 하면 다른 사용자의 "스왑 찾기" 화면에 마감 지난 글이 계속 노출됨
-    newlyExpired.forEach(p => {
-      if (!p.deleteToken) return;
-      apiFetch(`${API_BASE}/api/posts-delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
-      }).catch(e => console.warn("expired post 서버 삭제 실패:", e));
-    });
   }
 }
 
@@ -3917,7 +3953,7 @@ async function markSubmitDone(reqId) {
 async function proceedToRequestFromAsk(reqId) {
   const r = (state.requests.sent || []).find(x => x.id === reqId);
   if (!r || !r.offered) { showToast("의향 정보를 찾을 수 없습니다."); return; }
-  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧 부족 — 테스트 광고를 보고 1개를 받을 수 있습니다."); return; }
+  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧이 부족합니다 — 다음 달 기본 크레딧 또는 PRO를 이용해주세요."); return; }
   let post = state.posts.find(p => p.id === r.postId);
   if (!post) { await fetchPosts(); post = state.posts.find(p => p.id === r.postId); }
   if (!post) { showToast("상대 글이 마감되었거나 삭제되었습니다."); return; }
@@ -4686,10 +4722,7 @@ function bindEvents() {
       }
       state.sessionToken = data.sessionToken || null;
       state.sessionExpiresAt = data.sessionExpiresAt || null;
-      applyLoggedInProfile(_verifyEmail, data.profile || profile, data.premium);
-      state.credits = CREDIT_CAP;
-      state.creditMonth = CREDIT_POLICY.monthKey();
-      state.adCreditsThisMonth = 0;
+      applyLoggedInProfile(_verifyEmail, data.profile || profile, data.premium, data.wallet);
       saveState();
       renderCredits();
       closeSignupModal();
@@ -4723,7 +4756,7 @@ function bindEvents() {
       $("#loginPassword").value = "";
       state.sessionToken = data.sessionToken || null;
       state.sessionExpiresAt = data.sessionExpiresAt || null;
-      applyLoggedInProfile(data.email || email, data.profile, data.premium);
+      applyLoggedInProfile(data.email || email, data.profile, data.premium, data.wallet);
       closeLoginModal();
       showToast(`${data.username || "님"} 로그인 완료`);
     } catch (err) {
@@ -5089,6 +5122,7 @@ function bindEvents() {
     }
 
     const wanted = { memo: ($("#postMemo").value || "").trim() };
+    let createdCount = 0;
 
     for (const keyGroup of groups) {
       const ss = keyGroup.map(key => {
@@ -5175,30 +5209,42 @@ function bindEvents() {
         status: "active",
       };
 
+      let created = false;
       try {
         const res = await apiFetch(`${API_BASE}/api/posts-create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newPost),
         });
-        if (!res.ok) console.warn("posts-create failed:", await res.json().catch(() => ({})));
+        const data = await res.json().catch(() => ({}));
+        if (data.wallet) applyCreditWallet(data.wallet);
+        if (!res.ok) {
+          showToast(data.error || "스왑 등록 실패 — 다시 시도해주세요.");
+          break;
+        }
+        newPost.creditSpent = Number(data.creditSpent) || 0;
+        created = true;
       } catch (e) {
-        console.warn("posts-create network error:", e);
+        showToast("스왑 등록 실패 — 네트워크를 확인해주세요.");
+        break;
       }
 
-      state.myPosts.unshift(newPost);
-      CREDIT_POLICY.spend(state, 1, unlimitedCredits);
+      if (created) {
+        state.myPosts.unshift(newPost);
+        createdCount++;
+      }
       // 스왑 횟수(월/연)는 실제 매칭 성사(상호 수락) 시점에 카운팅 — 등록 시 증가 안 함
     }
 
+    if (createdCount === 0) return;
     state.postDraft = null;
     resetScheduleSelection(false);
     saveState();
     renderAll();
     showToast(unlimitedCredits
-      ? `스왑 글 ${needed}건 등록 완료 — PRO 크레딧 차감 없음`
-      : needed > 1
-        ? `스왑 글 ${needed}건 등록 완료 — ${needed}크레딧 차감됨`
+      ? `스왑 글 ${createdCount}건 등록 완료 — PRO 크레딧 차감 없음`
+      : createdCount > 1
+        ? `스왑 글 ${createdCount}건 등록 완료 — ${createdCount}크레딧 차감됨`
         : "스왑 글 등록 완료 — 스왑 등록 탭에서 확인하고 취소할 수 있습니다.");
     if (state.guideFlow === "post") {
       state.guideFlow = null;
@@ -5592,7 +5638,7 @@ function openResetModal() { closeLoginModal(); toggleModal("resetPanel", "resetO
 function closeResetModal() { toggleModal("resetPanel", "resetOverlay", false); }
 
 // 서버 프로필을 state.user에 반영하고 로그인 상태로 전환 (가입/로그인 공통)
-function applyLoggedInProfile(email, profile, premiumStatus = null) {
+function applyLoggedInProfile(email, profile, premiumStatus = null, wallet = null) {
   const p = profile || {};
   const previousEmail = state.user.email || null;
   Object.assign(state.user, {
@@ -5616,6 +5662,7 @@ function applyLoggedInProfile(email, profile, premiumStatus = null) {
     phone: p.phone ?? state.user.phone,
   });
   if (premiumStatus) applyPremiumStatus(premiumStatus, false);
+  if (wallet) applyCreditWallet(wallet, false);
   // 실제로 다른 계정으로 전환할 때만 기기 로컬 스케줄을 비웁니다.
   if (previousEmail && previousEmail !== email) state.schedules = [];
   resetScheduleSelection(false);
