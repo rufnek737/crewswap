@@ -5,6 +5,11 @@ import {
   subscriberCanUsePost,
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
+import {
+  createStore, listPosts, listRequests,
+  listPremiumAlerts, savePremiumAlerts, saveIndex,
+  POSTS_INDEX_KEY, REQUESTS_INDEX_KEY,
+} from './store.js';
 import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-entitlement.mjs';
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
@@ -131,12 +136,15 @@ async function rateLimit(env, request, scope, identity, limit, windowSeconds) {
   }
 
   // 로컬 테스트 및 이전 배포 환경용 폴백. 운영 환경에서는 위의 전용
-  // Rate Limiting 바인딩을 사용해 사용자 데이터용 KV 쓰기 한도를 소모하지 않는다.
+  // Rate Limiting 바인딩을 사용해 사용자 데이터용 쓰기 한도를 소모하지 않는다.
+  // 만료(TTL)가 필요한 카운터라 D1 저장소가 아니라 원래 KV를 그대로 쓴다.
+  const counter = env.rawKv || env.POSTS;
+  if (!counter?.put) return true;
   const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
   const key = `rate:${scope}:${digest.slice(0, 24)}:${bucket}`;
-  const count = Number(await env.POSTS.get(key) || 0);
+  const count = Number(await counter.get(key) || 0);
   if (count >= limit) return false;
-  await env.POSTS.put(key, String(count + 1), { expirationTtl: Math.max(60, windowSeconds + 60) });
+  await counter.put(key, String(count + 1), { expirationTtl: Math.max(60, windowSeconds + 60) });
   return true;
 }
 
@@ -416,37 +424,28 @@ async function handleCheckVerify(request, env) {
   return json({ verified: true, email: v.email, registered });
 }
 
-/* ── 글/요청 인덱스 캐시 ──────────────────────────────────────────
-   KV list()는 무료 플랜 하루 1,000회로 한도가 작아 화면 조회마다 쓰면 금방 바닥남.
-   대신 전체 목록을 idx:posts / idx:requests 키 하나에 캐싱해두고 get()(하루 100,000회)만 사용.
-   인덱스가 없을 때(최초 1회, 또는 키 유실 시)만 list()로 재구성. ── */
+/* ── 글/요청 목록 조회 ────────────────────────────────────────────
+   예전에는 KV list()의 낮은 한도를 피하려고 전체 목록을 idx:posts / idx:requests
+   키 하나에 캐싱했는데, 글이 1건 바뀔 때마다 목록 전체를 다시 써야 해서
+   쓰기 한도를 빠르게 소진시켰다. D1에서는 행 단위로 저장·조회하므로
+   캐시 키와 그 재작성이 모두 필요 없다. ── */
 
 async function getPostsIndex(env) {
-  let idx = await env.POSTS.get('idx:posts', { type: 'json' });
-  if (idx) return idx;
-  const { keys } = await env.POSTS.list({ prefix: 'post:' });
-  const posts = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
-  idx = posts.filter(Boolean);
-  await env.POSTS.put('idx:posts', JSON.stringify(idx));
-  return idx;
+  return listPosts(env.DB, env.POSTS);
 }
-async function savePostsIndex(env, arr) {
-  await env.POSTS.put('idx:posts', JSON.stringify(arr));
-}
-
 async function getRequestsIndex(env) {
-  let idx = await env.POSTS.get('idx:requests', { type: 'json' });
-  if (idx) return idx;
-  const { keys } = await env.POSTS.list({ prefix: 'req:' });
-  const all = await Promise.all(keys.map(({ name }) => env.POSTS.get(name, { type: 'json' })));
-  idx = all.filter(Boolean);
-  await env.POSTS.put('idx:requests', JSON.stringify(idx));
-  return idx;
+  return listRequests(env.DB, env.POSTS);
+}
+// D1에서는 레코드를 저장하면 목록에 바로 반영되므로 아무것도 하지 않는다.
+// KV 폴백(테스트·로컬)에서만 기존처럼 목록 캐시를 갱신한다.
+async function savePostsIndex(env, arr) {
+  await saveIndex(env.DB, env.POSTS, POSTS_INDEX_KEY, arr);
 }
 async function saveRequestsIndex(env, arr) {
-  await env.POSTS.put('idx:requests', JSON.stringify(arr));
+  await saveIndex(env.DB, env.POSTS, REQUESTS_INDEX_KEY, arr);
 }
 async function updateRequestsIndexEntry(env, updated) {
+  if (env.DB) return;
   const idx = await getRequestsIndex(env);
   const i = idx.findIndex(r => r.id === updated.id);
   if (i >= 0) idx[i] = updated; else idx.push(updated);
@@ -608,12 +607,11 @@ async function handlePremiumTrialActivate(env, authEmail) {
 }
 
 async function getPremiumAlertIndex(env) {
-  const value = await env.POSTS.get(PREMIUM_ALERT_INDEX_KEY, { type: 'json' });
-  return Array.isArray(value) ? value : [];
+  return listPremiumAlerts(env.DB, env.POSTS);
 }
 
 async function savePremiumAlertIndex(env, records) {
-  await env.POSTS.put(PREMIUM_ALERT_INDEX_KEY, JSON.stringify(records));
+  await savePremiumAlerts(env.DB, env.POSTS, records);
 }
 
 function sanitizePushSubscription(value) {
@@ -1843,6 +1841,9 @@ export default {
     if (request.method === 'OPTIONS') {
       return withCors(new Response(null, { status: 204 }), request);
     }
+    // 데이터 저장소를 D1로 바꾼다. 호출부는 기존 KV와 같은 get/put/delete를 그대로 쓴다.
+    // 인증 요청 제한 폴백은 TTL이 필요해 원래 KV(rawKv)를 계속 사용한다.
+    if (env.DB) env = { ...env, rawKv: env.POSTS, POSTS: createStore(env.DB) };
     const path = new URL(request.url).pathname;
     let auth = null;
     if (!PUBLIC_PATHS.has(path)) {

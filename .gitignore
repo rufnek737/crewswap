@@ -14,3 +14,7 @@ www/
 worker/.wrangler/
 ios/App/App.xcarchive/
 ios/App/archive.plist
+
+# KV→D1 이관 산출물 — 비밀번호 해시·실명·사번·연락처가 들어있어 공개 저장소에 올리지 않는다.
+backup/
+worker/migrate-data.sql

@@ -7,7 +7,14 @@ compatibility_flags = ["nodejs_compat"]
 # 정식 권한은 서버의 영구 이용권 또는 사용자가 직접 시작한 30일 무료 이용권으로 판정한다.
 BETA_ALL_PREMIUM = "false"
 
-# KV 네임스페이스: 아래 id는 `npx wrangler kv namespace create POSTS` 실행 후 교체
+# 사용자·스왑 글·요청·크레딧은 D1에 저장한다. KV 무료 플랜의 일일 쓰기 한도(1,000회)가
+# 회원가입·인증에서 먼저 소진돼 서비스가 멈추던 문제 때문이며, D1 무료 한도는 하루 10만 행이다.
+[[d1_databases]]
+binding = "DB"
+database_name = "crewswap-db"
+database_id = "e1da5a84-a945-4e02-8c1a-656c5ef9f105"
+
+# KV는 D1 전환 전 데이터 보관과 인증 요청 제한 폴백(로컬·구환경)에만 남겨둔다.
 [[kv_namespaces]]
 binding = "POSTS"
 id = "7da2a6e5ee7143fcab6834bf9ba92a17"
