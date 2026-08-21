@@ -5,8 +5,16 @@ import {
   subscriberCanUsePost,
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
-import { activateProTrial, getProStatus } from './pro-entitlement.mjs';
+import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-entitlement.mjs';
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
+import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
+import {
+  CREWSWAP_BUNDLE_ID,
+  CREWSWAP_PRO_PRODUCT_ID,
+  decodeAppleTransaction,
+  fetchAppleTransaction,
+  validateCrewSwapTransaction,
+} from './apple-iap.mjs';
 import '../mogiji-policy.js';
 import '../cabin-policy.js';
 
@@ -42,7 +50,7 @@ function withCors(response, request) {
   const origin = allowedOrigin(request.headers.get("Origin"));
   if (origin) headers.set("Access-Control-Allow-Origin", origin);
   headers.set("Vary", "Origin");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CrewSwap-Store-Environment");
   headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
@@ -102,6 +110,10 @@ async function authenticateRequest(request, env) {
   const match = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
   try { return await verifySessionToken(env, match[1]); } catch { return null; }
+}
+
+function requestAllowsSandboxPro(request) {
+  return request.headers.get('X-CrewSwap-Store-Environment') === 'sandbox';
 }
 
 async function rateLimit(env, request, scope, identity, limit, windowSeconds) {
@@ -299,6 +311,13 @@ async function handleUserDelete(request, env, authEmail) {
     await Promise.all([
       env.POSTS.delete(`user:${email}`),
       env.POSTS.delete(`wallet:${email}`),
+      ...(user?.proPurchase?.originalTransactionId
+        ? [
+            env.POSTS.delete(`iap:apple:${user.proPurchase.originalTransactionId}`),
+            env.POSTS.delete(`iap:apple:production:${user.proPurchase.originalTransactionId}`),
+            env.POSTS.delete(`iap:apple:sandbox:${user.proPurchase.originalTransactionId}`),
+          ]
+        : []),
     ]);
 
     return json({
@@ -431,16 +450,133 @@ function webPushConfigured(env) {
   return !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT);
 }
 
-async function isPremiumAccount(env, email) {
+async function isPremiumAccount(env, email, allowSandbox = false) {
   if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true') return true;
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
-  return getProStatus(user || {}).active;
+  return getProStatus(user || {}, Date.now(), { allowSandbox }).active;
 }
 
-async function handlePremiumStatus(env, authEmail) {
-  const user = await env.POSTS.get(`user:${authEmail}`, { type: 'json' });
+async function handlePremiumStatus(env, authEmail, allowSandbox = false) {
+  const user = await refreshStoredApplePurchase(env, authEmail);
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
-  return json({ ok: true, premium: getProStatus(user) });
+  return json({ ok: true, premium: getProStatus(user, Date.now(), { allowSandbox }) });
+}
+
+const APPLE_PURCHASE_REFRESH_MS = 6 * 60 * 60 * 1000;
+
+function appleIapConfigured(env) {
+  return !!(env.APPLE_IAP_KEY_ID && env.APPLE_IAP_ISSUER_ID && env.APPLE_IAP_PRIVATE_KEY);
+}
+
+function applePurchasePublicConfig(env) {
+  return {
+    productId: CREWSWAP_PRO_PRODUCT_ID,
+    bundleId: CREWSWAP_BUNDLE_ID,
+    verificationEnabled: appleIapConfigured(env),
+  };
+}
+
+async function refreshStoredApplePurchase(env, email, force = false) {
+  const key = `user:${email}`;
+  const user = await env.POSTS.get(key, { type: 'json' });
+  if (!user?.proPurchase?.transactionId || user.proLifetimeSource !== 'apple' || !appleIapConfigured(env)) return user;
+  const checkedAt = Date.parse(user.proPurchase.lastVerifiedAt || '');
+  if (!force && Number.isFinite(checkedAt) && Date.now() - checkedAt < APPLE_PURCHASE_REFRESH_MS) return user;
+  try {
+    const verified = await fetchAppleTransaction(env, user.proPurchase.transactionId);
+    const sandboxPurchase = verified.environment === 'sandbox';
+    const next = {
+      ...user,
+      proLifetime: sandboxPurchase ? user.proLifetime === true : verified.ok,
+      proSandboxExpiresAt: sandboxPurchase
+        ? (verified.ok ? user.proSandboxExpiresAt || new Date(Date.now() + PRO_SANDBOX_DURATION_MS).toISOString() : null)
+        : user.proSandboxExpiresAt || null,
+      proPurchase: {
+        ...user.proPurchase,
+        environment: verified.environment,
+        lastVerifiedAt: new Date().toISOString(),
+        revokedAt: verified.revoked ? new Date().toISOString() : null,
+      },
+    };
+    await env.POSTS.put(key, JSON.stringify(next));
+    return next;
+  } catch (error) {
+    console.warn('Apple PRO entitlement refresh failed', error?.message || error);
+    return user;
+  }
+}
+
+async function handleProPurchaseConfig(env) {
+  return json(applePurchasePublicConfig(env));
+}
+
+async function handleProPurchaseVerify(request, env, authEmail) {
+  if (!appleIapConfigured(env)) return json({ error: 'App Store 결제 검증 서버 설정이 필요합니다', code: 'APPLE_IAP_NOT_CONFIGURED' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청입니다' }, 400); }
+  const transactionId = String(body?.transactionId || '').trim();
+  const signedTransaction = String(body?.signedTransaction || '').trim();
+  if (!transactionId || !signedTransaction) return json({ error: 'App Store 거래 정보가 필요합니다' }, 400);
+
+  try {
+    const clientPayload = decodeAppleTransaction(signedTransaction);
+    const clientValidation = validateCrewSwapTransaction(clientPayload, transactionId);
+    if (!clientValidation.ok && !clientValidation.revoked) {
+      return json({ error: 'CrewSwap PRO 거래 정보가 일치하지 않습니다', code: clientValidation.code }, 400);
+    }
+  } catch {
+    return json({ error: 'App Store 거래 정보 형식이 올바르지 않습니다' }, 400);
+  }
+
+  let verified;
+  try {
+    verified = await fetchAppleTransaction(env, transactionId);
+  } catch (error) {
+    return json({ error: 'Apple에서 구매 내역을 확인하지 못했습니다', code: 'APPLE_VERIFY_FAILED' }, 502);
+  }
+
+  const payload = verified.payload || {};
+  const originalTransactionId = String(payload.originalTransactionId || '');
+  const bindingKey = `iap:apple:${verified.environment}:${originalTransactionId}`;
+  const existingOwner = await env.POSTS.get(bindingKey, { type: 'json' });
+  if (existingOwner?.email && existingOwner.email !== authEmail) {
+    return json({ error: '이 App Store 구매는 다른 CrewSwap 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
+  }
+
+  const userKey = `user:${authEmail}`;
+  const user = await env.POSTS.get(userKey, { type: 'json' });
+  if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
+  const now = new Date().toISOString();
+  const sandboxPurchase = verified.environment === 'sandbox';
+  const next = {
+    ...user,
+    proLifetime: sandboxPurchase ? user.proLifetime === true : verified.ok,
+    proLifetimeSource: sandboxPurchase ? user.proLifetimeSource || null : 'apple',
+    proSandboxExpiresAt: sandboxPurchase && verified.ok
+      ? new Date(Date.now() + PRO_SANDBOX_DURATION_MS).toISOString()
+      : user.proSandboxExpiresAt || null,
+    proPurchase: {
+      productId: CREWSWAP_PRO_PRODUCT_ID,
+      transactionId: String(payload.transactionId || transactionId),
+      originalTransactionId,
+      environment: verified.environment,
+      purchasedAt: payload.purchaseDate ? new Date(Number(payload.purchaseDate)).toISOString() : now,
+      lastVerifiedAt: now,
+      revokedAt: verified.revoked ? now : null,
+    },
+  };
+  await env.POSTS.put(userKey, JSON.stringify(next));
+  await env.POSTS.put(bindingKey, JSON.stringify({ email: authEmail, productId: CREWSWAP_PRO_PRODUCT_ID, linkedAt: existingOwner?.linkedAt || now }));
+
+  if (!verified.ok) {
+    return json({ error: '환불되거나 취소된 구매입니다', code: verified.code, premium: getProStatus(next, Date.now(), { allowSandbox: sandboxPurchase }) }, 409);
+  }
+  return json({
+    ok: true,
+    premium: getProStatus(next, Date.now(), { allowSandbox: sandboxPurchase }),
+    transactionId: next.proPurchase.transactionId,
+    environment: verified.environment,
+  });
 }
 
 async function handlePremiumTrialActivate(env, authEmail) {
@@ -477,31 +613,40 @@ function sanitizePushSubscription(value) {
 
 async function handlePremiumAlertConfig(env) {
   return json({
-    enabled: webPushConfigured(env),
+    enabled: webPushConfigured(env) || apnsConfigured(env),
+    webPushEnabled: webPushConfigured(env),
+    nativePushEnabled: apnsConfigured(env),
     vapidPublicKey: env.VAPID_PUBLIC_KEY || '',
     betaAllPremium: String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true',
   });
 }
 
-async function handlePremiumAlertSync(request, env, authEmail) {
+async function handlePremiumAlertSync(request, env, authEmail, allowSandbox = false) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   const email = authEmail;
   if (!email.endsWith('@jejuair.net')) return json({ error: '제주항공 계정이 필요합니다' }, 400);
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
-  if (!(await isPremiumAccount(env, email))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  if (!(await isPremiumAccount(env, email, allowSandbox))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
 
   const searches = sanitizeSavedSearches(body?.searches);
   const subscription = sanitizePushSubscription(body?.subscription);
+  const nativeDevice = sanitizeNativeDevice(body?.nativeDevice);
   const profile = pickProfile(user.profile || {});
   const records = await getPremiumAlertIndex(env);
   const index = records.findIndex(record => record.email === email);
-  const previous = index >= 0 ? records[index] : { email, subscriptions: [], notifiedPostIds: [] };
+  const previous = index >= 0 ? records[index] : { email, subscriptions: [], nativeDevices: [], notifiedPostIds: [] };
   const subscriptions = Array.isArray(previous.subscriptions) ? previous.subscriptions : [];
+  const nativeDevices = Array.isArray(previous.nativeDevices) ? previous.nativeDevices : [];
 
   if (subscription && !subscriptions.some(item => item.endpoint === subscription.endpoint)) {
     subscriptions.push(subscription);
+  }
+  if (nativeDevice) {
+    const deviceIndex = nativeDevices.findIndex(item => item.token === nativeDevice.token);
+    if (deviceIndex >= 0) nativeDevices[deviceIndex] = nativeDevice;
+    else nativeDevices.push(nativeDevice);
   }
 
   const next = {
@@ -510,26 +655,84 @@ async function handlePremiumAlertSync(request, env, authEmail) {
     profile,
     searches,
     subscriptions: subscriptions.slice(-5),
+    nativeDevices: nativeDevices.slice(-5),
     notifiedPostIds: Array.isArray(previous.notifiedPostIds) ? previous.notifiedPostIds.slice(-300) : [],
+    storeEnvironment: allowSandbox ? 'sandbox' : 'production',
+    sandboxProUntil: allowSandbox ? user.proSandboxExpiresAt || null : null,
     updatedAt: new Date().toISOString(),
   };
 
   if (index >= 0) records[index] = next; else records.push(next);
   await savePremiumAlertIndex(env, records);
-  return json({ ok: true, searches: searches.length, devices: next.subscriptions.length, pushEnabled: webPushConfigured(env) });
+  return json({
+    ok: true,
+    searches: searches.length,
+    devices: next.subscriptions.length + next.nativeDevices.length,
+    webPushEnabled: webPushConfigured(env),
+    nativePushEnabled: apnsConfigured(env),
+  });
+}
+
+async function handlePremiumAlertTest(env, authEmail, allowSandbox = false) {
+  if (!(await isPremiumAccount(env, authEmail, allowSandbox))) {
+    return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  }
+  if (!apnsConfigured(env)) return json({ error: 'APNs 서버 설정이 필요합니다' }, 503);
+
+  const records = await getPremiumAlertIndex(env);
+  const index = records.findIndex(record => record.email === authEmail);
+  if (index < 0 || !(records[index].nativeDevices || []).length) {
+    return json({ error: '등록된 iPhone 알림 기기가 없습니다' }, 409);
+  }
+
+  const record = records[index];
+  const alive = [];
+  const failures = [];
+  let delivered = 0;
+  for (const device of record.nativeDevices || []) {
+    try {
+      const result = await sendApnsNotification(env, device, {
+        title: '🔔 CrewSwap 알림 테스트',
+        body: 'iPhone 백그라운드 알림이 정상 연결되었습니다.',
+        route: 'find',
+        postId: '',
+      });
+      if (result.ok) {
+        alive.push({ ...device, environment: result.environment || device.environment });
+        delivered += 1;
+      } else {
+        failures.push(result.reason || 'APNS_DELIVERY_FAILED');
+        if (!result.permanent) alive.push(device);
+      }
+    } catch (error) {
+      failures.push(error?.message || 'APNS_DELIVERY_FAILED');
+      alive.push(device);
+    }
+  }
+
+  record.nativeDevices = alive;
+  record.updatedAt = new Date().toISOString();
+  records[index] = record;
+  await savePremiumAlertIndex(env, records);
+  if (!delivered) return json({ error: 'iPhone 테스트 알림 전송에 실패했습니다', failures }, 502);
+  return json({ ok: true, delivered });
 }
 
 async function notifyPremiumSubscribers(env, post) {
-  if (!webPushConfigured(env)) return;
+  const canWebPush = webPushConfigured(env);
+  const canNativePush = apnsConfigured(env);
+  if (!canWebPush && !canNativePush) return;
   const records = await getPremiumAlertIndex(env);
   if (!records.length) return;
 
-  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  if (canWebPush) webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
   let changed = false;
 
   for (const record of records) {
     if (!record?.email || record.email === post.ownerEmail) continue;
-    if (!(await isPremiumAccount(env, record.email))) continue;
+    const sandboxRecord = record.storeEnvironment === 'sandbox'
+      && Date.parse(record.sandboxProUntil || '') > Date.now();
+    if (!(await isPremiumAccount(env, record.email, sandboxRecord))) continue;
     if (!subscriberCanUsePost(record.profile, post)) continue;
     if ((record.notifiedPostIds || []).includes(post.id)) continue;
 
@@ -545,10 +748,12 @@ async function notifyPremiumSubscribers(env, post) {
     });
 
     const alive = [];
-    for (const subscription of record.subscriptions || []) {
+    let delivered = false;
+    for (const subscription of canWebPush ? (record.subscriptions || []) : []) {
       try {
         await webpush.sendNotification(subscription, payload, { TTL: 3600, urgency: 'high', topic: String(post.id).slice(-32) });
         alive.push(subscription);
+        delivered = true;
       } catch (error) {
         const status = error?.statusCode || error?.status || 0;
         if (status !== 404 && status !== 410) alive.push(subscription);
@@ -556,7 +761,27 @@ async function notifyPremiumSubscribers(env, post) {
     }
 
     record.subscriptions = alive;
-    record.notifiedPostIds = [...(record.notifiedPostIds || []), post.id].slice(-300);
+    const aliveNative = [];
+    for (const device of canNativePush ? (record.nativeDevices || []) : []) {
+      try {
+        const result = await sendApnsNotification(env, device, {
+          title: '🔔 조건에 맞는 새 스왑',
+          body,
+          route: 'find',
+          postId: post.id,
+        });
+        if (result.ok) {
+          aliveNative.push({ ...device, environment: result.environment || device.environment });
+          delivered = true;
+        } else if (!result.permanent) {
+          aliveNative.push(device);
+        }
+      } catch {
+        aliveNative.push(device);
+      }
+    }
+    record.nativeDevices = aliveNative;
+    if (delivered) record.notifiedPostIds = [...(record.notifiedPostIds || []), post.id].slice(-300);
     changed = true;
   }
 
@@ -600,7 +825,7 @@ const POST_FIELDS = [
   'deadlineDay', 'deadlineMonth', 'watchers', 'status', 'creditSpent',
 ];
 
-async function handlePostsCreate(request, env, ctx, authEmail) {
+async function handlePostsCreate(request, env, ctx, authEmail, allowSandbox = false) {
   let post;
   try { post = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!post.id || !post.deleteToken || !post.offered || !post.wanted)
@@ -612,7 +837,7 @@ async function handlePostsCreate(request, env, ctx, authEmail) {
   clean.status = 'active';
   clean.registeredAt = clean.registeredAt || new Date().toISOString();
   // 등록비는 서버의 PRO 권한을 기준으로 확정한다. 무료 체험과 영구 PRO 모두 무제한이다.
-  const unlimited = await isPremiumAccount(env, authEmail);
+  const unlimited = await isPremiumAccount(env, authEmail, allowSandbox);
   clean.creditSpent = unlimited ? 0 : 1;
 
   let debited = false;
@@ -689,7 +914,7 @@ function requestWithPrivateDaysRemoved(record) {
   return { ...record, openRoster: publicOpenRoster(record.openRoster, record.lockedDays) };
 }
 
-async function handleRequestsCreate(request, env, authEmail) {
+async function handleRequestsCreate(request, env, authEmail, allowSandbox = false) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   const {
@@ -725,7 +950,7 @@ async function handleRequestsCreate(request, env, authEmail) {
       const current = await walletStatus(env, authEmail);
       return json({ id, creditSpent: existing.creditSpent || 0, wallet: current.wallet, duplicate: true });
     }
-    const unlimited = await isPremiumAccount(env, authEmail);
+    const unlimited = await isPremiumAccount(env, authEmail, allowSandbox);
     const chargeable = type === 'request';
     const debit = await runWalletCommand(env, authEmail, {
       type: 'spend', operationId: `request:create:${id}`, amount: chargeable ? 1 : 0, unlimited,
@@ -1611,6 +1836,7 @@ export default {
       auth = await authenticateRequest(request, env);
       if (!auth) return withCors(json({ error: '로그인이 만료되었거나 유효하지 않습니다', code: 'AUTH_REQUIRED' }, 401), request);
     }
+    const allowSandboxPro = requestAllowsSandboxPro(request);
 
     let response;
     try {
@@ -1624,10 +1850,10 @@ export default {
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
       else if (path === '/api/posts-get') response = await handlePostsGet(env);
       else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
-      else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email);
+      else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);
       else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);
       else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email);
-      else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email);
+      else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email, allowSandboxPro);
       else if (path === '/api/requests-get') response = await handleRequestsGet(request, env, auth.email);
       else if (path === '/api/requests-accept') response = await handleRequestsAccept(request, env, auth.email);
       else if (path === '/api/requests-poster-select') response = await handleRequestsPosterSelect(request, env, auth.email);
@@ -1639,9 +1865,12 @@ export default {
       else if (path === '/api/requests-submit-done') response = await handleRequestsSubmitDone(request, env, auth.email);
       else if (path === '/api/requests-delete') response = await handleRequestsDelete(request, env, auth.email);
       else if (path === '/api/premium-alert-config') response = await handlePremiumAlertConfig(env);
-      else if (path === '/api/premium-status') response = await handlePremiumStatus(env, auth.email);
+      else if (path === '/api/premium-status') response = await handlePremiumStatus(env, auth.email, allowSandboxPro);
       else if (path === '/api/premium-trial-activate') response = await handlePremiumTrialActivate(env, auth.email);
-      else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email);
+      else if (path === '/api/pro-purchase-config') response = await handleProPurchaseConfig(env);
+      else if (path === '/api/pro-purchase-verify') response = await handleProPurchaseVerify(request, env, auth.email);
+      else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email, allowSandboxPro);
+      else if (path === '/api/premium-alert-test') response = await handlePremiumAlertTest(env, auth.email, allowSandboxPro);
       else if (path === '/api/crewconnex') response = await handleCrewConnex(request, env);
       else response = new Response('Not Found', { status: 404 });
     } catch (error) {

@@ -513,6 +513,9 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .premium-lock strong { color: var(--text); font-size: 14px; }
 .premium-lock small { display: block; }
 .premium-lock button { width: 100%; margin-top: 2px; }
+.premium-purchase-box { display: grid; gap: 7px; margin-top: 8px; padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.premium-purchase-box button { width: 100%; }
+.premium-purchase-box small { color: var(--muted); text-align: center; line-height: 1.45; }
 .premium-access-state { display: grid; gap: 4px; padding: 10px 11px; margin-bottom: 8px; border: 1px solid #ffcf8a; border-radius: 8px; background: #fffaf2; }
 .premium-access-state.is-active { border-color: #8fd3ab; background: #f0fff6; }
 .premium-access-state strong { color: var(--text); font-size: 12.5px; }

@@ -1,24 +1,29 @@
 export const PRO_TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+export const PRO_SANDBOX_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function validTime(value) {
   const parsed = Date.parse(value || '');
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function getProStatus(user = {}, now = Date.now()) {
+export function getProStatus(user = {}, now = Date.now(), { allowSandbox = false } = {}) {
   const lifetime = user.proLifetime === true;
+  const sandboxExpiresAt = user.proSandboxExpiresAt || null;
+  const sandboxExpiry = validTime(sandboxExpiresAt);
+  const sandboxActive = allowSandbox && sandboxExpiry !== null && sandboxExpiry > now;
   const trialStartedAt = user.proTrialStartedAt || null;
   const trialExpiresAt = user.proTrialExpiresAt || null;
   const trialExpiry = validTime(trialExpiresAt);
   const legacyExpiry = validTime(user.premiumUntil);
   const trialActive = trialExpiry !== null && trialExpiry > now;
   const legacyActive = legacyExpiry !== null && legacyExpiry > now;
-  const active = lifetime || trialActive || legacyActive;
+  const active = lifetime || sandboxActive || trialActive || legacyActive;
 
   return {
     active,
-    entitlement: lifetime ? 'lifetime' : trialActive ? 'trial' : legacyActive ? 'legacy' : 'none',
-    expiresAt: lifetime ? null : trialActive ? trialExpiresAt : legacyActive ? user.premiumUntil : null,
+    entitlement: lifetime ? 'lifetime' : sandboxActive ? 'sandbox' : trialActive ? 'trial' : legacyActive ? 'legacy' : 'none',
+    expiresAt: lifetime ? null : sandboxActive ? sandboxExpiresAt : trialActive ? trialExpiresAt : legacyActive ? user.premiumUntil : null,
+    sandboxExpiresAt,
     trialAvailable: !trialStartedAt && !trialExpiresAt,
     trialStartedAt,
     trialExpiresAt,

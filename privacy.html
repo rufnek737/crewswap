@@ -12,12 +12,12 @@
 <body><main>
   <div class="brand">CREWSWAP</div>
   <h1>개인정보처리방침</h1>
-  <p class="sub">시행일: 2026년 7월 28일</p>
+  <p class="sub">시행일: 2026년 8월 21일</p>
 
   <div class="summary">CrewSwap은 승무원 스케줄 스왑 연결에 필요한 정보만 처리합니다. CrewConnex 아이디와 비밀번호는 사용자가 요청한 일정 조회 중에만 사용하며 CrewSwap 데이터베이스에 저장하지 않습니다. 연락처는 스왑 상대와 상호 수락이 이뤄진 뒤에만 당사자 화면에 공개됩니다.</div>
 
   <h2>1. 개인정보 처리자</h2>
-  <p>서비스명 및 운영자 표기: CrewSwap<br />개인정보 관련 문의: <a href="mailto:rufnek737@gmail.com">rufnek737@gmail.com</a></p>
+  <p>서비스명 및 운영자 표기: CrewSwap<br />개인정보 관련 문의: <a href="mailto:info@rufnekcrew.com">info@rufnekcrew.com</a></p>
 
   <h2>2. 처리하는 정보·목적·보유기간</h2>
   <div class="table-wrap"><table>
@@ -30,6 +30,7 @@
       <tr><td>스왑 글·요청</td><td>내놓는 일정, 희망 조건, 닉네임·직군·등급·베이스, 요청 상태, 요청 일정, 의향·거절·상신 상태 및 시각</td><td>스왑 게시, 검색, 매칭, 요청·수락·회사 상신 진행</td><td>이용자가 삭제하거나 회원 탈퇴할 때까지. 운영상 필요한 자동 마감·정리 기능이 적용될 수 있음</td></tr>
       <tr><td>크레딧 지갑</td><td>월별 잔액, 등록·요청 차감, 취소·마감 환급 및 중복 처리 방지 식별값</td><td>기기 간 잔액 동기화, 중복 차감·환급 및 부정 이용 방지</td><td>회원 탈퇴 시까지</td></tr>
       <tr><td>PRO 알림</td><td>저장 검색조건, 프로필·자격, 웹 푸시 구독 주소와 암호화 키, 알림 발송 이력</td><td>앱을 열지 않은 상태에서 조건에 맞는 새 글 알림</td><td>알림 구독 해제, 만료, 회원 탈퇴 시까지</td></tr>
+      <tr><td>PRO 구매 확인</td><td>App Store 상품 ID, 거래·원거래 식별번호, 구매환경, 구매·검증·취소 시각</td><td>구매 진위 확인, PRO 권한 부여·복원·환불 반영, 중복 연결 방지</td><td>회원 탈퇴 시까지. App Store 자체 구매기록은 Apple 정책에 따름</td></tr>
       <tr><td>CrewConnex 조회</td><td>사용자가 직접 입력한 CrewConnex 아이디·비밀번호, 조회 세션과 반환 일정</td><td>사용자 요청에 따른 로그인과 일정 가져오기</td><td>요청 처리 중 일시 이용하며 아이디·비밀번호를 CrewSwap 저장소에 보관하지 않음</td></tr>
       <tr><td>기술 정보</td><td>IP 주소, 접속시각, 브라우저·기기 정보, 오류·보안 로그 등 인프라 사업자가 생성하는 정보</td><td>서비스 제공, 보안, 부정 이용 방지, 장애 대응</td><td>각 인프라 제공자의 보존정책과 관계 법령에 따름</td></tr>
     </tbody>
@@ -38,7 +39,7 @@
   <h2>3. 처리 및 저장 방법</h2>
   <ul>
     <li>전체 근무 일정과 화면 설정은 사용자의 기기 저장소에, 월별 크레딧 잔액·사용·환급 기록은 계정별 서버 저장소에 보관됩니다.</li>
-    <li>계정·프로필, 등록한 글, 보낸·받은 요청, PRO 알림정보는 Cloudflare Workers 및 KV에 저장됩니다.</li>
+    <li>계정·프로필, 등록한 글, 보낸·받은 요청, PRO 알림정보와 구매 검증 결과는 Cloudflare Workers 및 KV에 저장됩니다.</li>
     <li>계정 비밀번호는 PBKDF2-SHA256 방식의 일방향 해시로 저장하며 평문 비밀번호는 저장하지 않습니다.</li>
     <li>CrewConnex 로그인 정보는 HTTPS로 Cloudflare Worker에 전송되어 사용자가 누른 가져오기 요청에만 사용됩니다.</li>
   </ul>
@@ -57,6 +58,7 @@
       <tr><td>Cloudflare</td><td>Workers API, KV 저장, 보안·접속 로그, CrewConnex 요청 중계</td><td>계정·프로필, 글·요청, PRO 알림정보, 일시적인 CrewConnex 로그인정보, 기술 로그</td></tr>
       <tr><td>GitHub Pages</td><td>웹앱과 정책 페이지 제공</td><td>접속 과정에서 생성되는 기술 로그</td></tr>
       <tr><td>Resend</td><td>회사 이메일 인증 코드 발송</td><td>수신 이메일 주소와 발송 기록. 베타 설정에 따라 실제 메일 발송을 사용하지 않을 수 있음</td></tr>
+      <tr><td>Apple</td><td>App Store 인앱 구입, 거래 검증, 구매 복원·환불 상태 확인</td><td>Apple 계정에서 생성된 거래 식별정보와 상품·구매 상태. CrewSwap 로그인 비밀번호는 제공하지 않음</td></tr>
       <tr><td>브라우저·운영체제 푸시 서비스</td><td>PRO 새 글 알림 전달</td><td>푸시 구독 주소, 기기별 암호화 키, 알림 내용</td></tr>
     </tbody>
   </table></div>
@@ -66,10 +68,10 @@
   <p>CrewConnex는 CrewSwap이 운영하는 서비스가 아닙니다. 사용자가 자신의 권한으로 CrewConnex 가져오기를 실행하면 해당 서비스의 이용조건과 소속 회사의 정보보안 정책도 적용될 수 있습니다. CrewSwap은 이용자의 개인정보를 판매하지 않으며, 법령상 근거 또는 이용자의 별도 동의가 있는 경우를 제외하고 서비스 목적과 무관한 제3자에게 제공하지 않습니다.</p>
 
   <h2>7. 파기와 회원 탈퇴</h2>
-  <p>이용자는 ‘내 정보 → 회원 탈퇴’에서 현재 비밀번호를 다시 확인한 후 탈퇴할 수 있습니다. 탈퇴가 완료되면 서버의 계정·프로필·연락처, 작성한 글, 본인이 당사자인 요청, PRO 저장조건·푸시 구독정보와 현재 기기의 CrewSwap 일정·크레딧을 삭제합니다. 삭제된 정보는 복구할 수 없습니다. 서비스 제공자의 보안 백업이나 법령상 보관이 필요한 기록은 해당 목적과 기간 동안 분리 보관 후 파기될 수 있습니다.</p>
+  <p>이용자는 ‘내 정보 → 회원 탈퇴’에서 현재 비밀번호를 다시 확인한 후 탈퇴할 수 있습니다. 탈퇴가 완료되면 서버의 계정·프로필·연락처, 작성한 글, 본인이 당사자인 요청, PRO 저장조건·푸시 구독정보·구매 연결정보와 현재 기기의 CrewSwap 일정·크레딧을 삭제합니다. Apple이 보관하는 App Store 구매기록과 환불 처리는 Apple 정책에 따릅니다. CrewSwap에서 삭제된 정보는 복구할 수 없으며 서비스 제공자의 보안 백업이나 법령상 보관이 필요한 기록은 해당 목적과 기간 동안 분리 보관 후 파기될 수 있습니다.</p>
 
   <h2>8. 이용자의 권리</h2>
-  <p>이용자는 앱에서 프로필을 조회·수정하고 스왑 글과 요청을 삭제하거나 회원 탈퇴를 할 수 있습니다. 개인정보 열람·정정·삭제·처리정지 또는 기타 문의는 <a href="mailto:rufnek737@gmail.com">rufnek737@gmail.com</a>으로 접수할 수 있습니다.</p>
+  <p>이용자는 앱에서 프로필을 조회·수정하고 스왑 글과 요청을 삭제하거나 회원 탈퇴를 할 수 있습니다. 개인정보 열람·정정·삭제·처리정지 또는 기타 문의는 <a href="mailto:info@rufnekcrew.com">info@rufnekcrew.com</a>으로 접수할 수 있습니다.</p>
 
   <h2>9. 안전성 확보 조치</h2>
   <ul>
@@ -83,7 +85,7 @@
   <p>처리 항목, 외부 서비스 또는 유료 기능이 변경되면 시행일과 주요 변경사항을 앱이나 공개 페이지에서 안내합니다. 중요한 변경에는 필요한 경우 동의를 다시 받습니다.</p>
 
   <h2>11. 문의 및 권리침해 구제</h2>
-  <div class="contact">CrewSwap 개인정보 문의: <a href="mailto:rufnek737@gmail.com">rufnek737@gmail.com</a><br />개인정보침해 신고센터: 국번 없이 118 · <a href="https://privacy.kisa.or.kr" target="_blank" rel="noopener">privacy.kisa.or.kr</a><br />개인정보분쟁조정위원회: 1833-6972 · <a href="https://www.kopico.go.kr" target="_blank" rel="noopener">kopico.go.kr</a></div>
+  <div class="contact">CrewSwap 개인정보 문의: <a href="mailto:info@rufnekcrew.com">info@rufnekcrew.com</a><br />개인정보침해 신고센터: 국번 없이 118 · <a href="https://privacy.kisa.or.kr" target="_blank" rel="noopener">privacy.kisa.or.kr</a><br />개인정보분쟁조정위원회: 1833-6972 · <a href="https://www.kopico.go.kr" target="_blank" rel="noopener">kopico.go.kr</a></div>
 
   <footer>운영: CrewSwap · <a href="index.html">앱으로 돌아가기</a> · <a href="terms.html">이용약관</a></footer>
 </main></body></html>

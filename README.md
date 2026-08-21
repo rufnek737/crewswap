@@ -132,6 +132,27 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-08-21 — 공식 도메인·푸시 알림·PRO 영구 이용권 출시 준비
+
+#### 공식 도메인과 이메일
+- 공용 공식 사이트 `https://rufnekcrew.com`을 활성화하고 CrewSwap·Pilot Logbook 소개 및 정책 페이지를 연결함.
+- Cloudflare Email Routing으로 `info@rufnekcrew.com` 문의 메일을 기존 Gmail에서 수신하도록 설정함.
+- 앱·이용약관·개인정보처리방침의 문의 주소를 `info@rufnekcrew.com`으로 변경함.
+- Resend 발송 도메인을 인증하고 인증번호 발신자를 `CrewSwap <no-reply@notify.rufnekcrew.com>`으로 변경함.
+
+#### iPhone 백그라운드 알림
+- Apple Developer의 APNs 키와 앱 Push Notifications 권한을 연결하고, Worker에서 APNs 토큰 기반 알림을 발송하도록 구현함.
+- 실제 iPhone에서 알림 권한·기기 토큰 등록·백그라운드 테스트 알림 수신을 확인함.
+- APNs 키 원문은 저장소에 포함하지 않고 Cloudflare Worker Secret으로만 관리함.
+
+#### PRO 영구 이용권과 TestFlight 분리
+- StoreKit 2 기반 `CrewSwap PRO 영구 이용권` 구매·복원 기능과 서버 영수증 검증을 추가함.
+- PRO는 자동 알림과 무제한 크레딧을 제공하며 자동 갱신·반복 결제 없이 1회 구매로 유지되도록 구성함.
+- App Store Connect 상품 ID를 `com.rufnekcrewswap.pro.lifetime`, 대한민국 기준 가격을 4,900원으로 설정함.
+- TestFlight/Sandbox 구매는 실제 영구 권한으로 저장하지 않고 30일짜리 `PRO 테스트 이용권`으로 분리함. Production 요청에서는 Sandbox 권한을 인정하지 않도록 서버와 클라이언트를 함께 보강함.
+- 전체 자동 테스트 100개 통과, Worker 배포, iOS 실기기 빌드·Kay phone 재설치 및 실행을 완료함.
+- 실기기에서 APNs 권한과 StoreKit Sandbox 환경 판정은 정상 확인됨. 인앱구매 상품 조회는 현재 `PRODUCT_NOT_FOUND`로, App Store Connect 상품 메타데이터 전파 및 첫 앱 버전의 인앱구매 연결 상태를 다음 확인 항목으로 남김.
+
 ### 2026-08-06 — 단계 UI·일정 가독성·1:1 스왑 공개 범위 수정
 
 #### 단계 및 달력 UI 오류 수정

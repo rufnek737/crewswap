@@ -1,9 +1,14 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.crewswap.app',
+  appId: 'com.rufnekcrewswap.app',
   appName: 'CrewSwap',
-  webDir: 'www'
+  webDir: 'www',
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'banner', 'list']
+    }
+  }
 };
 
 export default config;

@@ -12,10 +12,12 @@ const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
 ]);
+let _storeEnvironment = 'production';
 
 async function apiFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
   if (state.sessionToken) headers.set("Authorization", `Bearer ${state.sessionToken}`);
+  if (_storeEnvironment === 'sandbox') headers.set('X-CrewSwap-Store-Environment', 'sandbox');
   const response = await fetch(url, { ...options, headers });
   const path = (() => { try { return new URL(url).pathname; } catch { return ""; } })();
   if (response.status === 401 && !PUBLIC_API_PATHS.has(path)) {
@@ -417,7 +419,7 @@ const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 const SERVICE_LINKS = Object.freeze({
   privacy: "https://rufnek737.github.io/crewswap/privacy.html",
   terms: "https://rufnek737.github.io/crewswap/terms.html",
-  contact: "mailto:rufnek737@gmail.com?subject=CrewSwap%20문의",
+  contact: "mailto:info@rufnekcrew.com?subject=CrewSwap%20문의",
 });
 
 function isNativeApp() {
@@ -445,8 +447,8 @@ async function openServiceLink(kind) {
     }
   } catch (error) {
     if (kind === "contact") {
-      try { await navigator.clipboard.writeText("rufnek737@gmail.com"); } catch (_) {}
-      showToast("메일 앱을 열 수 없어 문의 주소를 복사했습니다: rufnek737@gmail.com");
+      try { await navigator.clipboard.writeText("info@rufnekcrew.com"); } catch (_) {}
+      showToast("메일 앱을 열 수 없어 문의 주소를 복사했습니다: info@rufnekcrew.com");
       return;
     }
     showToast("페이지를 열 수 없습니다. 잠시 후 다시 시도해주세요.");
@@ -2693,7 +2695,7 @@ const BETA_ALL_PREMIUM = false;
 function isPremiumUser() {
   if (BETA_ALL_PREMIUM) return true;
   if (state.user.proEntitlement === 'lifetime') return true;
-  if (state.user.proEntitlement === 'trial' || state.user.proEntitlement === 'legacy') {
+  if (state.user.proEntitlement === 'sandbox' || state.user.proEntitlement === 'trial' || state.user.proEntitlement === 'legacy') {
     const expiry = Date.parse(state.user.proExpiresAt || state.user.proTrialExpiresAt || '');
     return Number.isFinite(expiry) && expiry > Date.now();
   }
@@ -2738,10 +2740,6 @@ async function refreshPremiumStatus() {
 }
 
 async function activateProTrialPass() {
-  if (isNativeCrewSwapApp()) {
-    showToast('무료 이용권은 보존됩니다. iPhone 백그라운드 알림 연결 후 시작할 수 있습니다.');
-    return;
-  }
   if (!state.user.proTrialAvailable) {
     showToast('PRO 30일 무료 이용권은 계정당 한 번만 사용할 수 있습니다.');
     return;
@@ -2762,6 +2760,140 @@ async function activateProTrialPass() {
   } finally {
     if (button) button.disabled = false;
   }
+}
+
+const PRO_PRODUCT_ID = 'com.rufnekcrewswap.pro.lifetime';
+
+function storeKitBridge() {
+  if (!isNativeIosCrewSwapApp()) return null;
+  return window.Capacitor?.Plugins?.StoreKitBridge || null;
+}
+
+async function refreshNativeStoreEnvironment() {
+  const StoreKit = storeKitBridge();
+  if (!StoreKit) {
+    _storeEnvironment = 'production';
+    return _storeEnvironment;
+  }
+  try {
+    const result = await StoreKit.getEnvironment();
+    _storeEnvironment = result?.environment === 'sandbox' ? 'sandbox' : 'production';
+  } catch {
+    _storeEnvironment = 'production';
+  }
+  return _storeEnvironment;
+}
+
+async function verifyAndApplyApplePurchase(transaction, { finish = true } = {}) {
+  if (!transaction || transaction.status !== 'verified') return { ok: false, skipped: true };
+  const response = await apiFetch(`${API_BASE}/api/pro-purchase-verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productId: PRO_PRODUCT_ID,
+      transactionId: transaction.transactionId,
+      signedTransaction: transaction.signedTransaction,
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'App Store 구매 확인에 실패했습니다.');
+  _storeEnvironment = data.environment === 'sandbox' ? 'sandbox' : _storeEnvironment;
+  applyPremiumStatus(data.premium);
+  if (finish) {
+    await storeKitBridge()?.finish({ transactionId: transaction.transactionId }).catch(() => {});
+  }
+  await syncPremiumAlertSettings();
+  return { ok: true, premium: data.premium };
+}
+
+async function purchaseLifetimePro() {
+  const StoreKit = storeKitBridge();
+  if (!StoreKit) {
+    showToast('PRO 구매는 iPhone 앱에서 이용할 수 있습니다.');
+    return;
+  }
+  const button = document.getElementById('purchaseLifetimeProBtn');
+  if (button) button.disabled = true;
+  try {
+    const transaction = await StoreKit.purchase();
+    if (transaction?.status === 'cancelled') return;
+    if (transaction?.status === 'pending') {
+      showToast('구매 승인을 기다리고 있습니다. 승인 후 자동으로 반영됩니다.');
+      return;
+    }
+    await verifyAndApplyApplePurchase(transaction);
+    showToast('CrewSwap PRO 영구 이용권이 활성화되었습니다.');
+  } catch (error) {
+    showToast(error?.message || 'PRO 구매를 완료하지 못했습니다.');
+    await refreshPremiumStatus();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function restoreLifetimePro() {
+  const StoreKit = storeKitBridge();
+  if (!StoreKit) {
+    showToast('구매 복원은 iPhone 앱에서 이용할 수 있습니다.');
+    return;
+  }
+  const button = document.getElementById('restoreLifetimeProBtn');
+  if (button) button.disabled = true;
+  try {
+    const transaction = await StoreKit.restore();
+    if (transaction?.status !== 'verified') {
+      showToast('복원할 CrewSwap PRO 구매 내역이 없습니다.');
+      return;
+    }
+    await verifyAndApplyApplePurchase(transaction);
+    showToast('CrewSwap PRO 구매 내역을 복원했습니다.');
+  } catch (error) {
+    showToast(error?.message || '구매 내역을 복원하지 못했습니다.');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function refreshNativeStoreEntitlement() {
+  await refreshNativeStoreEnvironment();
+  const StoreKit = storeKitBridge();
+  if (!StoreKit || !state.sessionToken || !state.user.email) return;
+  try {
+    const transaction = await StoreKit.currentEntitlement();
+    if (transaction?.status === 'verified') await verifyAndApplyApplePurchase(transaction, { finish: false });
+  } catch (error) {
+    console.warn('StoreKit entitlement refresh failed:', error);
+  }
+}
+
+async function loadProProductDisplay() {
+  const button = document.getElementById('purchaseLifetimeProBtn');
+  if (!button) return;
+  const StoreKit = storeKitBridge();
+  if (!StoreKit) {
+    button.textContent = 'iPhone 앱에서 PRO 구매';
+    button.disabled = true;
+    return;
+  }
+  try {
+    const product = await StoreKit.getProduct();
+    button.textContent = `PRO 영구 이용권 구매 · ${product.displayPrice}`;
+    button.disabled = false;
+  } catch {
+    button.textContent = '가격 설정 후 구매 가능';
+    button.disabled = true;
+  }
+}
+
+function proPurchaseControlsHtml() {
+  if (!isNativeIosCrewSwapApp()) {
+    return `<div class="premium-purchase-box"><small>PRO 영구 이용권 구매와 복원은 iPhone 앱에서 제공됩니다.</small></div>`;
+  }
+  return `<div class="premium-purchase-box">
+    <button type="button" id="purchaseLifetimeProBtn" class="primary-button" disabled>PRO 상품 확인 중…</button>
+    <button type="button" id="restoreLifetimeProBtn" class="secondary-button">이전 구매 복원</button>
+    <small>한 번 구매하면 만료 없이 사용할 수 있으며 자동 결제되지 않습니다.</small>
+  </div>`;
 }
 
 /* ====== 저장검색(스왑 알림) ======
@@ -2854,7 +2986,105 @@ function isNativeCrewSwapApp() {
   return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
 
-async function syncPremiumAlertSettings(subscription = null) {
+function isNativeIosCrewSwapApp() {
+  return isNativeCrewSwapApp() && window.Capacitor?.getPlatform?.() === 'ios';
+}
+
+let _nativePushDevice = null;
+let _nativePushListenersReady = false;
+let _nativePushWaiters = [];
+
+function nativePushPlugin() {
+  return window.Capacitor?.Plugins?.PushNotifications || null;
+}
+
+function settleNativePushWaiters(error, device = null) {
+  const waiters = _nativePushWaiters;
+  _nativePushWaiters = [];
+  waiters.forEach(({ resolve, reject }) => error ? reject(error) : resolve(device));
+}
+
+async function handleNativePushRoute(data = {}) {
+  const route = data.route === 'myPostsManager' ? 'myPostsManager' : 'find';
+  if (route === 'myPostsManager') await openMyPostsManager();
+  else {
+    switchTab('find');
+    await fetchPosts();
+  }
+  setAlertPanel(false);
+}
+
+async function initNativePushNotifications() {
+  if (!isNativeIosCrewSwapApp()) return false;
+  const PushNotifications = nativePushPlugin();
+  if (!PushNotifications) return false;
+
+  if (!_nativePushListenersReady) {
+    _nativePushListenersReady = true;
+    await PushNotifications.addListener('registration', async token => {
+      _nativePushDevice = {
+        token: token.value,
+        platform: 'ios',
+        environment: 'auto',
+        bundleId: 'com.rufnekcrewswap.app',
+      };
+      localStorage.setItem('crewswap_premium_push_enabled', '1');
+      settleNativePushWaiters(null, _nativePushDevice);
+      if (isPremiumUser() && state.sessionToken) await syncPremiumAlertSettings(null, _nativePushDevice);
+      renderSavedSearches();
+    });
+    await PushNotifications.addListener('registrationError', error => {
+      const registrationError = new Error(error?.error || 'APNs 기기 등록 실패');
+      settleNativePushWaiters(registrationError);
+      console.warn('native push registration failed:', registrationError);
+    });
+    await PushNotifications.addListener('pushNotificationActionPerformed', action => {
+      handleNativePushRoute(action?.notification?.data || {}).catch(console.warn);
+    });
+    await PushNotifications.addListener('pushNotificationReceived', notification => {
+      const data = notification?.data || {};
+      state.alerts.unshift({
+        kind: 'match',
+        goTo: data.route || 'find',
+        postId: data.postId || '',
+        title: notification?.title || '🔔 조건에 맞는 새 스왑',
+        body: notification?.body || '저장한 조건에 맞는 스왑이 올라왔습니다.',
+        createdAt: new Date().toISOString(),
+      });
+      saveState();
+      renderAlerts();
+    });
+  }
+
+  // 이미 허용한 사용자는 앱 실행 때마다 APNs에서 최신 토큰을 다시 받아 서버로 보낸다.
+  const permission = await PushNotifications.checkPermissions();
+  if (permission.receive === 'granted') await PushNotifications.register();
+  return true;
+}
+
+async function registerNativePushNotifications() {
+  const PushNotifications = nativePushPlugin();
+  if (!PushNotifications || !(await initNativePushNotifications())) {
+    throw new Error('이 앱 빌드에서 iPhone 알림 기능을 찾을 수 없습니다.');
+  }
+  let permission = await PushNotifications.checkPermissions();
+  if (permission.receive === 'prompt' || permission.receive === 'prompt-with-rationale') {
+    permission = await PushNotifications.requestPermissions();
+  }
+  if (permission.receive !== 'granted') throw new Error('iPhone 설정에서 CrewSwap 알림을 허용해주세요.');
+
+  const registration = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('APNs 기기 등록 시간이 초과되었습니다.')), 15000);
+    _nativePushWaiters.push({
+      resolve: value => { clearTimeout(timer); resolve(value); },
+      reject: error => { clearTimeout(timer); reject(error); },
+    });
+  });
+  await PushNotifications.register();
+  return registration;
+}
+
+async function syncPremiumAlertSettings(subscription = null, nativeDevice = undefined) {
   if (!isPremiumUser() || !state.user.email) return { ok: false, skipped: true };
   try {
     const response = await apiFetch(`${API_BASE}/api/premium-alert-sync`, {
@@ -2865,6 +3095,7 @@ async function syncPremiumAlertSettings(subscription = null) {
         profile: state.user,
         searches: state.savedSearches || [],
         subscription: subscription ? subscription.toJSON() : null,
+        nativeDevice: nativeDevice === undefined ? _nativePushDevice : nativeDevice,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -2879,7 +3110,31 @@ async function syncPremiumAlertSettings(subscription = null) {
 async function enablePremiumBackgroundAlerts() {
   if (!isPremiumUser()) { showToast('PRO 전용 기능입니다. 무료 이용권을 먼저 시작해주세요.'); return; }
   if (isNativeCrewSwapApp()) {
-    showToast('iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.');
+    if (!isNativeIosCrewSwapApp()) {
+      showToast('Android 백그라운드 알림은 다음 배포 단계에서 연결됩니다.');
+      return;
+    }
+    try {
+      const configResponse = await apiFetch(`${API_BASE}/api/premium-alert-config`);
+      const config = await configResponse.json().catch(() => ({}));
+      if (!configResponse.ok || !config.nativePushEnabled) {
+        throw new Error('APNs 서버 키가 아직 연결되지 않았습니다.');
+      }
+      const nativeDevice = await registerNativePushNotifications();
+      const synced = await syncPremiumAlertSettings(null, nativeDevice);
+      if (!synced.ok || !synced.nativePushEnabled) throw new Error(synced.error || '기기 토큰 서버 등록 실패');
+      const testResponse = await apiFetch(`${API_BASE}/api/premium-alert-test`, { method: 'POST' });
+      const testResult = await testResponse.json().catch(() => ({}));
+      if (!testResponse.ok || !testResult.delivered) {
+        throw new Error(testResult.error || '테스트 알림 전송 실패');
+      }
+      localStorage.setItem('crewswap_premium_push_enabled', '1');
+      renderSavedSearches();
+      showToast('iPhone 테스트 알림을 보냈습니다.');
+    } catch (error) {
+      console.warn('native premium push enable failed:', error);
+      showToast(`iPhone 알림 설정 실패 — ${error.message}`);
+    }
     return;
   }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
@@ -3500,13 +3755,15 @@ function renderSavedSearches() {
     ? `<div class="premium-access-state is-active"><strong>🎟️ PRO 30일 무료 이용권 사용 중</strong><span>${trialExpiry}까지 자동 알림과 무제한 크레딧을 사용할 수 있습니다. 자동 결제되지 않습니다.</span></div>`
     : state.user.proEntitlement === 'lifetime'
       ? `<div class="premium-access-state is-active"><strong>✓ PRO 영구 이용권</strong><span>만료 없이 자동 알림과 무제한 크레딧을 사용할 수 있습니다.</span></div>`
+      : state.user.proEntitlement === 'sandbox'
+        ? `<div class="premium-access-state is-active"><strong>🧪 TestFlight PRO 테스트 이용권</strong><span>${formatProDate(state.user.proExpiresAt)}까지 실제 과금 없이 PRO 기능을 테스트할 수 있습니다.</span></div>`
       : '';
 
   listEl.innerHTML = !premium
     ? state.user.proTrialAvailable
-      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>${nativeApp ? '이용권은 그대로 보존됩니다. iPhone 백그라운드 알림 연결이 완료된 뒤 원하는 시점에 시작할 수 있습니다.' : '가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.'}</small><button type="button" id="activateProTrialBtn" class="primary-button" ${nativeApp ? 'disabled' : ''}>${nativeApp ? '네이티브 알림 준비 중' : '원하는 날짜부터 30일 시작하기'}</button></div>`
-      : `<div class="premium-lock"><strong>PRO 무료 이용권 사용 완료</strong><small>저장한 조건은 그대로 보관되어 있습니다. PRO 영구 이용권을 구매하면 자동 알림을 다시 사용할 수 있습니다.</small></div>`
-    : accessBanner + (searches.length
+      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림과 무제한 크레딧을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.</small><button type="button" id="activateProTrialBtn" class="primary-button">원하는 날짜부터 30일 시작하기</button></div>${proPurchaseControlsHtml()}`
+      : `<div class="premium-lock"><strong>PRO 무료 이용권 사용 완료</strong><small>저장한 조건은 그대로 보관되어 있습니다. PRO 영구 이용권을 구매하면 자동 알림을 다시 사용할 수 있습니다.</small></div>${proPurchaseControlsHtml()}`
+    : accessBanner + (state.user.proEntitlement === 'trial' ? proPurchaseControlsHtml() : '') + (searches.length
     ? searches.map(s => `
         <div class="saved-item">
           <button class="saved-del" data-id="${s.id}" title="삭제">×</button>
@@ -3525,8 +3782,8 @@ function renderSavedSearches() {
       addEl.innerHTML = `
         <div class="premium-push-state ${pushEnabled ? 'is-on' : ''}">
           <strong>${pushEnabled ? '✓ 백그라운드 알림 켜짐' : '앱을 열지 않아도 새 글 알림'}</strong>
-          <span>${nativeApp ? 'iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.' : '홈 화면에 설치한 웹앱/PWA에서 받을 수 있습니다.'}</span>
-          <button type="button" id="premiumPushEnableBtn" class="secondary-button" ${nativeApp ? 'disabled' : ''}>${pushEnabled ? '알림 다시 확인' : '백그라운드 알림 켜기'}</button>
+          <span>${nativeApp ? 'iPhone에서 앱을 닫아도 조건에 맞는 새 스왑 알림을 받을 수 있습니다.' : '홈 화면에 설치한 웹앱/PWA에서 받을 수 있습니다.'}</span>
+          <button type="button" id="premiumPushEnableBtn" class="secondary-button">${pushEnabled ? '알림 다시 확인' : '백그라운드 알림 켜기'}</button>
         </div>
         <input id="savedKeyword" placeholder="목적지·키워드 (예: DPS, 보홀, CXR)" />
         <div class="saved-field-label">스케줄 유형</div>
@@ -3563,8 +3820,10 @@ function renderSavedSearches() {
       };
     }
   }
-
   document.getElementById('activateProTrialBtn')?.addEventListener('click', activateProTrialPass);
+  document.getElementById('purchaseLifetimeProBtn')?.addEventListener('click', purchaseLifetimePro);
+  document.getElementById('restoreLifetimeProBtn')?.addEventListener('click', restoreLifetimePro);
+  loadProProductDisplay();
 
   listEl.querySelectorAll(".saved-del").forEach(b => b.onclick = async () => {
     state.savedSearches = state.savedSearches.filter(s => s.id !== b.dataset.id);
@@ -5671,6 +5930,7 @@ function applyLoggedInProfile(email, profile, premiumStatus = null, wallet = nul
   renderAll();
   fetchRequests();
   syncPremiumAlertSettings();
+  refreshNativeStoreEntitlement();
   queueReleaseNotice();
 }
 
@@ -5841,7 +6101,11 @@ initPullToRefresh();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
-refreshPremiumStatus().then(() => syncPremiumAlertSettings()); // 서버 권한 확인 후 저장조건 동기화
+refreshPremiumStatus().then(async () => {
+  await refreshNativeStoreEntitlement();
+  await syncPremiumAlertSettings();
+}); // 서버 권한·App Store 구매 확인 후 저장조건 동기화
+initNativePushNotifications().catch(error => console.warn('native push init failed:', error));
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 regenCredits();          // 월 변경·구버전 크레딧 정책 마이그레이션
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크

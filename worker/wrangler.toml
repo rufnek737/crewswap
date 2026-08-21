@@ -17,4 +17,4 @@ id = "7da2a6e5ee7143fcab6834bf9ba92a17"
 #   AUTH_SECRET=generate-a-long-random-secret
 #   VERIFY_SECRET=your-secret
 #   RESEND_API_KEY=re_xxxx
-#   RESEND_FROM=CrewSwap <noreply@yourdomain.com>
+#   RESEND_FROM=CrewSwap <no-reply@notify.rufnekcrew.com>

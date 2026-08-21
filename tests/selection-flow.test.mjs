@@ -53,6 +53,27 @@ test("the PRO alert page is separate from the normal swap result list", () => {
   assert.doesNotMatch(find, /id="savedList"|id="savedAddForm"/);
 });
 
+test("the PRO alert screen stays concise and verifies native delivery", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(html, /PRO 전용 편의 기능/);
+  assert.match(app, /\/api\/premium-alert-test/);
+  assert.match(app, /iPhone 테스트 알림을 보냈습니다/);
+  assert.match(worker, /CrewSwap 알림 테스트/);
+});
+
+test("the PRO purchase screen uses the defined native iOS detector", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(app, /function isNativeIosCrewSwapApp\(\)/);
+  assert.doesNotMatch(app, /isNativeIOSApp\(\)/);
+  assert.equal((app.match(/isNativeIosCrewSwapApp\(\)/g) || []).length >= 3, true);
+  assert.match(app, /X-CrewSwap-Store-Environment/);
+  assert.match(app, /TestFlight PRO 테스트 이용권/);
+});
+
 test("my swap management is separate from the post form", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const manager = html.match(/<section id="myPostsManager"[\s\S]*?<\/section>/)?.[0] || "";
@@ -75,7 +96,7 @@ test("policy and contact links use the native-aware service link handler", () =>
 
   assert.equal((html.match(/data-service-link="privacy"/g) || []).length, 2);
   assert.equal((html.match(/data-service-link="terms"/g) || []).length, 2);
-  assert.match(html, /href="mailto:rufnek737@gmail\.com[^"]*" data-service-link="contact"/);
+  assert.match(html, /href="mailto:info@rufnekcrew\.com[^"]*" data-service-link="contact"/);
   assert.match(app, /Capacitor\.Plugins\.Browser\.open/);
   assert.match(app, /Capacitor\.Plugins\.AppLauncher\.openUrl/);
 });

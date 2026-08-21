@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   activateProTrial,
   getProStatus,
+  PRO_SANDBOX_DURATION_MS,
   PRO_TRIAL_DURATION_MS,
 } from '../worker/pro-entitlement.mjs';
 
@@ -13,6 +14,7 @@ test('PRO trial waits until the user activates it', () => {
     active: false,
     entitlement: 'none',
     expiresAt: null,
+    sandboxExpiresAt: null,
     trialAvailable: true,
     trialStartedAt: null,
     trialExpiresAt: null,
@@ -43,4 +45,13 @@ test('a permanent purchase keeps PRO active without an expiry', () => {
   assert.equal(status.active, true);
   assert.equal(status.entitlement, 'lifetime');
   assert.equal(status.trialExpiresAt, null);
+});
+
+test('a sandbox purchase is temporary and ignored by production requests', () => {
+  const user = { proSandboxExpiresAt: new Date(NOW + PRO_SANDBOX_DURATION_MS).toISOString() };
+  assert.equal(getProStatus(user, NOW).active, false);
+  const sandbox = getProStatus(user, NOW, { allowSandbox:true });
+  assert.equal(sandbox.active, true);
+  assert.equal(sandbox.entitlement, 'sandbox');
+  assert.equal(getProStatus(user, NOW + PRO_SANDBOX_DURATION_MS + 1, { allowSandbox:true }).active, false);
 });
