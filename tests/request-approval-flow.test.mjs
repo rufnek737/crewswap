@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker from '../worker/index.js';
+import rawWorker, { issueSessionToken } from '../worker/index.js';
+
+const TEST_AUTH_SECRET = 'test-auth-secret-at-least-32-characters';
+const worker = {
+  async fetch(request, env, ctx) {
+    env.AUTH_SECRET ||= TEST_AUTH_SECRET;
+    env.VERIFY_SECRET ||= 'test-verify-secret-at-least-32-characters';
+    const url = new URL(request.url);
+    const publicPath = ['/api/posts-get', '/api/premium-alert-config'].includes(url.pathname);
+    if (publicPath || request.headers.has('Authorization')) return rawWorker.fetch(request, env, ctx);
+    let email = url.searchParams.get('email');
+    if (!email && request.method !== 'GET') {
+      const body = await request.clone().json().catch(() => ({}));
+      email = body.email || body.fromEmail || body.ownerEmail;
+    }
+    if (!email) throw new Error(`테스트 인증 이메일 누락: ${url.pathname}`);
+    const headers = new Headers(request.headers);
+    headers.set('Authorization', `Bearer ${await issueSessionToken(env, email)}`);
+    return rawWorker.fetch(new Request(request, { headers }), env, ctx);
+  },
+};
 
 function createKv(seed = {}) {
   const values = new Map(Object.entries(seed).map(([key, value]) => [

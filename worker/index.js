@@ -15,16 +15,34 @@ const cabinPolicy = globalThis.CrewSwapCabinPolicy;
 // 라우팅: /api/send-verify, /api/check-verify, /api/posts-get,
 //          /api/posts-create, /api/posts-delete, /api/crewconnex
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PUBLIC_PATHS = new Set([
+  '/api/send-verify', '/api/check-verify', '/api/user-signup', '/api/user-login',
+  '/api/user-reset-password', '/api/posts-get', '/api/premium-alert-config',
+]);
 
 const POLICY_VERSION = '2026-07-28';
 
 function json(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: CORS });
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+}
+
+function allowedOrigin(origin) {
+  if (!origin) return null;
+  if (["https://rufnek737.github.io", "capacitor://localhost", "https://localhost"].includes(origin)) return origin;
+  if (/^http:\/\/localhost(?::\d+)?$/.test(origin)) return origin;
+  return null;
+}
+
+function withCors(response, request) {
+  const headers = new Headers(response.headers);
+  const origin = allowedOrigin(request.headers.get("Origin"));
+  if (origin) headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Vary", "Origin");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 /* ── Web Crypto 헬퍼 (Node.js crypto 대체) ─────────────────── */
@@ -55,6 +73,46 @@ function fromBase64url(str) {
   return decodeURIComponent(escape(atob(padded.replace(/-/g, '+').replace(/_/g, '/'))));
 }
 
+function requireSecret(env, name) {
+  const value = String(env?.[name] || '').trim();
+  if (!value) throw new Error(`${name} 서버 설정이 필요합니다`);
+  return value;
+}
+
+export async function issueSessionToken(env, email, now = Date.now()) {
+  const payload = toBase64url(JSON.stringify({ sub: String(email).trim().toLowerCase(), iat: now, exp: now + SESSION_TTL_MS, v: 1 }));
+  const signature = await hmacHex(requireSecret(env, 'AUTH_SECRET'), payload);
+  return `${payload}.${signature}`;
+}
+
+export async function verifySessionToken(env, token, now = Date.now()) {
+  const [payload, signature, extra] = String(token || '').split('.');
+  if (!payload || !signature || extra) return null;
+  const expected = await hmacHex(requireSecret(env, 'AUTH_SECRET'), payload);
+  if (!timingSafeEqual(expected, signature)) return null;
+  let data;
+  try { data = JSON.parse(fromBase64url(payload)); } catch { return null; }
+  if (data?.v !== 1 || !data.sub || !Number.isFinite(data.exp) || data.exp <= now) return null;
+  return { email: String(data.sub).trim().toLowerCase(), expiresAt: data.exp };
+}
+
+async function authenticateRequest(request, env) {
+  const match = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+  try { return await verifySessionToken(env, match[1]); } catch { return null; }
+}
+
+async function rateLimit(env, request, scope, identity, limit, windowSeconds) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
+  const digest = await hmacHex(requireSecret(env, 'AUTH_SECRET'), `${scope}:${ip}:${String(identity).toLowerCase()}`);
+  const key = `rate:${scope}:${digest.slice(0, 24)}:${bucket}`;
+  const count = Number(await env.POSTS.get(key) || 0);
+  if (count >= limit) return false;
+  await env.POSTS.put(key, String(count + 1), { expirationTtl: Math.max(60, windowSeconds + 60) });
+  return true;
+}
+
 /* ── 이메일 인증 토큰 검증 (send-verify가 발급한 HMAC 토큰) ─────── */
 async function verifyEmailToken(env, email, code, token) {
   email = (email || '').trim().toLowerCase();
@@ -66,7 +124,7 @@ async function verifyEmailToken(env, email, code, token) {
   if (!ts || !storedHmac) return { ok: false, error: '토큰 형식 오류' };
   if (Date.now() - parseInt(ts, 10) > 10 * 60 * 1000)
     return { ok: false, error: '인증 코드가 만료되었습니다. 코드를 다시 발송해 주세요.' };
-  const secret = env.VERIFY_SECRET || 'jjswap-verify-secret-change-me';
+  const secret = requireSecret(env, 'VERIFY_SECRET');
   const expectedHmac = await hmacHex(secret, `${email}:${code}:${ts}`);
   if (!timingSafeEqual(expectedHmac, storedHmac))
     return { ok: false, error: '인증 코드가 올바르지 않습니다' };
@@ -136,7 +194,8 @@ async function handleUserSignup(request, env) {
     },
   };
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
-  return json({ ok: true, username: rec.username, profile: rec.profile });
+  const sessionToken = await issueSessionToken(env, email);
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserLogin(request, env) {
@@ -145,18 +204,20 @@ async function handleUserLogin(request, env) {
   const email = (body.email || '').trim().toLowerCase();
   const password = body.password || '';
   if (!email || !password) return json({ error: '이메일과 비밀번호를 입력해주세요' }, 400);
+  if (!(await rateLimit(env, request, 'login', email, 10, 600)))
+    return json({ error: '로그인 시도가 너무 많습니다. 10분 후 다시 시도해주세요.' }, 429);
   const rec = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!rec) return json({ error: '가입되지 않은 이메일입니다. 회원가입을 진행해주세요.' }, 404);
   const ok = await verifyPassword(password, rec.salt, rec.hash);
   if (!ok) return json({ error: '비밀번호가 올바르지 않습니다.' }, 401);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile });
+  const sessionToken = await issueSessionToken(env, email);
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
-async function handleUserUpdate(request, env) {
+async function handleUserUpdate(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const email = (body.email || '').trim().toLowerCase();
-  if (!email) return json({ error: '이메일 누락' }, 400);
+  const email = authEmail;
   const rec = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!rec) return json({ error: '계정을 찾을 수 없습니다' }, 404);
   rec.profile = { ...rec.profile, ...pickProfile(body.profile) };
@@ -184,10 +245,10 @@ async function handleUserResetPassword(request, env) {
 /* ── user-delete ──────────────────────────────────────────────
    비밀번호를 다시 확인한 뒤 계정과 연결된 글·요청·PRO 푸시정보를
    서버에서 함께 삭제한다. 클라이언트의 로컬 데이터 삭제는 성공 응답 후 수행한다. ── */
-async function handleUserDelete(request, env) {
+async function handleUserDelete(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const email = String(body?.email || '').trim().toLowerCase();
+  const email = authEmail;
   const password = String(body?.password || '');
   if (!email || !password) return json({ error: '이메일과 비밀번호를 입력해주세요' }, 400);
 
@@ -238,11 +299,13 @@ async function handleSendVerify(request, env) {
   if (!email) return json({ error: '이메일을 입력해주세요' }, 400);
   if (!email.endsWith('@jejuair.net'))
     return json({ error: '제주항공 이메일(@jejuair.net)만 가입할 수 있습니다' }, 400);
+  if (!(await rateLimit(env, request, 'verify', email, 5, 600)))
+    return json({ error: '인증 코드 요청이 너무 많습니다. 10분 후 다시 시도해주세요.' }, 429);
 
   const EXPIRY = 10 * 60 * 1000;
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const ts = Date.now().toString();
-  const secret = env.VERIFY_SECRET || 'jjswap-verify-secret-change-me';
+  const secret = requireSecret(env, 'VERIFY_SECRET');
   const hmac = await hmacHex(secret, `${email}:${code}:${ts}`);
   const token = toBase64url(JSON.stringify({ t: ts, h: hmac }));
 
@@ -375,10 +438,10 @@ async function handlePremiumAlertConfig(env) {
   });
 }
 
-async function handlePremiumAlertSync(request, env) {
+async function handlePremiumAlertSync(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
-  const email = String(body?.email || '').trim().toLowerCase();
+  const email = authEmail;
   if (!email.endsWith('@jejuair.net')) return json({ error: '제주항공 계정이 필요합니다' }, 400);
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
@@ -472,10 +535,8 @@ async function handlePostsGet(env) {
 
 /* ── posts-get-mine (같은 계정이면 어느 기기에서든 내가 등록한 글 동기화) ── */
 
-async function handlePostsGetMine(request, env) {
-  const url = new URL(request.url);
-  const email = url.searchParams.get('email');
-  if (!email) return json({ error: 'email 필요' }, 400);
+async function handlePostsGetMine(request, env, authEmail) {
+  const email = authEmail;
   try {
     const idx = await getPostsIndex(env);
     const mine = idx
@@ -494,7 +555,7 @@ const POST_FIELDS = [
   'deadlineDay', 'deadlineMonth', 'watchers', 'status', 'creditSpent',
 ];
 
-async function handlePostsCreate(request, env, ctx) {
+async function handlePostsCreate(request, env, ctx, authEmail) {
   let post;
   try { post = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!post.id || !post.deleteToken || !post.offered || !post.wanted)
@@ -502,6 +563,7 @@ async function handlePostsCreate(request, env, ctx) {
 
   const clean = {};
   POST_FIELDS.forEach(k => { if (post[k] !== undefined) clean[k] = post[k]; });
+  clean.ownerEmail = authEmail;
   clean.status = 'active';
   clean.registeredAt = clean.registeredAt || new Date().toISOString();
 
@@ -517,7 +579,7 @@ async function handlePostsCreate(request, env, ctx) {
 
 /* ── posts-update (희망 조건만 수정, 오퍼/크레딧 변경 없음) ──── */
 
-async function handlePostsUpdate(request, env) {
+async function handlePostsUpdate(request, env, authEmail) {
   let id, deleteToken, wanted;
   try { ({ id, deleteToken, wanted } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !deleteToken || !wanted) return json({ error: '필수 필드 누락' }, 400);
@@ -525,7 +587,7 @@ async function handlePostsUpdate(request, env) {
   try {
     const post = await env.POSTS.get(`post:${id}`, { type: 'json' });
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
-    if (post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
+    if (post.ownerEmail !== authEmail || post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     post.wanted = wanted;
     await env.POSTS.put(`post:${id}`, JSON.stringify(post));
     const idx = await getPostsIndex(env);
@@ -562,15 +624,15 @@ function requestWithPrivateDaysRemoved(record) {
   return { ...record, openRoster: publicOpenRoster(record.openRoster, record.lockedDays) };
 }
 
-async function handleRequestsCreate(request, env) {
+async function handleRequestsCreate(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   const {
-    postId, fromEmail, fromNick, fromBase, fromRole,
+    postId, fromNick, fromBase, fromRole,
     fromRealName, fromEmployeeId, fromPhone,
     type, message, offered, openRoster, lockedDays, validationRoster,
   } = body || {};
-  if (!postId || !fromEmail || !fromNick || !type)
+  if (!postId || !fromNick || !type)
     return json({ error: '필수 필드 누락' }, 400);
   const safeLockedDays = [...normalizedLockedDays(lockedDays)];
   const safeOpenRoster = publicOpenRoster(openRoster, safeLockedDays);
@@ -594,7 +656,7 @@ async function handleRequestsCreate(request, env) {
       quals: [post.offered?.edto ? 'EDTO' : null, post.offered?.cat3 ? 'CAT III' : null].filter(Boolean).join(' / ') || '일반',
       base: post.ownerBase || null,
       message: message || '',
-      fromEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
+      fromEmail: authEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
       fromRealName: fromRealName || '', fromEmployeeId: fromEmployeeId || '', fromPhone: fromPhone || '',
       offered: offered || null,             // 상대가 날짜를 고르면 확정됨 (구버전은 즉시 값 있음)
       openRoster: Array.isArray(openRoster) ? safeOpenRoster : null, // 비공개 날짜를 서버에서도 강제 제거
@@ -617,9 +679,10 @@ async function handleRequestsCreate(request, env) {
 
 /* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
 
-async function handleRequestsAccept(request, env) {
+async function handleRequestsAccept(request, env, authEmail) {
   let id, email, realName, employeeId, phone;
   try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -729,9 +792,10 @@ function cabinRestViolationResponse(violation) {
   }, 409);
 }
 
-async function handleRequestsPosterSelect(request, env) {
+async function handleRequestsPosterSelect(request, env, authEmail) {
   let id, email, offered, realName, employeeId, phone;
   try { ({ id, email, offered, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   if (!offered || !Array.isArray(offered.days) || !offered.days.length) return json({ error: '바꿀 날을 선택해주세요' }, 400);
   try {
@@ -767,9 +831,10 @@ async function handleRequestsPosterSelect(request, env) {
 
 /* ── requests-requester-accept (요청자가 글작성자의 날짜 선택을 최종 승인) ── */
 
-async function handleRequestsRequesterAccept(request, env) {
+async function handleRequestsRequesterAccept(request, env, authEmail) {
   let id, email, realName, employeeId, phone;
   try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -798,9 +863,10 @@ async function handleRequestsRequesterAccept(request, env) {
 
 /* ── requests-requester-decline (선택 조합만 거절하고 글작성자가 다시 고르게 함) ── */
 
-async function handleRequestsRequesterDecline(request, env) {
+async function handleRequestsRequesterDecline(request, env, authEmail) {
   let id, email;
   try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -821,9 +887,10 @@ async function handleRequestsRequesterDecline(request, env) {
 
 /* ── requests-ask-accept (받은 의향 문의에 "관심 수락" — 자유 텍스트 답장 없음) ── */
 
-async function handleRequestsAskAccept(request, env) {
+async function handleRequestsAskAccept(request, env, authEmail) {
   let id, email;
   try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -840,9 +907,10 @@ async function handleRequestsAskAccept(request, env) {
 
 /* ── requests-decline (받은 요청 거절 — 양해 메세지 상태로 저장) ─────── */
 
-async function handleRequestsDecline(request, env) {
+async function handleRequestsDecline(request, env, authEmail) {
   let id, email, reason;
   try { ({ id, email, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -878,9 +946,10 @@ async function handleRequestsDecline(request, env) {
 
 /* ── requests-submit-nudge (요청자 → 글작성자에게 "회사 상신 독촉") ── */
 
-async function handleRequestsSubmitNudge(request, env) {
+async function handleRequestsSubmitNudge(request, env, authEmail) {
   let id, email;
   try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -898,9 +967,10 @@ async function handleRequestsSubmitNudge(request, env) {
 
 /* ── requests-submit-done (글작성자가 "회사 상신 완료" 표시) ───────── */
 
-async function handleRequestsSubmitDone(request, env) {
+async function handleRequestsSubmitDone(request, env, authEmail) {
   let id, email;
   try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -918,9 +988,10 @@ async function handleRequestsSubmitDone(request, env) {
 
 /* ── requests-delete (보낸/받은 요청·의향 삭제) ──────────────────── */
 
-async function handleRequestsDelete(request, env) {
+async function handleRequestsDelete(request, env, authEmail) {
   let id, email;
   try { ({ id, email } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
@@ -939,10 +1010,8 @@ async function handleRequestsDelete(request, env) {
 
 /* ── requests-get (보낸/받은 요청 조회) ───────────────────────── */
 
-async function handleRequestsGet(request, env) {
-  const url = new URL(request.url);
-  const email = url.searchParams.get('email');
-  if (!email) return json({ error: 'email 필요' }, 400);
+async function handleRequestsGet(request, env, authEmail) {
+  const email = authEmail;
 
   try {
     const idx = await getRequestsIndex(env);
@@ -955,7 +1024,7 @@ async function handleRequestsGet(request, env) {
 
 /* ── posts-delete ───────────────────────────────────────────── */
 
-async function handlePostsDelete(request, env) {
+async function handlePostsDelete(request, env, authEmail) {
   let id, deleteToken;
   try { ({ id, deleteToken } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !deleteToken) return json({ error: '필수 필드 누락' }, 400);
@@ -963,7 +1032,7 @@ async function handlePostsDelete(request, env) {
   try {
     const post = await env.POSTS.get(`post:${id}`, { type: 'json' });
     if (!post) return json({ ok: true, alreadyGone: true });
-    if (post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
+    if (post.ownerEmail !== authEmail || post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     await env.POSTS.delete(`post:${id}`);
     const idx = await getPostsIndex(env);
     await savePostsIndex(env, idx.filter(p => p.id !== id));
@@ -1413,34 +1482,49 @@ async function handleCrewConnex(request) {
 
 export default {
   async fetch(request, env, ctx) {
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (request.method === 'OPTIONS') {
+      return withCors(new Response(null, { status: 204 }), request);
+    }
     const path = new URL(request.url).pathname;
-    if (path === '/api/send-verify')  return handleSendVerify(request, env);
-    if (path === '/api/check-verify') return handleCheckVerify(request, env);
-    if (path === '/api/user-signup')  return handleUserSignup(request, env);
-    if (path === '/api/user-login')   return handleUserLogin(request, env);
-    if (path === '/api/user-update')  return handleUserUpdate(request, env);
-    if (path === '/api/user-reset-password') return handleUserResetPassword(request, env);
-    if (path === '/api/user-delete') return handleUserDelete(request, env);
-    if (path === '/api/posts-get')    return handlePostsGet(env);
-    if (path === '/api/posts-get-mine') return handlePostsGetMine(request, env);
-    if (path === '/api/posts-create') return handlePostsCreate(request, env, ctx);
-    if (path === '/api/posts-delete') return handlePostsDelete(request, env);
-    if (path === '/api/posts-update') return handlePostsUpdate(request, env);
-    if (path === '/api/requests-create') return handleRequestsCreate(request, env);
-    if (path === '/api/requests-get')    return handleRequestsGet(request, env);
-    if (path === '/api/requests-accept') return handleRequestsAccept(request, env);
-    if (path === '/api/requests-poster-select') return handleRequestsPosterSelect(request, env);
-    if (path === '/api/requests-requester-accept') return handleRequestsRequesterAccept(request, env);
-    if (path === '/api/requests-requester-decline') return handleRequestsRequesterDecline(request, env);
-    if (path === '/api/requests-ask-accept') return handleRequestsAskAccept(request, env);
-    if (path === '/api/requests-decline') return handleRequestsDecline(request, env);
-    if (path === '/api/requests-submit-nudge') return handleRequestsSubmitNudge(request, env);
-    if (path === '/api/requests-submit-done') return handleRequestsSubmitDone(request, env);
-    if (path === '/api/requests-delete') return handleRequestsDelete(request, env);
-    if (path === '/api/premium-alert-config') return handlePremiumAlertConfig(env);
-    if (path === '/api/premium-alert-sync') return handlePremiumAlertSync(request, env);
-    if (path === '/api/crewconnex')   return handleCrewConnex(request, env);
-    return new Response('Not Found', { status: 404 });
+    let auth = null;
+    if (!PUBLIC_PATHS.has(path)) {
+      auth = await authenticateRequest(request, env);
+      if (!auth) return withCors(json({ error: '로그인이 만료되었거나 유효하지 않습니다', code: 'AUTH_REQUIRED' }, 401), request);
+    }
+
+    let response;
+    try {
+      if (path === '/api/send-verify') response = await handleSendVerify(request, env);
+      else if (path === '/api/check-verify') response = await handleCheckVerify(request, env);
+      else if (path === '/api/user-signup') response = await handleUserSignup(request, env);
+      else if (path === '/api/user-login') response = await handleUserLogin(request, env);
+      else if (path === '/api/user-update') response = await handleUserUpdate(request, env, auth.email);
+      else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
+      else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
+      else if (path === '/api/posts-get') response = await handlePostsGet(env);
+      else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
+      else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email);
+      else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);
+      else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email);
+      else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email);
+      else if (path === '/api/requests-get') response = await handleRequestsGet(request, env, auth.email);
+      else if (path === '/api/requests-accept') response = await handleRequestsAccept(request, env, auth.email);
+      else if (path === '/api/requests-poster-select') response = await handleRequestsPosterSelect(request, env, auth.email);
+      else if (path === '/api/requests-requester-accept') response = await handleRequestsRequesterAccept(request, env, auth.email);
+      else if (path === '/api/requests-requester-decline') response = await handleRequestsRequesterDecline(request, env, auth.email);
+      else if (path === '/api/requests-ask-accept') response = await handleRequestsAskAccept(request, env, auth.email);
+      else if (path === '/api/requests-decline') response = await handleRequestsDecline(request, env, auth.email);
+      else if (path === '/api/requests-submit-nudge') response = await handleRequestsSubmitNudge(request, env, auth.email);
+      else if (path === '/api/requests-submit-done') response = await handleRequestsSubmitDone(request, env, auth.email);
+      else if (path === '/api/requests-delete') response = await handleRequestsDelete(request, env, auth.email);
+      else if (path === '/api/premium-alert-config') response = await handlePremiumAlertConfig(env);
+      else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email);
+      else if (path === '/api/crewconnex') response = await handleCrewConnex(request, env);
+      else response = new Response('Not Found', { status: 404 });
+    } catch (error) {
+      console.error('CrewSwap API error', error);
+      response = json({ error: '서버 설정 또는 처리 중 오류가 발생했습니다' }, 500);
+    }
+    return withCors(response, request);
   },
 };

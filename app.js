@@ -8,6 +8,26 @@
 // Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
 // Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
 const API_BASE = "https://crewswap-api.tae26001.workers.dev";
+const PUBLIC_API_PATHS = new Set([
+  "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
+  "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
+]);
+
+async function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (state.sessionToken) headers.set("Authorization", `Bearer ${state.sessionToken}`);
+  const response = await fetch(url, { ...options, headers });
+  const path = (() => { try { return new URL(url).pathname; } catch { return ""; } })();
+  if (response.status === 401 && !PUBLIC_API_PATHS.has(path)) {
+    state.sessionToken = null;
+    state.sessionExpiresAt = null;
+    state.user.serverAuthed = false;
+    saveState();
+    setTimeout(() => openLoginModal(state.user.email || ""), 0);
+    showToast("로그인이 만료되었습니다. 다시 로그인해주세요.");
+  }
+  return response;
+}
 const POLICY_VERSION = "2026-07-28";
 const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
@@ -156,6 +176,8 @@ function currentRules() {
 
 /* ====== 2. 상태 ====== */
 const state = {
+  sessionToken: null,
+  sessionExpiresAt: null,
   credits: 3,
   creditMonth: null,
   adCreditsThisMonth: 0,
@@ -2404,7 +2426,7 @@ function renderMyPosts() {
       if (!confirm(`"${post.offered.patternName}" 등록을 취소하시겠습니까?\n기본 크레딧이 3개 미만일 때만 최대 ${post.creditSpent || 1}크레딧이 환급됩니다.`)) return;
       if (post.deleteToken) {
         try {
-          await fetch(`${API_BASE}/api/posts-delete`, {
+          await apiFetch(`${API_BASE}/api/posts-delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
@@ -2430,7 +2452,7 @@ function renderMyPosts() {
       if (!confirm(`"${post.offered.patternName}" 환급 완료 기록을 삭제하시겠습니까?\n크레딧은 변동되지 않습니다.`)) return;
       if (post.deleteToken) {
         try {
-          await fetch(`${API_BASE}/api/posts-delete`, {
+          await apiFetch(`${API_BASE}/api/posts-delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: pid, deleteToken: post.deleteToken }),
@@ -2709,7 +2731,7 @@ function isNativeCrewSwapApp() {
 async function syncPremiumAlertSettings(subscription = null) {
   if (!isPremiumUser() || !state.user.email) return { ok: false, skipped: true };
   try {
-    const response = await fetch(`${API_BASE}/api/premium-alert-sync`, {
+    const response = await apiFetch(`${API_BASE}/api/premium-alert-sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2740,7 +2762,7 @@ async function enablePremiumBackgroundAlerts() {
   }
 
   try {
-    const configResponse = await fetch(`${API_BASE}/api/premium-alert-config`);
+    const configResponse = await apiFetch(`${API_BASE}/api/premium-alert-config`);
     const config = await configResponse.json();
     if (!config.enabled || !config.vapidPublicKey) {
       showToast('푸시 서버 설정 준비 중입니다.');
@@ -2770,7 +2792,7 @@ async function enablePremiumBackgroundAlerts() {
 
 async function fetchPosts() {
   try {
-    const res = await fetch(`${API_BASE}/api/posts-get`);
+    const res = await apiFetch(`${API_BASE}/api/posts-get`);
     if (!res.ok) return;
     const data = await res.json();
     const myIds = new Set(state.myPosts.map(p => p.id));
@@ -2980,7 +3002,7 @@ async function sendAskInterest() {
 async function sendOpenSwap(postId, type, roster, offered = null) {
   const lockedDays = [...state.selectedDays].map(k => parseDayKey(k).day);
   try {
-    const res = await fetch(`${API_BASE}/api/requests-create`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -3046,7 +3068,7 @@ const _deletedPostIds = new Set();
 async function fetchMyPosts() {
   if (!state.user.email) return;
   try {
-    const res = await fetch(`${API_BASE}/api/posts-get-mine?email=${encodeURIComponent(state.user.email)}`);
+    const res = await apiFetch(`${API_BASE}/api/posts-get-mine`);
     if (!res.ok) { processExpiredRefunds(); return; }
     const data = await res.json();
     // 방금 취소한 글은 서버 목록에 남아있어도 제외
@@ -3113,7 +3135,7 @@ async function processExpiredRefunds() {
     // 서버(KV)에서도 실제로 제거 — 안 하면 다른 사용자의 "스왑 찾기" 화면에 마감 지난 글이 계속 노출됨
     newlyExpired.forEach(p => {
       if (!p.deleteToken) return;
-      fetch(`${API_BASE}/api/posts-delete`, {
+      apiFetch(`${API_BASE}/api/posts-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: p.id, deleteToken: p.deleteToken }),
@@ -3143,7 +3165,7 @@ function saveSeenAskAcceptedIds(set) {
 async function fetchRequests() {
   if (!state.user.email) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-get?email=${encodeURIComponent(state.user.email)}`);
+    const res = await apiFetch(`${API_BASE}/api/requests-get`);
     if (!res.ok) return;
     const data = await res.json();
     const ago = (iso) => {
@@ -3702,7 +3724,7 @@ async function posterSelectDays(reqId) {
   if (!offered) { showToast("바꿀 날을 하나 이상 선택하세요."); return; }
   if (msg) { showToast("휴식 기준 위반 — 다른 날을 선택하세요."); return; }
   try {
-    const res = await fetch(`${API_BASE}/api/requests-poster-select`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-poster-select`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email, offered, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
     });
@@ -3718,7 +3740,7 @@ async function approvePosterSelection(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   if (!confirm("상대가 선택한 일정으로 스왑을 최종 승인할까요? 승인 후 서로의 연락처가 공개됩니다.")) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-requester-accept`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-requester-accept`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: reqId, email: state.user.email,
@@ -3737,7 +3759,7 @@ async function rejectPosterSelection(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   if (!confirm("이 조합은 거절하고 상대에게 다른 날짜를 골라달라고 할까요?")) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-requester-decline`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-requester-decline`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email }),
     });
@@ -3752,7 +3774,7 @@ async function rejectPosterSelection(reqId) {
 async function nudgeSubmit(reqId) {
   if (!state.user.email) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-submit-nudge`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-submit-nudge`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email }),
     });
@@ -3768,7 +3790,7 @@ async function markSubmitDone(reqId) {
   if (!state.user.email) return;
   if (!confirm("회사에 상신을 완료하셨나요? 완료로 표시하면 상대방에게 알림이 전송됩니다.")) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-submit-done`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-submit-done`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email }),
     });
@@ -3807,7 +3829,7 @@ async function proceedToRequestFromAsk(reqId) {
 async function acceptAsk(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   try {
-    const res = await fetch(`${API_BASE}/api/requests-ask-accept`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-ask-accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
@@ -3828,7 +3850,7 @@ async function declineRequest(reqId, reason = null) {
     : "거절할까요? 상대방에게 개인 사정으로 인한 양해 메세지가 전송됩니다.";
   if (!confirm(confirmMessage)) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-decline`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-decline`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email, reason }),
@@ -3847,7 +3869,7 @@ async function deleteRequest(reqId, confirmMsg) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   if (!confirm(confirmMsg || "이 요청/의향을 삭제할까요? 상대방 화면에서도 사라집니다.")) return;
   try {
-    const res = await fetch(`${API_BASE}/api/requests-delete`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-delete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email }),
@@ -4008,7 +4030,7 @@ function requestCard(r) {
 async function acceptRequest(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   try {
-    const res = await fetch(`${API_BASE}/api/requests-accept`, {
+    const res = await apiFetch(`${API_BASE}/api/requests-accept`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
@@ -4422,7 +4444,7 @@ function bindEvents() {
     btn.textContent = "발송 중…";
     setVerifyStatus("인증 코드를 발송하고 있습니다…", "hint");
     try {
-      const res = await fetch(`${API_BASE}/api/send-verify`, {
+      const res = await apiFetch(`${API_BASE}/api/send-verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -4469,7 +4491,7 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = "확인 중…";
     try {
-      const res = await fetch(`${API_BASE}/api/check-verify`, {
+      const res = await apiFetch(`${API_BASE}/api/check-verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code, token: _verifyToken }),
@@ -4543,7 +4565,7 @@ function bindEvents() {
     if (btn) btn.disabled = true;
     setVerifyStatus("계정을 생성하는 중…", "hint");
     try {
-      const res = await fetch(`${API_BASE}/api/user-signup`, {
+      const res = await apiFetch(`${API_BASE}/api/user-signup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: _verifyEmail, code: _verifyCode, token: _verifyToken, username, password: pw, profile,
@@ -4556,6 +4578,8 @@ function bindEvents() {
         if (res.status === 409) openLoginModal(_verifyEmail); // 이미 가입 → 로그인 유도
         return;
       }
+      state.sessionToken = data.sessionToken || null;
+      state.sessionExpiresAt = data.sessionExpiresAt || null;
       applyLoggedInProfile(_verifyEmail, data.profile || profile);
       state.credits = CREDIT_CAP;
       state.creditMonth = CREDIT_POLICY.monthKey();
@@ -4584,13 +4608,15 @@ function bindEvents() {
     setSt("로그인 중…", true);
     if (st) st.style.color = "var(--muted)";
     try {
-      const res = await fetch(`${API_BASE}/api/user-login`, {
+      const res = await apiFetch(`${API_BASE}/api/user-login`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: pw }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setSt("❌ " + (data.error || "로그인 실패"), false); return; }
       $("#loginPassword").value = "";
+      state.sessionToken = data.sessionToken || null;
+      state.sessionExpiresAt = data.sessionExpiresAt || null;
       applyLoggedInProfile(data.email || email, data.profile);
       closeLoginModal();
       showToast(`${data.username || "님"} 로그인 완료`);
@@ -4618,7 +4644,7 @@ function bindEvents() {
     if (!email.endsWith("@jejuair.net")) { setResetStatus("제주항공 이메일(@jejuair.net)을 입력해주세요.", "err"); return; }
     btn.disabled = true; btn.textContent = "발송 중…";
     try {
-      const res = await fetch(`${API_BASE}/api/send-verify`, {
+      const res = await apiFetch(`${API_BASE}/api/send-verify`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }),
       });
       const data = await res.json();
@@ -4636,7 +4662,7 @@ function bindEvents() {
     const code = ($("#resetCodeInput").value || "").trim();
     if (!_resetToken) { setResetStatus("먼저 코드를 발송해주세요.", "err"); return; }
     try {
-      const res = await fetch(`${API_BASE}/api/check-verify`, {
+      const res = await apiFetch(`${API_BASE}/api/check-verify`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code, token: _resetToken }),
       });
       const data = await res.json();
@@ -4655,7 +4681,7 @@ function bindEvents() {
     if (pw !== pw2) { setResetStatus("비밀번호가 일치하지 않습니다.", "err"); return; }
     const btn = e.submitter; if (btn) btn.disabled = true;
     try {
-      const res = await fetch(`${API_BASE}/api/user-reset-password`, {
+      const res = await apiFetch(`${API_BASE}/api/user-reset-password`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: _resetVerified, code: _resetCode, token: _resetToken, password: pw }),
       });
@@ -4699,7 +4725,7 @@ function bindEvents() {
     status.textContent = "⏳ CrewConnex 로그인 중... (10~20초)";
     $("#ccLoginButton").disabled = true;
     try {
-      const resp = await fetch(`${API_BASE}/api/crewconnex`, {
+      const resp = await apiFetch(`${API_BASE}/api/crewconnex`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, userName }),
@@ -4810,7 +4836,7 @@ function bindEvents() {
     if (button) button.disabled = true;
     setStatus("서버와 기기에서 계정 정보를 삭제하고 있습니다…");
     try {
-      const response = await fetch(`${API_BASE}/api/user-delete`, {
+      const response = await apiFetch(`${API_BASE}/api/user-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: state.user.email, password }),
@@ -5042,7 +5068,7 @@ function bindEvents() {
       };
 
       try {
-        const res = await fetch(`${API_BASE}/api/posts-create`, {
+        const res = await apiFetch(`${API_BASE}/api/posts-create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newPost),
@@ -5076,7 +5102,7 @@ function bindEvents() {
     if (!post) { exitEditPostMode(); return; }
     const wanted = { memo: ($("#postMemo").value || "").trim() };
     try {
-      const res = await fetch(`${API_BASE}/api/posts-update`, {
+      const res = await apiFetch(`${API_BASE}/api/posts-update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: post.id, deleteToken: post.deleteToken, wanted }),
@@ -5271,6 +5297,8 @@ function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       v: 4,
       savedAt: new Date().toISOString(),
+      sessionToken: state.sessionToken,
+      sessionExpiresAt: state.sessionExpiresAt,
       schedules: state.schedules,
       user: state.user,
       credits: state.credits,
@@ -5293,6 +5321,13 @@ function loadStateFromStorage() {
     const d = JSON.parse(raw);
     if (d.v !== 4) return null;  // v3 이하는 서버 계정 도입 전 로컬-only 세션 — 무효화(재로그인 유도)
     if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
+    state.sessionToken = typeof d.sessionToken === "string" ? d.sessionToken : null;
+    state.sessionExpiresAt = Number.isFinite(d.sessionExpiresAt) ? d.sessionExpiresAt : null;
+    if (!state.sessionToken || (state.sessionExpiresAt && state.sessionExpiresAt <= Date.now())) {
+      state.sessionToken = null;
+      state.sessionExpiresAt = null;
+      if (d.user) d.user.serverAuthed = false;
+    }
     const continuityFixes = window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules) || 0;
     if (d.user) Object.assign(state.user, d.user);
     if (typeof d.credits === "number") state.credits = d.credits;
@@ -5444,6 +5479,7 @@ function closeResetModal() { toggleModal("resetPanel", "resetOverlay", false); }
 // 서버 프로필을 state.user에 반영하고 로그인 상태로 전환 (가입/로그인 공통)
 function applyLoggedInProfile(email, profile) {
   const p = profile || {};
+  const previousEmail = state.user.email || null;
   Object.assign(state.user, {
     email,
     hasSignedUp: true,
@@ -5464,8 +5500,8 @@ function applyLoggedInProfile(email, profile) {
     employeeId: p.employeeId ?? state.user.employeeId,
     phone: p.phone ?? state.user.phone,
   });
-  // 다른 계정으로 로그인했을 수 있으니 기기 로컬 스케줄/선택 초기화
-  state.schedules = [];
+  // 실제로 다른 계정으로 전환할 때만 기기 로컬 스케줄을 비웁니다.
+  if (previousEmail && previousEmail !== email) state.schedules = [];
   resetScheduleSelection(false);
   syncFormsFromState();
   saveState();
@@ -5485,7 +5521,7 @@ function syncProfileToServer() {
     gender: u.gender, languages: u.languages, hasBroadcastRating: u.hasBroadcastRating,
     realName: u.realName, employeeId: u.employeeId, phone: u.phone,
   };
-  fetch(`${API_BASE}/api/user-update`, {
+  apiFetch(`${API_BASE}/api/user-update`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: u.email, profile }),
   }).catch(e => console.warn("프로필 서버 동기화 실패:", e));
