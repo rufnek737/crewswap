@@ -40,7 +40,12 @@ function json(body, status = 200) {
 
 function allowedOrigin(origin) {
   if (!origin) return null;
-  if (["https://rufnek737.github.io", "capacitor://localhost", "https://localhost"].includes(origin)) return origin;
+  if ([
+    "https://rufnek737.github.io",
+    "https://rufnekcrew.com",
+    "capacitor://localhost",
+    "https://localhost",
+  ].includes(origin)) return origin;
   if (/^http:\/\/localhost(?::\d+)?$/.test(origin)) return origin;
   return null;
 }
@@ -118,8 +123,16 @@ function requestAllowsSandboxPro(request) {
 
 async function rateLimit(env, request, scope, identity, limit, windowSeconds) {
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
   const digest = await hmacHex(requireSecret(env, 'AUTH_SECRET'), `${scope}:${ip}:${String(identity).toLowerCase()}`);
+  const limiter = scope === 'verify' ? env.VERIFY_RATE_LIMITER : env.LOGIN_RATE_LIMITER;
+  if (limiter?.limit) {
+    const result = await limiter.limit({ key: digest.slice(0, 32) });
+    return result.success;
+  }
+
+  // 로컬 테스트 및 이전 배포 환경용 폴백. 운영 환경에서는 위의 전용
+  // Rate Limiting 바인딩을 사용해 사용자 데이터용 KV 쓰기 한도를 소모하지 않는다.
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
   const key = `rate:${scope}:${digest.slice(0, 24)}:${bucket}`;
   const count = Number(await env.POSTS.get(key) || 0);
   if (count >= limit) return false;

@@ -230,8 +230,30 @@ test('verification fails closed when email delivery is not configured', async ()
 });
 
 test('CORS is limited to the web app and native app origins', async () => {
-  const allowed = await worker.fetch(new Request('https://example.test/api/posts-get', { headers:{ Origin:'https://rufnek737.github.io' } }), env({ 'idx:posts':[] }), {});
-  assert.equal(allowed.headers.get('Access-Control-Allow-Origin'), 'https://rufnek737.github.io');
+  for (const origin of ['https://rufnek737.github.io', 'https://rufnekcrew.com', 'capacitor://localhost']) {
+    const allowed = await worker.fetch(new Request('https://example.test/api/posts-get', { headers:{ Origin:origin } }), env({ 'idx:posts':[] }), {});
+    assert.equal(allowed.headers.get('Access-Control-Allow-Origin'), origin);
+  }
   const blocked = await worker.fetch(new Request('https://example.test/api/posts-get', { headers:{ Origin:'https://evil.example' } }), env({ 'idx:posts':[] }), {});
   assert.equal(blocked.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+test('production auth rate limiting does not consume user-data KV writes', async () => {
+  let limiterCalls = 0;
+  const runtime = env();
+  runtime.VERIFY_RATE_LIMITER = {
+    async limit() {
+      limiterCalls += 1;
+      return { success: false };
+    },
+  };
+  runtime.POSTS.put = async () => {
+    throw new Error('auth rate limiting must not write to POSTS KV');
+  };
+  const response = await worker.fetch(new Request('https://example.test/api/send-verify', {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body:JSON.stringify({ email:'pilot@jejuair.net' }),
+  }), runtime, {});
+  assert.equal(response.status, 429);
+  assert.equal(limiterCalls, 1);
 });
