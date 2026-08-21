@@ -28,7 +28,7 @@ async function apiFetch(url, options = {}) {
   }
   return response;
 }
-const POLICY_VERSION = "2026-07-28";
+const POLICY_VERSION = "2026-08-21";
 const ROLE_LABELS = {
   CAPTAIN_C: "C등급 기장", CAPTAIN_B: "B등급 기장", CAPTAIN_A: "A등급 기장",
   FO_C: "C등급 부기장",   FO_B: "B등급 부기장",   FO_A: "A등급 부기장",
@@ -223,6 +223,11 @@ const state = {
     gender: "F",          // "M" | "F"
     languages: [],        // ["Japanese","Chinese","Ann_JA","Ann_CA"]
     hasBroadcastRating: false, // 방송등급 보유 여부 (미보유 시 RSV/STBY 불가)
+    isPremium: false,
+    proEntitlement: "none",
+    proTrialAvailable: true,
+    proTrialStartedAt: null,
+    proTrialExpiresAt: null,
   },
 };
 
@@ -387,7 +392,7 @@ function createMockAlerts() {
       body:"1. 내 근무 확인\nCrewConnex에 로그인해 스케줄을 불러오면 달력에서 근무와 세부 일정을 확인할 수 있습니다.\n\n2. 원하는 스왑 찾기\n모든 스왑을 보거나 날짜·근무 종류 등 원하는 조건을 선택해 찾을 수 있습니다. 글을 누르면 쇼업 시간과 비행 일정을 자세히 확인할 수 있습니다.\n\n3. 내 스왑 올리기\n내가 바꾸고 싶은 근무와 원하는 조건을 선택해 등록합니다. 등록한 글은 ‘내가 올린 스왑 관리’에서 수정·취소·삭제할 수 있습니다.\n\n4. 요청과 의향 묻기\n정식 요청은 내 근무를 제안해 교환을 요청하는 기능입니다. 의향 묻기는 크레딧 없이 상대방의 교환 의사부터 확인하는 기능입니다.\n\n5. 요청 확인\n‘요청’ 메뉴에서 받은 요청과 보낸 요청을 확인합니다. 필요한 경우 서로의 달력을 비교해 교환할 일정을 선택할 수 있습니다.\n\n6. 규정 및 개인정보\n앱이 휴식시간과 스왑 규정을 확인하며, 교환할 수 없는 일정은 사유와 함께 알려줍니다. 실명·사번·연락처는 상호 수락 후에만 공개됩니다.\n\n7. 최종 변경\n상호 수락 후 실제 스케줄 변경은 회사 시스템을 통해 최종 신청해야 합니다.\n\n8. PRO 알림\n원하는 스왑 조건을 저장하면 앱을 열지 않아도 조건에 맞는 새 글 알림을 받을 수 있습니다.",
       time:"공지" },
     { id:"qna", kind:"announce", title:"❓ 자주 묻는 질문 (Q&A)", date:"2026.07.17",
-      body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n일반 거절은 상대방에게 개인 사정으로 인한 양해 메세지가 전달됩니다. 모기지 휴무 등 자동 규정 판정으로 교환할 수 없는 경우에는 개인 사유가 아니라 충돌 날짜와 규정 사유가 상대방에게 정확히 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청·스왑 등록에 1개씩 차감됩니다(의향묻기는 무료). 매월 첫 실행 시 기본 3개로 재설정되며 남은 크레딧과 광고 보상 크레딧은 다음 달로 이월되지 않습니다. 3개 이상이 더 필요하면 보상형 광고를 한 번 볼 때마다 1개를 받을 수 있습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.\n\nQ8. 무료와 프리미엄(구독)은 뭐가 다른가요?\n스왑을 찾고, 올리고, 요청·수락해서 성사시키는 핵심 기능은 전부 무료입니다. PRO는 \"내가 앱을 열지 않아도 서버가 조건에 맞는 새 글을 찾아주는\" 유료 구독 기능입니다.\n· 무료: 스왑 둘러보기·올리기·요청·성사, 내 거래 알림, 휴식시간 규정 체크\n· PRO 구독: 목적지·유형·박수 조건 저장, 조건 수 무제한, 앱이 꺼져 있어도 새 글 즉시 푸시\n※ 베타 기간에는 조건 저장과 웹/PWA 백그라운드 푸시를 무료로 검증합니다. iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.\n\nQ9. 달력 날짜 위 아이콘(👀 ⚠️ 🔒)은 무슨 뜻인가요?\n👀 (숫자): 다른 사용자가 해당 날짜의 근무를 내놓은 스왑 글 개수입니다.\n⚠️ : 그 날짜까지 연속 근무일수가 회사 규정 한도(운항 5일·객실 7일)에 임박했다는 경고입니다. 그 위에 근무를 더 얹는 스왑은 주의하세요.\n🔒 : 특수공항 자격 갱신 비행 등 회사 규정상 SWAP이 불가한 근무입니다.",
+      body:"Q1. 스왑 올리기 / 요청하기 / 의향묻기, 뭐가 다른가요?\n스왑 올리기는 내 근무를 시장에 내놓는 것, 요청하기는 상대 글을 보고 내 근무를 걸고 정식으로 맞바꾸자고 제안하는 것(1크레딧), 의향묻기는 크레딧 없이 \"관심 있다\"만 먼저 타진하는 것입니다.\n\nQ2. 상대방 실명·사번·연락처는 언제 보이나요?\n양쪽이 서로 \"상호 수락\"한 이후에만 공개됩니다. 그 전까지는 닉네임·베이스·직책 등 공개 정보만 보입니다.\n\nQ3. 요청/의향을 거절하면 상대방은 어떻게 되나요?\n일반 거절은 상대방에게 개인 사정으로 인한 양해 메세지가 전달됩니다. 모기지 휴무 등 자동 규정 판정으로 교환할 수 없는 경우에는 개인 사유가 아니라 충돌 날짜와 규정 사유가 상대방에게 정확히 전달됩니다.\n\nQ4. 요청 버튼이 빨간 경고와 함께 눌리지 않아요, 왜 그런가요?\n스왑하면 비행 전후 휴식시간이 회사 규정(운항 FOM 5.5.3 / 객실 SKD Swap 기준) 최소치보다 부족해지는 경우 자동으로 막습니다. 운항은 추가로 노조 협약상 \"모기지 휴식일수\"도 함께 검사합니다.\n\nQ5. 상호 수락 후 회사 시스템에는 누가 상신하나요?\n스왑 글을 올린 사람이 상신 주체입니다. 양쪽 화면 모두에 상신 절차가 안내되지만, 실제 신청은 글 작성자가 진행합니다.\n\nQ6. 크레딧은 어떻게 쓰이나요?\n정식 요청·스왑 등록에 1개씩 차감됩니다(의향묻기는 무료). 매월 첫 실행 시 기본 3개로 재설정되며 남은 크레딧과 광고 보상 크레딧은 다음 달로 이월되지 않습니다. 3개 이상이 더 필요하면 보상형 광고를 한 번 볼 때마다 1개를 받을 수 있습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.\n\nQ7. 스왑 횟수 제한이 있나요?\n객실승무원은 월/연 스왑 횟수 한도가 있지만, 운항승무원은 별도 제한 없이 \"무제한\"입니다.\n\nQ8. 무료와 PRO는 뭐가 다른가요?\n스왑을 찾고, 올리고, 요청·수락해서 성사시키는 핵심 기능은 전부 무료입니다. PRO는 내가 앱을 열지 않아도 서버가 저장한 조건에 맞는 새 글을 찾아 알려주는 편의 기능입니다.\n· 무료: 스왑 둘러보기·올리기·요청·성사, 내 거래 알림, 휴식시간 규정 체크\n· PRO: 목적지·유형·박수 조건 저장, 앱이 꺼져 있어도 조건에 맞는 새 글 알림\n※ 계정마다 원하는 시점에 시작하는 30일 무료 이용권이 한 번 제공됩니다. 결제정보가 필요 없고 자동 결제되지 않습니다.\n\nQ9. 달력 날짜 위 아이콘(👀 ⚠️)은 무슨 뜻인가요?\n👀 (숫자): 다른 사용자가 해당 날짜의 근무를 내놓은 스왑 글 개수입니다.\n⚠️ : 그 날짜까지 연속 근무일수가 회사 규정 한도(운항 5일·객실 7일)에 임박했다는 경고입니다. 그 위에 근무를 더 얹는 스왑은 주의하세요.",
       time:"공지" },
   ];
   const qna = alerts.find(alert => alert.id === "qna");
@@ -2631,15 +2636,68 @@ function renderMatches() {
 }
 
 /* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
-/* ====== 프리미엄 (구독) ======
- * 베타 기간엔 전원 프리미엄으로 열어 기능을 검증. 정식 출시 시 BETA_ALL_PREMIUM=false +
- * 실제 결제(IAP/Stripe)로 state.user.isPremium를 세팅. */
-const BETA_ALL_PREMIUM = true;
+/* ====== PRO 권한 ======
+ * 핵심 스왑 기능은 무료이며, 저장조건 자동 알림만 PRO 편의 기능으로 제공한다.
+ * 가입 즉시가 아니라 사용자가 원할 때 계정당 한 번 30일 무료 이용권을 시작한다. */
+const BETA_ALL_PREMIUM = false;
 function isPremiumUser() { return BETA_ALL_PREMIUM || !!state.user.isPremium; }
 
+function applyPremiumStatus(status, shouldRender = true) {
+  const premium = status || {};
+  state.user.isPremium = !!premium.active;
+  state.user.proEntitlement = premium.entitlement || 'none';
+  state.user.proTrialAvailable = premium.trialAvailable !== false;
+  state.user.proTrialStartedAt = premium.trialStartedAt || null;
+  state.user.proTrialExpiresAt = premium.trialExpiresAt || null;
+  saveState();
+  if (shouldRender) renderSavedSearches();
+}
+
+function formatProDate(value) {
+  const date = new Date(value || '');
+  if (!Number.isFinite(date.getTime())) return '';
+  return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+async function refreshPremiumStatus() {
+  if (!state.sessionToken || !state.user.email) return { ok: false, skipped: true };
+  try {
+    const response = await apiFetch(`${API_BASE}/api/premium-status`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'PRO 상태 확인 실패');
+    applyPremiumStatus(data.premium);
+    return { ok: true, premium: data.premium };
+  } catch (error) {
+    console.warn('premium status refresh failed:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+async function activateProTrialPass() {
+  if (!state.user.proTrialAvailable) {
+    showToast('PRO 30일 무료 이용권은 계정당 한 번만 사용할 수 있습니다.');
+    return;
+  }
+  if (!confirm('PRO 30일 무료 이용권을 지금 시작할까요?\n시작하는 순간부터 30일 동안 사용할 수 있으며 일시정지하거나 다시 시작할 수 없습니다.')) return;
+  const button = document.getElementById('activateProTrialBtn');
+  if (button) button.disabled = true;
+  try {
+    const response = await apiFetch(`${API_BASE}/api/premium-trial-activate`, { method: 'POST' });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || '무료 이용권 활성화 실패');
+    applyPremiumStatus(data.premium);
+    await syncPremiumAlertSettings();
+    showToast(`PRO 무료 이용권 시작 · ${formatProDate(data.premium?.trialExpiresAt)}까지`);
+  } catch (error) {
+    showToast(error.message || '무료 이용권을 시작하지 못했습니다.');
+    await refreshPremiumStatus();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 /* ====== 저장검색(스왑 알림) ======
- * PRO 구독자가 원하는 조건을 서버에 저장하면 새 글 등록 시 서버가 대조해 푸시한다.
- * 베타에서는 전원을 PRO로 취급하고 웹/PWA 백그라운드 푸시를 먼저 검증한다. */
+ * PRO 이용자가 원하는 조건을 서버에 저장하면 새 글 등록 시 서버가 대조해 푸시한다. */
 // 글의 박수(nights) 추정: 0=퀵턴(당일), 1=1박, 2+=장박, null=박수 개념 없음(OFF/RSV 등)
 // 홈(퇴근 가능) 공항 — 여기서 밤을 보내는 건 '박'으로 치지 않음
 function homeAirports() {
@@ -2751,7 +2809,7 @@ async function syncPremiumAlertSettings(subscription = null) {
 }
 
 async function enablePremiumBackgroundAlerts() {
-  if (!isPremiumUser()) { showToast('PRO 구독 전용 기능입니다.'); return; }
+  if (!isPremiumUser()) { showToast('PRO 전용 기능입니다. 무료 이용권을 먼저 시작해주세요.'); return; }
   if (isNativeCrewSwapApp()) {
     showToast('iPhone 네이티브 푸시는 Apple 개발자 등록 후 연결됩니다.');
     return;
@@ -3356,10 +3414,18 @@ function renderSavedSearches() {
   if (!listEl) return;
   const searches = state.savedSearches || [];
   const premium = isPremiumUser();
+  const trialExpiry = formatProDate(state.user.proTrialExpiresAt);
+  const accessBanner = state.user.proEntitlement === 'trial'
+    ? `<div class="premium-access-state is-active"><strong>🎟️ PRO 30일 무료 이용권 사용 중</strong><span>${trialExpiry}까지 사용할 수 있습니다. 자동 결제되지 않습니다.</span></div>`
+    : state.user.proEntitlement === 'lifetime'
+      ? `<div class="premium-access-state is-active"><strong>✓ PRO 영구 이용권</strong><span>만료 없이 자동 알림 기능을 사용할 수 있습니다.</span></div>`
+      : '';
 
   listEl.innerHTML = !premium
-    ? `<div class="premium-lock">🔒 <strong>PRO 구독 전용</strong><br><small>무료 사용자는 스왑을 직접 둘러볼 수 있고, 저장조건 백그라운드 알림은 PRO 구독자에게만 제공됩니다.</small></div>`
-    : searches.length
+    ? state.user.proTrialAvailable
+      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.</small><button type="button" id="activateProTrialBtn" class="primary-button">원하는 날짜부터 30일 시작하기</button></div>`
+      : `<div class="premium-lock"><strong>PRO 무료 이용권 사용 완료</strong><small>저장한 조건은 그대로 보관되어 있습니다. PRO 영구 이용권을 구매하면 자동 알림을 다시 사용할 수 있습니다.</small></div>`
+    : accessBanner + (searches.length
     ? searches.map(s => `
         <div class="saved-item">
           <button class="saved-del" data-id="${s.id}" title="삭제">×</button>
@@ -3367,7 +3433,7 @@ function renderSavedSearches() {
           <span class="saved-meta">알림 ${(s.notified || []).length}건 받음</span>
         </div>
       `).join("")
-    : `<span class="hint">저장한 알림 조건이 없습니다. 원하는 조건을 저장하면 PRO 알림 서버가 새 스왑 글을 확인합니다.</span>`;
+    : `<span class="hint">저장한 알림 조건이 없습니다. 원하는 조건을 저장하면 PRO 알림 서버가 새 스왑 글을 확인합니다.</span>`);
 
   const addEl = document.getElementById("savedAddForm");
   if (addEl) {
@@ -3417,6 +3483,8 @@ function renderSavedSearches() {
       };
     }
   }
+
+  document.getElementById('activateProTrialBtn')?.addEventListener('click', activateProTrialPass);
 
   listEl.querySelectorAll(".saved-del").forEach(b => b.onclick = async () => {
     state.savedSearches = state.savedSearches.filter(s => s.id !== b.dataset.id);
@@ -4574,7 +4642,7 @@ function bindEvents() {
       }
       state.sessionToken = data.sessionToken || null;
       state.sessionExpiresAt = data.sessionExpiresAt || null;
-      applyLoggedInProfile(_verifyEmail, data.profile || profile);
+      applyLoggedInProfile(_verifyEmail, data.profile || profile, data.premium);
       state.credits = CREDIT_CAP;
       state.creditMonth = CREDIT_POLICY.monthKey();
       state.adCreditsThisMonth = 0;
@@ -4611,7 +4679,7 @@ function bindEvents() {
       $("#loginPassword").value = "";
       state.sessionToken = data.sessionToken || null;
       state.sessionExpiresAt = data.sessionExpiresAt || null;
-      applyLoggedInProfile(data.email || email, data.profile);
+      applyLoggedInProfile(data.email || email, data.profile, data.premium);
       closeLoginModal();
       showToast(`${data.username || "님"} 로그인 완료`);
     } catch (err) {
@@ -5325,6 +5393,11 @@ function loadStateFromStorage() {
     }
     const continuityFixes = window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules) || 0;
     if (d.user) Object.assign(state.user, d.user);
+    // 과거 전원 PRO 베타값은 신뢰하지 않고, 서버가 발급한 이용권 캐시만 임시 인정한다.
+    const cachedTrialExpiry = Date.parse(state.user.proTrialExpiresAt || '');
+    state.user.isPremium = state.user.proEntitlement === 'lifetime'
+      || (state.user.proEntitlement === 'trial' && Number.isFinite(cachedTrialExpiry) && cachedTrialExpiry > Date.now());
+    state.user.proTrialAvailable = state.user.proTrialAvailable !== false;
     if (typeof d.credits === "number") state.credits = d.credits;
     if (typeof d.creditMonth === "string") state.creditMonth = d.creditMonth;
     if (typeof d.adCreditsThisMonth === "number") state.adCreditsThisMonth = d.adCreditsThisMonth;
@@ -5472,7 +5545,7 @@ function openResetModal() { closeLoginModal(); toggleModal("resetPanel", "resetO
 function closeResetModal() { toggleModal("resetPanel", "resetOverlay", false); }
 
 // 서버 프로필을 state.user에 반영하고 로그인 상태로 전환 (가입/로그인 공통)
-function applyLoggedInProfile(email, profile) {
+function applyLoggedInProfile(email, profile, premiumStatus = null) {
   const p = profile || {};
   const previousEmail = state.user.email || null;
   Object.assign(state.user, {
@@ -5495,6 +5568,7 @@ function applyLoggedInProfile(email, profile) {
     employeeId: p.employeeId ?? state.user.employeeId,
     phone: p.phone ?? state.user.phone,
   });
+  if (premiumStatus) applyPremiumStatus(premiumStatus, false);
   // 실제로 다른 계정으로 전환할 때만 기기 로컬 스케줄을 비웁니다.
   if (previousEmail && previousEmail !== email) state.schedules = [];
   resetScheduleSelection(false);
@@ -5673,7 +5747,7 @@ initPullToRefresh();
 applyLang();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
-syncPremiumAlertSettings(); // PRO 저장조건을 서버와 동기화 (푸시 권한 요청은 사용자 버튼에서만)
+refreshPremiumStatus().then(() => syncPremiumAlertSettings()); // 서버 권한 확인 후 저장조건 동기화
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 regenCredits();          // 월 변경·구버전 크레딧 정책 마이그레이션
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크

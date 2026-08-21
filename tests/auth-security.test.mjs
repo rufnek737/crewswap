@@ -91,18 +91,46 @@ test('signup returns a verifiable session and verification requests are rate lim
       body:JSON.stringify({
         email:'new@jejuair.net', code:deliveredCode, token:verification.token,
         username:'New', password:'secure-password', profile:{ nickname:'New' },
-        policyConsent:{ privacyVersion:'2026-07-28', termsVersion:'2026-07-28' },
+        policyConsent:{ privacyVersion:'2026-08-21', termsVersion:'2026-08-21' },
       }),
     }), runtime, {});
     assert.equal(signup.status, 200);
     const account = await signup.json();
     assert.equal((await verifySessionToken(runtime, account.sessionToken)).email, 'new@jejuair.net');
+    assert.equal(account.premium.active, false);
+    assert.equal(account.premium.trialAvailable, true);
 
     for (let i = 0; i < 4; i++) assert.equal((await verifyRequest()).status, 200);
     assert.equal((await verifyRequest()).status, 429);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('the PRO pass starts only on request and cannot be claimed twice', async () => {
+  const runtime = env({
+    'user:pilot@jejuair.net': { email:'pilot@jejuair.net', profile:{ nickname:'Pilot' } },
+  });
+
+  const before = await authed('/api/premium-status', 'pilot@jejuair.net', undefined, runtime);
+  const beforeData = await before.json();
+  assert.equal(beforeData.premium.active, false);
+  assert.equal(beforeData.premium.trialAvailable, true);
+
+  const activation = await authed('/api/premium-trial-activate', 'pilot@jejuair.net', {}, runtime);
+  const activationData = await activation.json();
+  assert.equal(activation.status, 200);
+  assert.equal(activationData.premium.active, true);
+  assert.equal(activationData.premium.entitlement, 'trial');
+  assert.equal(activationData.premium.trialAvailable, false);
+
+  const stored = await runtime.POSTS.get('user:pilot@jejuair.net', { type:'json' });
+  assert.ok(stored.proTrialStartedAt);
+  assert.ok(stored.proTrialExpiresAt);
+
+  const duplicate = await authed('/api/premium-trial-activate', 'pilot@jejuair.net', {}, runtime);
+  assert.equal(duplicate.status, 409);
+  assert.equal((await duplicate.json()).code, 'PRO_TRIAL_ALREADY_USED');
 });
 
 test('verification fails closed when email delivery is not configured', async () => {

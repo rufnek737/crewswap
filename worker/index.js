@@ -5,6 +5,7 @@ import {
   subscriberCanUsePost,
 } from './premium-alerts.mjs';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
+import { activateProTrial, getProStatus } from './pro-entitlement.mjs';
 import '../mogiji-policy.js';
 import '../cabin-policy.js';
 
@@ -22,7 +23,7 @@ const PUBLIC_PATHS = new Set([
   '/api/user-reset-password', '/api/posts-get', '/api/premium-alert-config',
 ]);
 
-const POLICY_VERSION = '2026-07-28';
+const POLICY_VERSION = '2026-08-21';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -195,7 +196,7 @@ async function handleUserSignup(request, env) {
   };
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   const sessionToken = await issueSessionToken(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserLogin(request, env) {
@@ -211,7 +212,7 @@ async function handleUserLogin(request, env) {
   const ok = await verifyPassword(password, rec.salt, rec.hash);
   if (!ok) return json({ error: '비밀번호가 올바르지 않습니다.' }, 401);
   const sessionToken = await issueSessionToken(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserUpdate(request, env, authEmail) {
@@ -398,8 +399,8 @@ async function updateRequestsIndexEntry(env, updated) {
 }
 
 /* ── PRO 저장조건·백그라운드 Web Push ────────────────────────────
-   베타에서는 BETA_ALL_PREMIUM=true로 모든 테스터가 PRO 흐름을 검증한다.
-   정식 출시에서는 false로 바꾸고 결제 서버가 user:<email>.premiumUntil을 갱신한다. ── */
+   PRO는 1회성 영구 이용권이며, 가입자는 원하는 시점에 계정당 한 번
+   30일 무료 이용권을 활성화할 수 있다. ── */
 
 const PREMIUM_ALERT_INDEX_KEY = 'idx:premium-alert-subscribers';
 
@@ -410,8 +411,28 @@ function webPushConfigured(env) {
 async function isPremiumAccount(env, email) {
   if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true') return true;
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
-  const premiumUntil = Date.parse(user?.premiumUntil || '');
-  return Number.isFinite(premiumUntil) && premiumUntil > Date.now();
+  return getProStatus(user).active;
+}
+
+async function handlePremiumStatus(env, authEmail) {
+  const user = await env.POSTS.get(`user:${authEmail}`, { type: 'json' });
+  if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
+  return json({ ok: true, premium: getProStatus(user) });
+}
+
+async function handlePremiumTrialActivate(env, authEmail) {
+  const key = `user:${authEmail}`;
+  const user = await env.POSTS.get(key, { type: 'json' });
+  if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
+  const activation = activateProTrial(user);
+  if (!activation.ok) {
+    const error = activation.code === 'PRO_ALREADY_LIFETIME'
+      ? '이미 PRO 영구 이용권을 사용 중입니다'
+      : 'PRO 30일 무료 이용권은 계정당 한 번만 사용할 수 있습니다';
+    return json({ error, code: activation.code, premium: activation.status }, 409);
+  }
+  await env.POSTS.put(key, JSON.stringify(activation.user));
+  return json({ ok: true, premium: activation.status });
 }
 
 async function getPremiumAlertIndex(env) {
@@ -446,7 +467,7 @@ async function handlePremiumAlertSync(request, env, authEmail) {
   if (!email.endsWith('@jejuair.net')) return json({ error: '제주항공 계정이 필요합니다' }, 400);
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
-  if (!(await isPremiumAccount(env, email))) return json({ error: 'PRO 구독 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  if (!(await isPremiumAccount(env, email))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
 
   const searches = sanitizeSavedSearches(body?.searches);
   const subscription = sanitizePushSubscription(body?.subscription);
@@ -1519,6 +1540,8 @@ export default {
       else if (path === '/api/requests-submit-done') response = await handleRequestsSubmitDone(request, env, auth.email);
       else if (path === '/api/requests-delete') response = await handleRequestsDelete(request, env, auth.email);
       else if (path === '/api/premium-alert-config') response = await handlePremiumAlertConfig(env);
+      else if (path === '/api/premium-status') response = await handlePremiumStatus(env, auth.email);
+      else if (path === '/api/premium-trial-activate') response = await handlePremiumTrialActivate(env, auth.email);
       else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email);
       else if (path === '/api/crewconnex') response = await handleCrewConnex(request, env);
       else response = new Response('Not Found', { status: 404 });
