@@ -2674,6 +2674,10 @@ async function refreshPremiumStatus() {
 }
 
 async function activateProTrialPass() {
+  if (isNativeCrewSwapApp()) {
+    showToast('무료 이용권은 보존됩니다. iPhone 백그라운드 알림 연결 후 시작할 수 있습니다.');
+    return;
+  }
   if (!state.user.proTrialAvailable) {
     showToast('PRO 30일 무료 이용권은 계정당 한 번만 사용할 수 있습니다.');
     return;
@@ -3414,6 +3418,7 @@ function renderSavedSearches() {
   if (!listEl) return;
   const searches = state.savedSearches || [];
   const premium = isPremiumUser();
+  const nativeApp = isNativeCrewSwapApp();
   const trialExpiry = formatProDate(state.user.proTrialExpiresAt);
   const accessBanner = state.user.proEntitlement === 'trial'
     ? `<div class="premium-access-state is-active"><strong>🎟️ PRO 30일 무료 이용권 사용 중</strong><span>${trialExpiry}까지 사용할 수 있습니다. 자동 결제되지 않습니다.</span></div>`
@@ -3423,7 +3428,7 @@ function renderSavedSearches() {
 
   listEl.innerHTML = !premium
     ? state.user.proTrialAvailable
-      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.</small><button type="button" id="activateProTrialBtn" class="primary-button">원하는 날짜부터 30일 시작하기</button></div>`
+      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>${nativeApp ? '이용권은 그대로 보존됩니다. iPhone 백그라운드 알림 연결이 완료된 뒤 원하는 시점에 시작할 수 있습니다.' : '가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.'}</small><button type="button" id="activateProTrialBtn" class="primary-button" ${nativeApp ? 'disabled' : ''}>${nativeApp ? '네이티브 알림 준비 중' : '원하는 날짜부터 30일 시작하기'}</button></div>`
       : `<div class="premium-lock"><strong>PRO 무료 이용권 사용 완료</strong><small>저장한 조건은 그대로 보관되어 있습니다. PRO 영구 이용권을 구매하면 자동 알림을 다시 사용할 수 있습니다.</small></div>`
     : accessBanner + (searches.length
     ? searches.map(s => `
@@ -3440,7 +3445,6 @@ function renderSavedSearches() {
     if (!premium) {
       addEl.innerHTML = '';
     } else {
-      const nativeApp = isNativeCrewSwapApp();
       const pushEnabled = localStorage.getItem('crewswap_premium_push_enabled') === '1';
       addEl.innerHTML = `
         <div class="premium-push-state ${pushEnabled ? 'is-on' : ''}">
