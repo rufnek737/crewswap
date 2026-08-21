@@ -97,6 +97,19 @@ test("the usage guide describes the current guided swap flow", () => {
   assert.match(app, /실명·사번·연락처는 상호 수락 후에만 공개/);
 });
 
+test("the final Q&A matches the current privacy, credit, and PRO policies", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(app, /같은 날짜끼리 바로 교환할 수 있는 1:1 스왑은 제안한 근무만 보입니다/);
+  assert.match(app, /상호 수락한 뒤에만 공개됩니다/);
+  assert.match(app, /매월 첫 실행 시 기본 3크레딧으로 재설정/);
+  assert.match(app, /매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급/);
+  assert.match(app, /30일 동안 PRO 알림과 무제한 크레딧/);
+  assert.match(app, /기간 종료 후 자동 결제되지 않으며/);
+  assert.match(app, /월 2회·연 12회 한도/);
+  assert.match(app, /가져온 전체 근무표와 무료 크레딧은 현재 기기에 저장/);
+});
+
 test("swap restrictions are checked by rules without a calendar lock icon", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
