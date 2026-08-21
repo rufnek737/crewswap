@@ -15,7 +15,15 @@ function createKv(seed = {}) {
   };
 }
 
-function env(seed = {}) { return { AUTH_SECRET, VERIFY_SECRET, POSTS: createKv(seed) }; }
+function env(seed = {}) {
+  return {
+    AUTH_SECRET,
+    VERIFY_SECRET,
+    RESEND_API_KEY: 're_test',
+    RESEND_FROM: 'CrewSwap <verify@notify.rufnekcrew.com>',
+    POSTS: createKv(seed),
+  };
+}
 async function authed(path, email, body, runtime) {
   const token = await issueSessionToken(runtime, email);
   return worker.fetch(new Request(`https://example.test${path}`, {
@@ -60,28 +68,55 @@ test('authenticated identity overrides forged body and query emails', async () =
 
 test('signup returns a verifiable session and verification requests are rate limited', async () => {
   const runtime = env();
+  const originalFetch = globalThis.fetch;
+  let deliveredCode = '';
+  globalThis.fetch = async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    deliveredCode = payload.html.match(/>(\d{6})<\/div>/)?.[1] || '';
+    return new Response(JSON.stringify({ id: 'email-test' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
   const verifyRequest = () => worker.fetch(new Request('https://example.test/api/send-verify', {
     method:'POST', headers:{ 'Content-Type':'application/json', 'CF-Connecting-IP':'203.0.113.1' },
     body:JSON.stringify({ email:'new@jejuair.net' }),
   }), runtime, {});
-  const first = await verifyRequest();
-  const verification = await first.json();
-  assert.equal(first.status, 200);
+  try {
+    const first = await verifyRequest();
+    const verification = await first.json();
+    assert.equal(first.status, 200);
+    assert.equal('code' in verification, false);
+    assert.match(deliveredCode, /^\d{6}$/);
 
-  const signup = await worker.fetch(new Request('https://example.test/api/user-signup', {
+    const signup = await worker.fetch(new Request('https://example.test/api/user-signup', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        email:'new@jejuair.net', code:deliveredCode, token:verification.token,
+        username:'New', password:'secure-password', profile:{ nickname:'New' },
+        policyConsent:{ privacyVersion:'2026-07-28', termsVersion:'2026-07-28' },
+      }),
+    }), runtime, {});
+    assert.equal(signup.status, 200);
+    const account = await signup.json();
+    assert.equal((await verifySessionToken(runtime, account.sessionToken)).email, 'new@jejuair.net');
+
+    for (let i = 0; i < 4; i++) assert.equal((await verifyRequest()).status, 200);
+    assert.equal((await verifyRequest()).status, 429);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('verification fails closed when email delivery is not configured', async () => {
+  const runtime = env();
+  delete runtime.RESEND_API_KEY;
+  delete runtime.RESEND_FROM;
+  const response = await worker.fetch(new Request('https://example.test/api/send-verify', {
     method:'POST', headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({
-      email:'new@jejuair.net', code:verification.code, token:verification.token,
-      username:'New', password:'secure-password', profile:{ nickname:'New' },
-      policyConsent:{ privacyVersion:'2026-07-28', termsVersion:'2026-07-28' },
-    }),
+    body:JSON.stringify({ email:'pilot@jejuair.net' }),
   }), runtime, {});
-  assert.equal(signup.status, 200);
-  const account = await signup.json();
-  assert.equal((await verifySessionToken(runtime, account.sessionToken)).email, 'new@jejuair.net');
-
-  for (let i = 0; i < 4; i++) assert.equal((await verifyRequest()).status, 200);
-  assert.equal((await verifyRequest()).status, 429);
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.equal('code' in body, false);
+  assert.equal('token' in body, false);
 });
 
 test('CORS is limited to the web app and native app origins', async () => {

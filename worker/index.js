@@ -310,7 +310,8 @@ async function handleSendVerify(request, env) {
   const token = toBase64url(JSON.stringify({ t: ts, h: hmac }));
 
   if (!env.RESEND_API_KEY || !env.RESEND_FROM) {
-    return json({ token, code, expiresAt: Date.now() + EXPIRY, testMode: true });
+    console.error('Email delivery is not configured: RESEND_API_KEY or RESEND_FROM is missing');
+    return json({ error: '이메일 발송 설정 오류입니다. 잠시 후 다시 시도해주세요.' }, 503);
   }
 
   try {

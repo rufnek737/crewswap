@@ -27,9 +27,9 @@ test("shows a release once and shows again when the release id changes", () => {
 test("keeps the current release notes in the announcement list", () => {
   const item = releaseNotice.announcement();
   assert.equal(item.kind, "announce");
-  assert.match(item.title, /v1\.1\.3/);
-  assert.match(item.body, /로그인 보안 강화/);
-  assert.equal(item.releaseVersion, "1.1.3");
+  assert.match(item.title, /v1\.1\.4/);
+  assert.match(item.body, /회사 이메일 인증 적용/);
+  assert.equal(item.releaseVersion, "1.1.4");
 });
 
 test("replaces old update notices while preserving all other alerts", () => {

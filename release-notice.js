@@ -6,15 +6,15 @@
   const SEEN_RELEASE_KEY = "crewswap_seen_release";
 
   const current = Object.freeze({
-    id: "1.1.3-20260821",
-    version: "1.1.3",
+    id: "1.1.4-20260821",
+    version: "1.1.4",
     date: "2026.08.21",
-    title: "CrewSwap v1.1.3 업데이트",
-    summary: "로그인 보안과 계정 접근 안정성을 강화했습니다.",
+    title: "CrewSwap v1.1.4 업데이트",
+    summary: "실제 회사 이메일 인증을 적용했습니다.",
     changes: Object.freeze([
-      "로그인 보안 강화",
-      "계정·스왑 접근 오류 수정",
-      "웹 업데이트 반영 개선",
+      "회사 이메일 인증 적용",
+      "인증 코드 노출 제거",
+      "가입·비밀번호 재설정 개선",
     ]),
   });
 

@@ -4461,13 +4461,7 @@ function bindEvents() {
       $("#verifyCodeRow").hidden = false;
       $("#verifyCodeInput").value = "";
       $("#verifyCodeInput").focus();
-      if (data.testMode && data.code) {
-        // 테스트 모드: 코드를 입력란에 자동 입력 (이메일 미발송)
-        $("#verifyCodeInput").value = data.code;
-        setVerifyStatus("이메일 발송 미설정 — 인증 코드가 자동 입력됐습니다. 아래 '인증 확인'을 눌러주세요.", "hint");
-      } else {
-        setVerifyStatus(`${email} 으로 코드를 발송했습니다. 10분 이내 입력해주세요.`, "hint");
-      }
+      setVerifyStatus(`${email} 으로 코드를 발송했습니다. 10분 이내 입력해주세요.`, "hint");
       startCooldown(btn, 60);
     } catch (e) {
       setVerifyStatus("네트워크 오류. 잠시 후 다시 시도해주세요.", "err");
@@ -4651,8 +4645,9 @@ function bindEvents() {
       if (!res.ok) { setResetStatus(data.error || "발송 실패", "err"); btn.disabled = false; btn.textContent = "코드 발송"; return; }
       _resetToken = data.token; _resetVerified = null;
       $("#resetCodeRow").hidden = false;
-      if (data.testMode && data.code) { $("#resetCodeInput").value = data.code; setResetStatus("테스트 모드 — 코드 자동 입력됨. '인증 확인'을 눌러주세요.", "hint"); }
-      else setResetStatus(`${email} 으로 코드를 발송했습니다.`, "hint");
+      $("#resetCodeInput").value = "";
+      $("#resetCodeInput").focus();
+      setResetStatus(`${email} 으로 코드를 발송했습니다.`, "hint");
       btn.textContent = "재발송";
       setTimeout(() => { btn.disabled = false; }, 3000);
     } catch (e) { setResetStatus("네트워크 오류", "err"); btn.disabled = false; btn.textContent = "코드 발송"; }
