@@ -5890,10 +5890,19 @@ function openLoginModal(prefillEmail) {
   closeSignupModal();
   toggleModal("resetPanel", "resetOverlay", false);
   if (prefillEmail) { const el = document.getElementById("loginEmail"); if (el) el.value = prefillEmail; }
+  // 이전에 실패했던 로그인 시도의 빨간 오류 메시지가 남아있다가, 비밀번호
+  // 재설정 완료 후 이 창이 다시 열릴 때 "서버 오류"처럼 보이는 문제 방지.
+  const st = document.getElementById("loginStatus");
+  if (st) { st.textContent = ""; st.style.color = ""; }
   toggleModal("loginPanel", "loginOverlay", true);
 }
 function closeLoginModal() { toggleModal("loginPanel", "loginOverlay", false); }
-function openResetModal() { closeLoginModal(); toggleModal("resetPanel", "resetOverlay", true); }
+function openResetModal() {
+  closeLoginModal();
+  const st = document.getElementById("resetStatus");
+  if (st) { st.textContent = ""; st.style.color = ""; }
+  toggleModal("resetPanel", "resetOverlay", true);
+}
 function closeResetModal() { toggleModal("resetPanel", "resetOverlay", false); }
 
 // 서버 프로필을 state.user에 반영하고 로그인 상태로 전환 (가입/로그인 공통)
@@ -5922,8 +5931,10 @@ function applyLoggedInProfile(email, profile, premiumStatus = null, wallet = nul
   });
   if (premiumStatus) applyPremiumStatus(premiumStatus, false);
   if (wallet) applyCreditWallet(wallet, false);
-  // 실제로 다른 계정으로 전환할 때만 기기 로컬 스케줄을 비웁니다.
-  if (previousEmail && previousEmail !== email) state.schedules = [];
+  // 이 계정으로 이 기기에서 이미 CrewConnex를 불러온 적이 있으면(=같은 이메일로
+  // 계속 로그인 상태) 그 스케줄을 유지한다. 그 외(새 기기 첫 로그인, 다른 계정으로
+  // 전환)에는 초기 로딩용 데모 스케줄이나 이전 계정 데이터가 남아있지 않도록 비운다.
+  if (previousEmail !== email) state.schedules = [];
   resetScheduleSelection(false);
   syncFormsFromState();
   saveState();
