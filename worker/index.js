@@ -279,6 +279,25 @@ async function handleCreditsStatus(env, authEmail) {
   return json({ wallet: result.wallet });
 }
 
+/* ── 내 근무 스케줄(CrewConnex 불러오기 결과) ────────────────────
+   기존에는 기기 로컬(localStorage)에만 저장돼 다른 기기·브라우저에서
+   같은 계정으로 로그인해도 보이지 않았다. 계정당 최신 상태만 보관한다. */
+async function handleSchedulesGet(env, authEmail) {
+  const rec = await env.POSTS.get(`schedule:${authEmail}`, { type: 'json' });
+  return json({ schedules: rec?.schedules || [], updatedAt: rec?.updatedAt || null });
+}
+
+async function handleSchedulesSync(request, env, authEmail) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const schedules = Array.isArray(body?.schedules) ? body.schedules : null;
+  if (!schedules) return json({ error: 'schedules 배열이 필요합니다' }, 400);
+  if (schedules.length > 500) return json({ error: '스케줄 항목이 너무 많습니다' }, 400);
+  const updatedAt = new Date().toISOString();
+  await env.POSTS.put(`schedule:${authEmail}`, JSON.stringify({ schedules, updatedAt }));
+  return json({ ok: true, updatedAt });
+}
+
 async function handleUserResetPassword(request, env) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -332,6 +351,7 @@ async function handleUserDelete(request, env, authEmail) {
     await Promise.all([
       env.POSTS.delete(`user:${email}`),
       env.POSTS.delete(`wallet:${email}`),
+      env.POSTS.delete(`schedule:${email}`),
       ...(user?.proPurchase?.originalTransactionId
         ? [
             env.POSTS.delete(`iap:apple:${user.proPurchase.originalTransactionId}`),
@@ -1860,6 +1880,8 @@ export default {
       else if (path === '/api/user-login') response = await handleUserLogin(request, env);
       else if (path === '/api/user-update') response = await handleUserUpdate(request, env, auth.email);
       else if (path === '/api/credits-status') response = await handleCreditsStatus(env, auth.email);
+      else if (path === '/api/schedules-get') response = await handleSchedulesGet(env, auth.email);
+      else if (path === '/api/schedules-sync') response = await handleSchedulesSync(request, env, auth.email);
       else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
       else if (path === '/api/posts-get') response = await handlePostsGet(env);

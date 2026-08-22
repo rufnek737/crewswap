@@ -5200,6 +5200,7 @@ function bindEvents() {
       state.currentMonth = monthsAvail[0];
     }
     saveState();
+    syncSchedulesToServer();
     closeGenericModal("crewDialog", "crewOverlay");
     renderAll();
     if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
@@ -5943,6 +5944,7 @@ function applyLoggedInProfile(email, profile, premiumStatus = null, wallet = nul
   syncPremiumAlertSettings();
   refreshNativeStoreEntitlement();
   queueReleaseNotice();
+  pullSchedulesFromServer();
 }
 
 // 내 정보 변경을 서버 계정에 반영 (실패해도 로컬은 이미 저장됨)
@@ -5959,6 +5961,37 @@ function syncProfileToServer() {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: u.email, profile }),
   }).catch(e => console.warn("프로필 서버 동기화 실패:", e));
+}
+
+// ── 내 근무 스케줄 서버 동기화 ────────────────────────────────────
+// CrewConnex 불러오기 결과는 기기 로컬에도 저장하지만, 서버(D1)에도 올려서
+// 다른 기기·브라우저에서 같은 계정으로 로그인해도 동일하게 보이게 한다.
+function syncSchedulesToServer() {
+  if (!state.user.email || !state.user.serverAuthed) return;
+  apiFetch(`${API_BASE}/api/schedules-sync`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ schedules: state.schedules }),
+  }).catch(e => console.warn("스케줄 서버 동기화 실패:", e));
+}
+
+// 로그인 직후 서버 스케줄을 가져온다. 이 기기에 이미 스케줄이 있으면(같은 계정으로
+// 계속 쓰던 기기) 그대로 두고, 없으면(새 기기 첫 로그인) 서버 것으로 채운다.
+// 반대로 이 기기에만 있고 서버엔 없으면(이 기능 이전부터 쓰던 기기) 서버로 올려둔다.
+async function pullSchedulesFromServer() {
+  if (!state.user.email || !state.user.serverAuthed) return;
+  try {
+    const res = await apiFetch(`${API_BASE}/api/schedules-get`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const serverSchedules = Array.isArray(data.schedules) ? data.schedules : [];
+    if (serverSchedules.length > 0 && state.schedules.length === 0) {
+      state.schedules = serverSchedules;
+      saveState();
+      renderAll();
+    } else if (serverSchedules.length === 0 && state.schedules.length > 0) {
+      syncSchedulesToServer();
+    }
+  } catch (e) { console.warn("스케줄 서버 조회 실패:", e); }
 }
 
 // 로그아웃 — 이 기기 로컬 세션만 종료 (서버 계정·정보는 유지)
@@ -6117,6 +6150,7 @@ refreshPremiumStatus().then(async () => {
   await syncPremiumAlertSettings();
 }); // 서버 권한·App Store 구매 확인 후 저장조건 동기화
 initNativePushNotifications().catch(error => console.warn('native push init failed:', error));
+if (state.user.serverAuthed) pullSchedulesFromServer(); // 이 기기에 스케줄이 없으면 서버(다른 기기에서 불러온 것)에서 채움
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 regenCredits();          // 월 변경·구버전 크레딧 정책 마이그레이션
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크

@@ -64,3 +64,12 @@ CREATE TABLE IF NOT EXISTS purchase_bindings (
   key   TEXT PRIMARY KEY,
   data  TEXT NOT NULL
 );
+
+-- CrewConnex로 불러온 내 근무 스케줄. 기존에는 기기 로컬(localStorage)에만 저장돼
+-- 다른 기기·브라우저에서 같은 계정으로 로그인해도 보이지 않았다. 계정당 최신 상태
+-- 하나만 보관(마지막에 저장한 기기 기준 last-write-wins)한다.
+CREATE TABLE IF NOT EXISTS schedules (
+  email      TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  updated_at TEXT
+);
