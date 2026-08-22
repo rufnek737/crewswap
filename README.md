@@ -132,6 +132,24 @@ netlify dev          # http://localhost:8889
 
 ## Work Log
 
+### 2026-08-22 (오후) — 유료 개발자 등록 반영·TestFlight 심사 준비
+
+#### Apple Developer 프로그램(유료) 전환
+- `rufnek@naver.com`을 Apple Developer 프로그램에 유료 등록. Xcode 계정을 다시 로그인시켜 반영 확인 — Xcode Accounts 화면에 "Personal Team" 대신 "Developer Team"으로 표시됨.
+- 팀 ID(`V6TT3SA8H9`)는 무료→유료 전환 후에도 그대로 유지됨(Apple이 개인 팀을 승격하는 방식). 프로젝트 서명 설정 변경은 불필요했음.
+- 새로 발급된 프로비저닝 프로파일 확인 결과 유효기간 2027-08-21까지(발급일로부터 1년) — 이후 7일마다 재설치할 필요 없음.
+
+#### TestFlight 테스터 등록
+- 내부 테스터 `rufnek@naver.com` 초대 발송 완료.
+- 외부 테스터 3명(`stormbreaker00@hotmail.com`, `rufnek737@gmail.com`, `tae26001@gmail.com`) 그룹 등록 완료.
+
+#### 베타 앱 심사용 전용 계정 생성
+- 외부 테스터 초대에는 Apple 베타 앱 심사가 필요하고, 심사자 로그인용 별도 계정이 필요함. 개인 계정을 제공하지 않기 위해 `appreview@rufnekcrew.com` 전용 계정을 생성.
+- `rufnekcrew.com`은 발송 전용 도메인이라 실제 수신 메일함이 없어, 일반 회원가입 API(이메일 인증 필요)로는 만들 수 없음. Worker와 동일한 PBKDF2-SHA256(10만 회) 해시를 로컬에서 생성해 D1 `users`/`wallets` 테이블에 직접 삽입.
+- 프로필은 운항·기장·GMP 베이스·EDTO/CAT3로 구성해 심사자가 스왑 기능을 정상적으로 체험할 수 있게 하고 크레딧 3개를 지급. 실제 로그인 API 호출과 공개 글 목록(2건) 조회로 정상 동작 확인.
+- App Store Connect 테스트 정보 화면에 로그인 정보(`appreview@rufnekcrew.com`)를 등록. 별도 연락처 정보(성명·전화번호·이메일)는 심사용 계정과 무관하게 개발자 본인 정보로 입력.
+- 다음 조치: 베타 심사 통과 후 `appreview@rufnekcrew.com` 계정을 D1에서 삭제.
+
 ### 2026-08-22 — 사용자·스왑 데이터를 KV에서 D1로 이전
 
 #### 배경
