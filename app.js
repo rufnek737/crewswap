@@ -4467,9 +4467,6 @@ function alertTimeAgo(a) {
   return `${Math.round(mins / 1440)}일 전`;
 }
 
-// '전체' 탭에서 X로 임시 숨긴 알림 (세션 한정 · 저장 안 함 · 카테고리 탭엔 그대로 남음)
-const _hiddenInAll = new WeakSet();
-
 // 앱 아이콘 배지 — 미확인 알림(공지 제외) 수를 iOS/Android 아이콘 숫자로 표시.
 // 네이티브(Capacitor)에서만 동작하며, 앱이 실행/폴링 중일 때 갱신됨.
 // 배지·벨에 표시할 미읽음 알림 수 (공지 제외). 클릭해서 전체 내용을 확인하면 read=true.
@@ -4529,7 +4526,7 @@ function renderAlerts() {
   const filter = state.alertFilter;
   const allIndexed = state.alerts.map((a, i) => ({ a, i }));
   const items = filter === "all"
-    ? allIndexed.filter(x => !_hiddenInAll.has(x.a))
+    ? allIndexed.filter(x => !x.a.hiddenInAll)
     : allIndexed.filter(x => x.a.kind === filter);
   $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => {
     const unread = a.kind !== "announce" && !a.read;
@@ -4546,8 +4543,10 @@ function renderAlerts() {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.alertIdx, 10);
       if (state.alertFilter === "all") {
-        // 전체 탭: 화면에서만 임시 숨김 (매칭/마감/공지 메뉴엔 그대로 남음)
-        _hiddenInAll.add(state.alerts[idx]);
+        // 전체 탭: 매칭/마감/공지 메뉴엔 그대로 남기고 '전체'에서만 숨김.
+        // 재시작해도 다시 보이지 않도록 알림 자체에 표시해 저장한다.
+        if (state.alerts[idx]) state.alerts[idx].hiddenInAll = true;
+        saveState();
       } else {
         // 카테고리 탭(매칭/마감/공지): 영구 삭제
         state.alerts.splice(idx, 1);
