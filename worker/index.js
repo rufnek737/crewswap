@@ -821,13 +821,22 @@ async function notifyPremiumSubscribers(env, post) {
 
 /* ── posts-get ──────────────────────────────────────────────── */
 
-async function handlePostsGet(env) {
+// PRO 구독 혜택: 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있다.
+// 무료 사용자에게는 이 글이 공개 목록에 뜨는 시점에 crewPublic을 아예 보내지
+// 않고, 상호 수락 완료 후(handleRequestsRequesterAccept)에만 별도로 공개한다.
+async function handlePostsGet(request, env) {
   try {
+    const auth = await authenticateRequest(request, env);
+    const viewerIsPro = auth ? await isPremiumAccount(env, auth.email) : false;
     const idx = await getPostsIndex(env);
     const posts = idx.filter(p => p && p.status === 'active').map(p => {
       const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
+      if (pub.offered && !viewerIsPro) {
+        const { crewPublic, ...offeredPublic } = pub.offered;
+        pub.offered = offeredPublic;
+      }
       return pub;
     });
     return json({ posts });
@@ -1047,6 +1056,9 @@ async function handleRequestsAccept(request, env, authEmail) {
     rec.toRealName = realName || '';
     rec.toEmployeeId = employeeId || '';
     rec.toPhone = phone || '';
+    // 편조구성원(동료 이름)은 PRO는 처음부터 보이지만, 무료 사용자는 상호
+    // 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
+    rec.postCrewPublic = post?.offered?.crewPublic || null;
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
@@ -1200,6 +1212,9 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     rec.fromRealName = realName || rec.fromRealName || '';
     rec.fromEmployeeId = employeeId || rec.fromEmployeeId || '';
     rec.fromPhone = phone || rec.fromPhone || '';
+    // 편조구성원(동료 이름)은 PRO는 처음부터 보이지만, 무료 사용자는 상호
+    // 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
+    rec.postCrewPublic = post?.offered?.crewPublic || null;
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
@@ -1884,7 +1899,7 @@ export default {
       else if (path === '/api/schedules-sync') response = await handleSchedulesSync(request, env, auth.email);
       else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
-      else if (path === '/api/posts-get') response = await handlePostsGet(env);
+      else if (path === '/api/posts-get') response = await handlePostsGet(request, env);
       else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
       else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);
       else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);

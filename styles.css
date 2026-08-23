@@ -574,6 +574,11 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .match-flight-times small { color: var(--muted); font-size: 9px; font-weight: 700; white-space: nowrap; }
 .match-flight-times b { color: var(--text); font-size: 12px; }
 .match-flight-no-time { margin-top: 7px; color: var(--muted); font-size: 11px; }
+/* 편조구성원 — PRO는 처음부터 공개, 무료는 상호 수락 후 공개 (구독 혜택) */
+.match-crew-public { padding: 9px 11px; border-radius: 8px; background: #fff3e0; border: 1px solid #f3c98a; display: flex; gap: 8px; align-items: baseline; }
+.match-crew-public small { flex: 0 0 auto; color: #b45309; font-weight: 800; font-size: 11px; }
+.match-crew-public span { color: #7c4a08; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.match-crew-locked { padding: 9px 11px; border-radius: 8px; background: #f3f4f6; border: 1px dashed #cbd2db; color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .match-card .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .match-card .badge { padding: 3px 8px; border-radius: 4px; background: var(--c-intl-bg); color: var(--c-intl); font-size: 11px; font-weight: 700; }
 .match-card .badge.dom { background: var(--c-dom-bg); color: var(--c-dom); }
