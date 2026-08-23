@@ -1754,6 +1754,7 @@ function candidateCountForOffered() {
 /* ====== 8. 렌더링 ====== */
 function renderAll() {
   updateBadges();
+  renderProDiscovery();
   renderMetrics();
   renderCalendar();
   renderSelection();
@@ -2742,6 +2743,7 @@ function applyPremiumStatus(status, shouldRender = true) {
   state.user.proExpiresAt = premium.expiresAt || premium.trialExpiresAt || null;
   saveState();
   if (shouldRender) {
+    renderProDiscovery();
     renderSavedSearches();
     renderCredits();
     renderPostFooter();
@@ -2753,6 +2755,25 @@ function formatProDate(value) {
   const date = new Date(value || '');
   if (!Number.isFinite(date.getTime())) return '';
   return `${date.getFullYear()}.${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+function renderProDiscovery() {
+  const status = document.getElementById("profileProStatus");
+  const button = document.getElementById("openProfilePro");
+  if (!status || !button) return;
+  if (state.user.proEntitlement === "lifetime") {
+    status.textContent = "PRO 영구 이용권 사용 중 · 맞춤 알림, 무제한 크레딧, 편조구성원 미리보기";
+    button.textContent = "PRO 기능 관리";
+    return;
+  }
+  if (isPremiumUser()) {
+    const until = formatProDate(state.user.proExpiresAt || state.user.proTrialExpiresAt);
+    status.textContent = `${until ? `${until}까지 · ` : ""}맞춤 알림, 무제한 크레딧, 편조구성원 미리보기`;
+    button.textContent = "PRO 기능 관리·영구 이용권 보기";
+    return;
+  }
+  status.textContent = "맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기";
+  button.textContent = "PRO 자세히·구매";
 }
 
 async function refreshPremiumStatus() {
@@ -4755,6 +4776,7 @@ function bindEvents() {
   $("#startFindFlow")?.addEventListener("click", startFindGuide);
   $("#openMyPostsManager")?.addEventListener("click", openMyPostsManager);
   $("#openPremiumAlertManager")?.addEventListener("click", openPremiumAlertManager);
+  $("#openProfilePro")?.addEventListener("click", openPremiumAlertManager);
   $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;

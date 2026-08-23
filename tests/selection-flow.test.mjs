@@ -64,6 +64,18 @@ test("the PRO alert screen stays concise and verifies native delivery", () => {
   assert.match(worker, /CrewSwap 알림 테스트/);
 });
 
+test("PRO benefits and purchase entry points are visible without opening Q&A", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기/);
+  assert.match(html, /CrewSwap PRO 혜택/);
+  assert.match(html, /id="openPremiumAlertManager"/);
+  assert.match(html, /id="openProfilePro"/);
+  assert.match(app, /#openProfilePro.*openPremiumAlertManager/);
+  assert.match(app, /PRO 기능 관리·영구 이용권 보기/);
+});
+
 test("the PRO purchase screen uses the defined native iOS detector", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
