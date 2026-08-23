@@ -7,7 +7,7 @@
 
 ## ⚠️ 정식 출시 전 필수 체크리스트 (베타엔 지장 없음 / 상용화 시 누락 금지)
 
-- [ ] **TestFlight 빌드 재업로드 필요** — 2026-08-22부터 Kay phone엔 Xcode로 직접 설치(Debug 빌드)만 하고 있음. TestFlight는 별도 Archive→App Store Connect 업로드가 있어야 반영되는데, 그 이후로 업로드 안 함(알림 X 버그 수정, PRO 편조구성원 혜택, 스케줄 서버 동기화, 로그인 오류 잔상 수정 등 미반영). 외부 테스터에게 실제로 공유하기 전에 최신 상태로 Archive+업로드 필요.
+- [x] **TestFlight 최신 빌드 업로드 완료** — 2026-08-23에 알림 X 버그 수정, PRO 편조구성원 혜택, 스케줄 서버 동기화, 로그인 오류 잔상 수정 등을 포함한 `1.1.8 (11)`을 App Store Connect에 업로드함. 외부 테스터 배포 전 Apple 처리 완료 및 베타 앱 심사 상태를 확인해야 함.
 - [~] **정책·회원 탈퇴** — 개인정보처리방침·이용약관, 가입 필수동의, 비밀번호 재확인 기반 서버 계정 삭제까지 구현·배포 완료. 정식 출시 직전 실제 국외 처리 위치와 유료 구독·환불 조건을 최종 문안에 반영해야 함.
 - [~] **실시간 푸시 알림** — PRO 저장조건의 웹/PWA 백그라운드 Web Push는 구현·배포 완료. 네이티브 iOS/Android는 Apple 개발자 등록과 APNs/FCM 인증키 연결이 남음. 받은 요청·수락 알림도 같은 네이티브 푸시로 확장 필요.
 - [ ] **신뢰도/평판 시스템** — ★4.8, 매칭 성공률·승인률 전부 하드코딩 mock. 실제 계산 로직 없음.
@@ -264,6 +264,14 @@ netlify dev          # http://localhost:8889
 - TestFlight/Sandbox 구매는 실제 영구 권한으로 저장하지 않고 30일짜리 `PRO 테스트 이용권`으로 분리함. Production 요청에서는 Sandbox 권한을 인정하지 않도록 서버와 클라이언트를 함께 보강함.
 - 전체 자동 테스트 100개 통과, Worker 배포, iOS 실기기 빌드·Kay phone 재설치 및 실행을 완료함.
 - 실기기에서 APNs 권한과 StoreKit Sandbox 환경 판정은 정상 확인됨. 인앱구매 상품 조회는 현재 `PRODUCT_NOT_FOUND`로, App Store Connect 상품 메타데이터 전파 및 첫 앱 버전의 인앱구매 연결 상태를 다음 확인 항목으로 남김.
+
+### 2026-08-23 — 최신 Xcode 수정본 TestFlight 반영
+
+- GitHub worklog와 최신 커밋을 대조해 기존 TestFlight `1.1.8 (10)` 이후의 수정사항이 iOS 공개 파일에 동기화된 것을 확인함.
+- iOS 빌드 번호를 `10`에서 `11`로 올리고 Release Archive를 새로 생성함.
+- 자동 테스트 108개가 모두 통과했고, App Store 배포용 IPA의 번들 ID `com.rufnekcrewswap.app`, 버전 `1.1.8`, 빌드 `11`을 확인함.
+- 배포 서명에서 `aps-environment=production`, `beta-reports-active=true`, `get-task-allow=false`를 확인해 TestFlight용 푸시·배포 설정이 정상임을 검증함.
+- App Store Connect 업로드가 성공했으며, Apple 서버의 빌드 처리 완료 후 외부 테스트 그룹에 빌드 11을 연결하고 베타 앱 심사를 진행할 예정임.
 
 ### 2026-08-06 — 단계 UI·일정 가독성·1:1 스왑 공개 범위 수정
 
