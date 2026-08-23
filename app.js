@@ -398,6 +398,30 @@ function createMockAlerts() {
       body:"Q1. 스왑 올리기·요청하기·의향 묻기는 어떻게 다른가요?\n‘내 스왑 올리기’는 내가 바꿀 근무를 게시하는 기능입니다. ‘요청하기’는 상대 글에 내 근무를 제안하는 정식 교환 요청이고, ‘의향 묻기’는 크레딧 없이 상대의 교환 의사부터 확인하는 기능입니다.\n\nQ2. 요청할 때 내 스케줄 전체가 상대에게 보이나요?\n같은 날짜끼리 바로 교환할 수 있는 1:1 스왑은 제안한 근무만 보입니다. 날짜가 다르거나 상대가 받을 근무를 직접 골라야 할 때만 공개 달력이 전달되며, ‘내 스케줄 숨기기’로 원하지 않는 날짜를 제외할 수 있습니다.\n\nQ3. 실명·사번·연락처는 언제 공개되나요?\n양쪽이 상호 수락한 뒤에만 공개됩니다. 그전에는 닉네임·베이스·직책 등 공개 정보만 표시됩니다. 공개된 정보는 회사 스왑 진행 목적으로만 사용해야 합니다.\n\nQ4. 규정 경고로 요청할 수 없는 이유는 무엇인가요?\n앱이 휴식시간, 연속 근무, 모기지 휴무, RSV·STBY 패턴, 자격 및 스왑 횟수 등을 자동 확인합니다. 규정과 충돌하면 해당 날짜와 사유를 표시하고 요청을 막습니다. 이 판정은 보조 기능이므로 원본 일정과 최신 회사 규정을 반드시 다시 확인해야 합니다.\n\nQ5. 요청이나 의향을 거절하면 어떤 내용이 전달되나요?\n일반 거절은 개인 사정으로 진행하기 어렵다는 안내가 전달됩니다. 자동 규정 판정으로 불가능한 경우에는 개인 사유가 아니라 충돌 날짜와 규정 사유가 전달됩니다.\n\nQ6. 상호 수락하면 스왑이 끝난 건가요?\n아닙니다. 상호 수락은 두 이용자의 의사 확인이며 회사 승인이 아닙니다. 글을 올린 사람이 회사 시스템에 근무교환을 신청하고 최종 승인 여부를 확인해야 합니다.\n\nQ7. 무료 크레딧은 어떻게 사용되나요?\n무료 이용자는 스왑 글 등록과 정식 요청에 각각 1크레딧을 사용하며 의향 묻기는 무료입니다. 매월 첫 실행 시 기본 3크레딧으로 재설정되고 남은 크레딧과 광고 보상은 다음 달로 이월되지 않습니다. 보상형 광고가 제공되면 시청 1회당 그달에 사용할 1크레딧을 추가로 받을 수 있습니다.\n\nQ8. 취소하거나 마감되면 크레딧이 환급되나요?\n진행 전 등록을 취소하면 사용한 등록 크레딧이 기본 상한 3개까지 복원됩니다. 등록 글이 매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급됩니다. PRO 무제한으로 등록한 글은 처음부터 크레딧을 쓰지 않으므로 환급도 없습니다.\n\nQ9. 무료와 PRO는 무엇이 다른가요?\n스왑 검색·등록·요청·수락과 규정 확인 등 핵심 기능은 무료입니다. PRO는 원하는 목적지·근무 유형·체류조건을 저장해 앱을 열지 않아도 조건에 맞는 새 글 알림을 받고, 스왑 등록과 정식 요청 크레딧을 무제한으로 이용하며, 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있는 편의 기능입니다.\n\nQ10. PRO 30일 무료 이용권은 언제 시작되나요?\n가입 즉시 시작되지 않습니다. 계정당 한 번, 내가 필요한 시점에 직접 시작하며 활성화 순간부터 30일 동안 PRO 알림과 무제한 크레딧을 동일하게 이용합니다. 결제정보가 필요 없고 기간 종료 후 자동 결제되지 않으며 일시정지하거나 다시 사용할 수 없습니다.\n\nQ11. 앱을 닫아도 PRO 알림이 오나요?\n알림 권한과 백그라운드 알림을 켜고 조건을 서버에 저장하면 앱을 열지 않은 상태에서도 받을 수 있습니다. 기기의 알림 차단, 네트워크 상태나 운영체제 정책에 따라 전달이 늦거나 제한될 수 있습니다.\n\nQ12. 스왑 횟수 제한이 있나요?\n객실승무원은 실제 상호 수락된 스왑을 기준으로 월 2회·연 12회 한도를 확인하며, 한도에 도달하면 경고하고 진행을 막습니다. 운항승무원은 현재 앱에서 별도 횟수 제한을 적용하지 않습니다.\n\nQ13. 달력의 👀·⚠️ 아이콘은 무엇인가요?\n👀 옆 숫자는 다른 사용자가 해당 날짜에 내놓은 스왑 글 수입니다. ⚠️는 연속 근무 등 규정상 주의가 필요한 날짜입니다. 실제 교환 가능 여부는 등록·요청 단계에서 다시 자동 확인합니다.\n\nQ14. 휴대폰을 바꾸거나 앱을 삭제하면 일정과 크레딧이 복원되나요?\n계정·프로필·등록 글·요청·PRO 정보와 크레딧은 서버 계정에 연결되어 다시 로그인하면 복원됩니다. CrewConnex로 불러온 근무표도 서버에 저장되어 다른 기기에서 같은 계정으로 로그인하면 자동으로 동기화됩니다. 탈퇴하면 서버 정보와 현재 기기 정보가 함께 삭제됩니다.\n\nQ15. 편조구성원(동료 이름)은 언제 볼 수 있나요?\nPRO 구독자는 스왑 글을 둘러볼 때부터 바로 확인할 수 있습니다. 무료 사용자는 상호 수락이 끝난 뒤에만 공개됩니다.",
       time:"공지" },
   ];
+  const guide = alerts.find(item => item.id === "guide");
+  if (guide) {
+    guide.body = guide.body.replace(
+      "8. PRO 알림\n원하는 스왑 조건을 저장하면 앱을 열지 않아도 조건에 맞는 새 글 알림을 받을 수 있습니다.",
+      "8. PRO 편의 기능\n원하는 스왑 조건을 저장하면 앱을 열지 않아도 새 글 알림을 받을 수 있습니다. 스왑 등록·정식 요청 크레딧은 무제한이며, 스왑 목록에서 편조구성원 이름을 상호 수락 전에도 미리 확인할 수 있습니다."
+    );
+  }
+  const qna = alerts.find(item => item.id === "qna");
+  if (qna) {
+    qna.date = "2026.08.23";
+    qna.body = qna.body
+      .replace(
+        "Q9. 무료와 PRO는 무엇이 다른가요?\n스왑 검색·등록·요청·수락과 규정 확인 등 핵심 기능은 무료입니다. PRO는 원하는 목적지·근무 유형·체류조건을 저장해 앱을 열지 않아도 조건에 맞는 새 글 알림을 받고, 스왑 등록과 정식 요청 크레딧을 무제한으로 이용하며, 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있는 편의 기능입니다.",
+        "Q9. 무료와 PRO는 무엇이 다른가요?\n스왑 검색·등록·요청·수락과 규정 확인 등 핵심 기능은 무료입니다. PRO 영구 이용권은 한 번만 구매하는 상품으로, 원하는 조건의 새 글을 앱을 닫은 상태에서도 알림받고 스왑 등록·정식 요청 크레딧을 무제한으로 이용할 수 있습니다. 또한 스왑 목록에서 편조구성원(동료 이름)을 상호 수락 전에도 미리 확인할 수 있습니다."
+      )
+      .replace(
+        "Q10. PRO 30일 무료 이용권은 언제 시작되나요?\n가입 즉시 시작되지 않습니다. 계정당 한 번, 내가 필요한 시점에 직접 시작하며 활성화 순간부터 30일 동안 PRO 알림과 무제한 크레딧을 동일하게 이용합니다.",
+        "Q10. PRO 30일 무료 이용권은 언제 시작되나요?\n가입 즉시 시작되지 않습니다. 계정당 한 번, 내가 필요한 시점에 직접 시작하며 활성화 순간부터 30일 동안 자동 알림·무제한 크레딧·편조구성원 미리보기를 모두 이용합니다."
+      )
+      .replace(
+        "Q15. 편조구성원(동료 이름)은 언제 볼 수 있나요?\nPRO 구독자는 스왑 글을 둘러볼 때부터 바로 확인할 수 있습니다. 무료 사용자는 상호 수락이 끝난 뒤에만 공개됩니다.",
+        "Q15. 편조구성원(동료 이름)은 언제 볼 수 있나요?\nPRO 이용자는 스왑 목록을 둘러볼 때부터 바로 확인할 수 있습니다. 무료 사용자는 상호 수락이 끝난 뒤에만 공개됩니다. 편조 정보가 원본 스케줄에 없거나 아직 미정인 근무는 PRO에서도 표시되지 않을 수 있습니다."
+      );
+  }
   const releaseAnnouncement = window.CrewSwapReleaseNotice?.announcement();
   if (releaseAnnouncement) alerts.unshift(releaseAnnouncement);
   return alerts;
@@ -2695,7 +2719,7 @@ function renderMatches() {
 
 /* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
 /* ====== PRO 권한 ======
- * 핵심 스왑 기능은 무료이며, PRO는 저장조건 자동 알림과 무제한 크레딧을 제공한다.
+ * 핵심 스왑 기능은 무료이며, PRO는 저장조건 자동 알림, 무제한 크레딧, 편조구성원 미리보기를 제공한다.
  * 가입 즉시가 아니라 사용자가 원할 때 계정당 한 번 30일 무료 이용권을 시작한다. */
 const BETA_ALL_PREMIUM = false;
 function isPremiumUser() {
@@ -3758,16 +3782,16 @@ function renderSavedSearches() {
   const nativeApp = isNativeCrewSwapApp();
   const trialExpiry = formatProDate(state.user.proTrialExpiresAt);
   const accessBanner = state.user.proEntitlement === 'trial'
-    ? `<div class="premium-access-state is-active"><strong>🎟️ PRO 30일 무료 이용권 사용 중</strong><span>${trialExpiry}까지 자동 알림과 무제한 크레딧을 사용할 수 있습니다. 자동 결제되지 않습니다.</span></div>`
+    ? `<div class="premium-access-state is-active"><strong>🎟️ PRO 30일 무료 이용권 사용 중</strong><span>${trialExpiry}까지 자동 알림·무제한 크레딧·편조구성원 미리보기를 사용할 수 있습니다. 자동 결제되지 않습니다.</span></div>`
     : state.user.proEntitlement === 'lifetime'
-      ? `<div class="premium-access-state is-active"><strong>✓ PRO 영구 이용권</strong><span>만료 없이 자동 알림과 무제한 크레딧을 사용할 수 있습니다.</span></div>`
+      ? `<div class="premium-access-state is-active"><strong>✓ PRO 영구 이용권</strong><span>만료 없이 자동 알림·무제한 크레딧·편조구성원 미리보기를 사용할 수 있습니다.</span></div>`
       : state.user.proEntitlement === 'sandbox'
         ? `<div class="premium-access-state is-active"><strong>🧪 TestFlight PRO 테스트 이용권</strong><span>${formatProDate(state.user.proExpiresAt)}까지 실제 과금 없이 PRO 기능을 테스트할 수 있습니다.</span></div>`
       : '';
 
   listEl.innerHTML = !premium
     ? state.user.proTrialAvailable
-      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림과 무제한 크레딧을 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.</small><button type="button" id="activateProTrialBtn" class="primary-button">원하는 날짜부터 30일 시작하기</button></div>${proPurchaseControlsHtml()}`
+      ? `<div class="premium-lock"><strong>🎟️ PRO 30일 무료 이용권</strong><small>가입 즉시 시작되지 않습니다. 필요한 시점에 직접 시작하고 30일 동안 자동 알림·무제한 크레딧·편조구성원 미리보기를 사용해보세요. 결제정보가 필요 없고 자동 결제되지 않습니다.</small><button type="button" id="activateProTrialBtn" class="primary-button">원하는 날짜부터 30일 시작하기</button></div>${proPurchaseControlsHtml()}`
       : `<div class="premium-lock"><strong>PRO 무료 이용권 사용 완료</strong><small>저장한 조건은 그대로 보관되어 있습니다. PRO 영구 이용권을 구매하면 자동 알림을 다시 사용할 수 있습니다.</small></div>${proPurchaseControlsHtml()}`
     : accessBanner + (state.user.proEntitlement === 'trial' ? proPurchaseControlsHtml() : '') + (searches.length
     ? searches.map(s => `

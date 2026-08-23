@@ -271,7 +271,8 @@ netlify dev          # http://localhost:8889
 - iOS 빌드 번호를 `10`에서 `11`로 올리고 Release Archive를 새로 생성함.
 - 자동 테스트 108개가 모두 통과했고, App Store 배포용 IPA의 번들 ID `com.rufnekcrewswap.app`, 버전 `1.1.8`, 빌드 `11`을 확인함.
 - 배포 서명에서 `aps-environment=production`, `beta-reports-active=true`, `get-task-allow=false`를 확인해 TestFlight용 푸시·배포 설정이 정상임을 검증함.
-- App Store Connect 업로드가 성공했으며, Apple 서버의 빌드 처리 완료 후 외부 테스트 그룹에 빌드 11을 연결하고 베타 앱 심사를 진행할 예정임.
+- App Store Connect 빌드 `11` 업로드에 이어 PRO 설명·Q&A 갱신본을 `1.1.8 (12)`로 추가 업로드함. Apple 서버의 처리 완료 후 외부 테스트 그룹에는 최신 빌드 12를 연결하고 베타 앱 심사를 진행할 예정임.
+- PRO 안내와 Q&A를 새 혜택에 맞게 갱신함. PRO는 월 구독이 아닌 1회 구매형 영구 이용권이며, 백그라운드 조건 알림·스왑 등록/정식 요청 크레딧 무제한·편조구성원 사전 확인을 제공한다고 명확히 표시함. 30일 무료 이용권에서도 세 기능을 모두 체험할 수 있으며 자동 결제되지 않는다는 설명을 반영함.
 
 ### 2026-08-06 — 단계 UI·일정 가독성·1:1 스왑 공개 범위 수정
 

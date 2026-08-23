@@ -114,7 +114,9 @@ test("the usage guide describes the current guided swap flow", () => {
   assert.match(app, /1\. 내 근무 확인/);
   assert.match(app, /3\. 내 스왑 올리기/);
   assert.match(app, /4\. 요청과 의향 묻기/);
-  assert.match(app, /8\. PRO 알림/);
+  assert.match(app, /8\. PRO 편의 기능/);
+  assert.match(app, /스왑 등록·정식 요청 크레딧은 무제한/);
+  assert.match(app, /편조구성원 이름을 상호 수락 전에도 미리 확인/);
   assert.match(app, /실명·사번·연락처는 상호 수락 후에만 공개/);
 });
 
@@ -125,7 +127,9 @@ test("the final Q&A matches the current privacy, credit, and PRO policies", () =
   assert.match(app, /상호 수락한 뒤에만 공개됩니다/);
   assert.match(app, /매월 첫 실행 시 기본 3크레딧으로 재설정/);
   assert.match(app, /매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급/);
-  assert.match(app, /30일 동안 PRO 알림과 무제한 크레딧/);
+  assert.match(app, /PRO 영구 이용권은 한 번만 구매하는 상품/);
+  assert.match(app, /자동 알림·무제한 크레딧·편조구성원 미리보기/);
+  assert.match(app, /PRO 이용자는 스왑 목록을 둘러볼 때부터 바로 확인/);
   assert.match(app, /기간 종료 후 자동 결제되지 않으며/);
   assert.match(app, /월 2회·연 12회 한도/);
   assert.match(app, /PRO 정보와 크레딧은 서버 계정에 연결/);
