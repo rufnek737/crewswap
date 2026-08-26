@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.15" />
+    <link rel="stylesheet" href="styles.css?v=1.1.16" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -627,6 +627,10 @@
           </div>
         </div>
         <div class="refund-note">💡 보낸 요청이 <strong>마감일까지 매칭되지 않으면</strong> 사용한 크레딧의 <strong>50%가 자동 환급</strong>됩니다.</div>
+        <div id="requestFocusBar" class="request-focus-bar" hidden>
+          <span id="requestFocusLabel"></span>
+          <button type="button" id="requestFocusClear" class="secondary-button">전체 요청 보기</button>
+        </div>
         <div id="requestList" class="card-list"></div>
       </section>
 
@@ -960,7 +964,7 @@
     <script src="release-notice.js?v=1.1.10"></script>
     <script src="selection-flow.js?v=1.0.0"></script>
     <script src="airport-aliases.js?v=1.0.0"></script>
-    <script src="app.js?v=1.1.32"></script>
+    <script src="app.js?v=1.1.33"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

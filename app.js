@@ -202,6 +202,7 @@ const state = {
   findGuideStep: 1,
   requests: { sent: [], received: [] },
   reqViewMode: "sent",
+  focusedRequestId: null,   // 알림에서 들어와 한 건만 보고 있을 때의 요청 id
   alerts: [],
   alertFilter: "all",
   savedSearches: [],
@@ -3917,8 +3918,32 @@ function renderSavedSearches() {
 const _posterPick = {};
 const _compareOwnInspect = {};
 
+// 알림에서 특정 요청만 보고 있을 때, 지금 걸러 보는 중이라는 것과 전체로 돌아가는 길을 안내한다.
+function renderRequestFocusBar(shownReqs) {
+  const bar = document.getElementById("requestFocusBar");
+  const label = document.getElementById("requestFocusLabel");
+  if (!bar) return;
+  const focusedReq = state.focusedRequestId ? shownReqs.find(r => r.id === state.focusedRequestId) : null;
+  if (!focusedReq) { bar.hidden = true; return; }
+  const total = (state.requests[state.reqViewMode] || []).length;
+  if (label) {
+    label.innerHTML = `🔔 알림에서 선택한 <strong>${escapeHtml(focusedReq.postTitle || "요청")}</strong> 1건만 보는 중`
+      + (total > 1 ? ` <small>(전체 ${total}건)</small>` : "");
+  }
+  bar.hidden = false;
+}
+
 function renderRequests() {
-  const reqs = state.requests[state.reqViewMode];
+  const all = state.requests[state.reqViewMode];
+  // 알림에서 들어온 경우 그 요청 하나만 보여준다. 목록 전체를 띄우면 최신순 정렬 탓에
+  // 다른 요청이 맨 위에 와서, 방금 누른 알림과 다른 내용을 보고 있다고 오해하기 쉽다.
+  const focused = state.focusedRequestId
+    ? all.filter(r => r.id === state.focusedRequestId)
+    : null;
+  const reqs = focused && focused.length ? focused : all;
+  // 포커스한 요청이 목록에서 사라졌으면(삭제·거절 등) 포커스를 푼다.
+  if (state.focusedRequestId && !(focused && focused.length)) state.focusedRequestId = null;
+  renderRequestFocusBar(reqs);
   $("#requestList").innerHTML = reqs.length ? reqs.map(r => requestCard(r)).join("") : `<div class="empty-state">${state.reqViewMode==="sent"?"보낸":"받은"} 요청이 없습니다.</div>`;
   $$("#requestList .accept-req-btn").forEach(b => b.onclick = () => acceptRequest(b.dataset.reqId));
   $$("#requestList .ask-accept-btn").forEach(b => b.onclick = () => acceptAsk(b.dataset.reqId));
@@ -4659,10 +4684,9 @@ async function openAlertDestination(a) {
     $$('[data-req-view]').forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
     switchTab("requests");
     setAlertPanel(false);
-    // 알림이 가리키는 특정 요청으로 스크롤·강조 (없으면 목록 맨 위 카드가 대신 보여
-    // 클릭한 알림과 다른 내용이 뜨는 문제 방지). switchTab이 안에서 fetchRequests()를
-    // fire-and-forget으로 호출해 카드가 아직 그려지기 전일 수 있어, 여기서 다시
-    // await로 렌더 완료를 기다린 뒤 스크롤한다.
+    // 알림이 가리키는 요청 한 건만 보여준다. switchTab이 안에서 fetchRequests()를
+    // fire-and-forget으로 호출해 아직 목록이 없을 수 있으므로, 여기서 await로
+    // 응답을 받은 뒤 대상 요청을 특정한다.
     await fetchRequests();
     let targetId = a.requestId;
     if (!targetId) {
@@ -4670,10 +4694,11 @@ async function openAlertDestination(a) {
       const match = (state.requests[mode] || []).find(r => r.postTitle && a.body?.includes(r.postTitle));
       targetId = match?.id || null;
     }
+    state.focusedRequestId = targetId;
+    renderRequests();
     if (targetId) {
       const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(targetId)}"]`);
       if (target) {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
         target.classList.add("is-alert-target");
         setTimeout(() => target.classList.remove("is-alert-target"), 2600);
       }
@@ -4796,7 +4821,9 @@ function switchTab(name, { preserveSelection = false } = {}) {
   if (name === "find") fetchPosts();
   if (name === "premiumAlerts") renderSavedSearches();
   if (name === "myPostsManager") fetchMyPosts();
-  if (name === "requests") fetchRequests();
+  // 하단 탭 등으로 요청함을 직접 열면 전체 목록을 보여준다.
+  // (알림에서 들어오는 경로는 switchTab 이후에 focusedRequestId를 세팅한다.)
+  if (name === "requests") { state.focusedRequestId = null; fetchRequests(); }
   if (name === "post") fetchMyPosts();
   if (name === "swapGuide") fetchMyPosts();
   renderFlowUi();
@@ -5778,6 +5805,13 @@ function bindEvents() {
     $$("[data-req-view]").forEach(x => x.classList.remove("is-active"));
     b.classList.add("is-active");
     state.reqViewMode = b.dataset.reqView;
+    state.focusedRequestId = null;   // 받은/보낸 전환 시 알림 필터 해제
+    renderRequests();
+  });
+
+  // 알림에서 한 건만 보고 있을 때 전체 목록으로 돌아가기
+  $("#requestFocusClear")?.addEventListener("click", () => {
+    state.focusedRequestId = null;
     renderRequests();
   });
 
