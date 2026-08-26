@@ -4660,15 +4660,17 @@ async function openAlertDestination(a) {
     switchTab("requests");
     setAlertPanel(false);
     // 알림이 가리키는 특정 요청으로 스크롤·강조 (없으면 목록 맨 위 카드가 대신 보여
-    // 클릭한 알림과 다른 내용이 뜨는 문제 방지)
+    // 클릭한 알림과 다른 내용이 뜨는 문제 방지). switchTab이 안에서 fetchRequests()를
+    // fire-and-forget으로 호출해 카드가 아직 그려지기 전일 수 있어, 여기서 다시
+    // await로 렌더 완료를 기다린 뒤 스크롤한다.
     if (a.requestId) {
-      requestAnimationFrame(() => {
-        const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(a.requestId)}"]`);
-        if (!target) return;
+      await fetchRequests();
+      const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(a.requestId)}"]`);
+      if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         target.classList.add("is-alert-target");
         setTimeout(() => target.classList.remove("is-alert-target"), 1800);
-      });
+      }
     }
   }
 }
