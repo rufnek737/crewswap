@@ -8,11 +8,12 @@
 // Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
 // Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
 const API_BASE = "https://crewswap-api.tae26001.workers.dev";
-// 지금 실행 중인 코드의 식별자. 앱을 새로 설치했는데도 수정이 반영 안 된 것처럼 보일 때
-// (TestFlight 빌드와 Xcode 직접 설치본이 같은 빌드 번호를 쓰면 겉으로 구분되지 않음)
-// '내 정보' 화면 맨 아래에서 이 값을 확인해 어느 코드가 도는지 판별한다.
-// 코드를 고칠 때마다 갱신할 것.
-const APP_CODE_VERSION = "2026-08-27 00:10 · 알림1건표시·월전환·팝업";
+// 앱 버전 표기 — 대부분의 앱처럼 '내 정보' 맨 아래에 버전과 배포일을 담백하게 보여준다.
+// 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
+// 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
+// 코드를 배포할 때마다 날짜를 갱신할 것.
+const APP_VERSION = "1.1.8";
+const APP_RELEASE_DATE = "2026.08.27";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -6370,12 +6371,10 @@ renderAll();
 bindEvents();
 initPullToRefresh();
 applyLang();
-// 실행 중인 코드 버전을 '내 정보' 화면 맨 아래에 표시 (설치 반영 여부 판별용)
+// '내 정보' 맨 아래 버전 표기 (문의 대응 + 새 빌드 반영 확인용)
 (() => {
   const el = document.getElementById("buildStamp");
-  if (!el) return;
-  const native = !!(window.Capacitor && window.Capacitor.isNativePlatform());
-  el.textContent = `코드 ${APP_CODE_VERSION} · ${native ? "네이티브" : "웹"}`;
+  if (el) el.textContent = `CrewSwap ${APP_VERSION} · ${APP_RELEASE_DATE}`;
 })();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
