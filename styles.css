@@ -827,6 +827,14 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .alert-del-btn:hover { background: rgba(0,0,0,0.08); color: var(--text); }
 .my-post-card.is-alert-target { animation: alertTargetPulse 0.9s ease-in-out 2; }
 @keyframes alertTargetPulse { 50% { box-shadow: 0 0 0 4px rgba(238, 116, 20, 0.3); } }
+/* 알림에서 넘어온 요청 카드 — 목록에 여러 건이 있을 때 어느 것이 그 알림의
+   대상인지 분명히 보이도록 테두리까지 강조한다. (기존에는 my-post-card에만
+   스타일이 있어 요청 카드에서는 클래스만 붙고 아무 표시도 나지 않았음) */
+.request-card.is-alert-target {
+  animation: alertTargetPulse 0.9s ease-in-out 3;
+  border-color: var(--brand, #F07820);
+  box-shadow: 0 0 0 3px rgba(238, 116, 20, 0.25);
+}
 
 /* ===== 회원 탈퇴 ===== */
 .withdraw-zone { padding: 24px 16px 12px; text-align: center; border-top: 1px solid var(--line); margin-top: 16px; }

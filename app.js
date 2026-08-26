@@ -4663,13 +4663,19 @@ async function openAlertDestination(a) {
     // 클릭한 알림과 다른 내용이 뜨는 문제 방지). switchTab이 안에서 fetchRequests()를
     // fire-and-forget으로 호출해 카드가 아직 그려지기 전일 수 있어, 여기서 다시
     // await로 렌더 완료를 기다린 뒤 스크롤한다.
-    if (a.requestId) {
-      await fetchRequests();
-      const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(a.requestId)}"]`);
+    await fetchRequests();
+    let targetId = a.requestId;
+    if (!targetId) {
+      // requestId가 도입되기 전에 만들어진 알림 — 본문에 적힌 글 제목으로 요청을 찾는다.
+      const match = (state.requests[mode] || []).find(r => r.postTitle && a.body?.includes(r.postTitle));
+      targetId = match?.id || null;
+    }
+    if (targetId) {
+      const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(targetId)}"]`);
       if (target) {
         target.scrollIntoView({ behavior: "smooth", block: "center" });
         target.classList.add("is-alert-target");
-        setTimeout(() => target.classList.remove("is-alert-target"), 1800);
+        setTimeout(() => target.classList.remove("is-alert-target"), 2600);
       }
     }
   }
