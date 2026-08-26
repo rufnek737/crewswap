@@ -954,6 +954,31 @@ function requestWithPrivateDaysRemoved(record) {
   return { ...record, openRoster: publicOpenRoster(record.openRoster, record.lockedDays) };
 }
 
+// 요청 화면에서 글 작성자의 근무를 식별하는 데 필요한 정보만 전달한다.
+// 원본 offered의 편조/연락처 등 공개 전 개인정보는 요청 응답에 포함하지 않는다.
+function requestPostOfferSnapshot(offered) {
+  if (!offered) return null;
+  const daySchedules = (Array.isArray(offered.daySchedules) ? offered.daySchedules : []).map(schedule => ({
+    day: schedule?.day,
+    date: schedule?.date,
+    title: schedule?.title || '',
+    type: schedule?.type || '',
+    routeSummary: schedule?.routeSummary || '',
+    dep: schedule?.dep || '',
+    arr: schedule?.arr || '',
+    reportTime: schedule?.reportTime || '',
+    releaseTime: schedule?.releaseTime || '',
+  }));
+  return {
+    patternName: offered.patternName || '',
+    summary: offered.summary || '',
+    type: offered.type || '',
+    days: Array.isArray(offered.days) ? offered.days : [],
+    dateKeys: Array.isArray(offered.dateKeys) ? offered.dateKeys : [],
+    daySchedules,
+  };
+}
+
 async function handleRequestsCreate(request, env, authEmail, allowSandbox = false) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -1000,6 +1025,7 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
     const rec = {
       id, postId, type,
       postTitle: post.offered?.patternName || '',
+      postOffered: requestPostOfferSnapshot(post.offered),
       postOwnerRole: post.ownerRole || null,
       aircraft: post.offered?.aircraft || '-',
       quals: [post.offered?.edto ? 'EDTO' : null, post.offered?.cat3 ? 'CAT III' : null].filter(Boolean).join(' / ') || '일반',
@@ -1376,9 +1402,23 @@ async function handleRequestsGet(request, env, authEmail) {
 
   try {
     const idx = await getRequestsIndex(env);
+    // 구버전 요청에는 대상 글의 상세 일정이 저장되지 않았다. 현재 글이 남아 있으면
+    // 조회 시 보강해 요청 카드에서 양쪽 근무를 모두 확인할 수 있게 한다.
+    const relevant = idx.filter(r => r.fromEmail === email || r.toEmail === email);
+    const missingPostIds = [...new Set(relevant.filter(r => !r.postOffered && r.postId).map(r => r.postId))];
+    const loadedPosts = await Promise.all(missingPostIds.map(async postId => [
+      postId,
+      await env.POSTS.get(`post:${postId}`, { type: 'json' }),
+    ]));
+    const postById = new Map(loadedPosts);
+    const withPostDetails = record => {
+      if (record.postOffered) return record;
+      const post = postById.get(record.postId);
+      return post?.offered ? { ...record, postOffered: requestPostOfferSnapshot(post.offered) } : record;
+    };
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
-    const sent = idx.filter(r => r.fromEmail === email).map(requestWithPrivateDaysRemoved);
-    const received = idx.filter(r => r.toEmail === email).map(requestWithPrivateDaysRemoved);
+    const sent = idx.filter(r => r.fromEmail === email).map(withPostDetails).map(requestWithPrivateDaysRemoved);
+    const received = idx.filter(r => r.toEmail === email).map(withPostDetails).map(requestWithPrivateDaysRemoved);
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }

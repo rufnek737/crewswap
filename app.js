@@ -80,6 +80,7 @@ const AIRPORT_REGION = {
   PVG:"CHINA", PEK:"CHINA", CTU:"CHINA", TAO:"CHINA",
 };
 const SPECIAL_AIRPORTS = ["CXR","TAG","BKI"];
+const AIRPORT_ALIASES = globalThis.CrewSwapAirportAliases;
 
 const PILL_CLASS = {
   "OFF":"pill-off", "VAC":"pill-off", "국내선":"pill-dom", "국제선":"pill-intl",
@@ -2447,7 +2448,7 @@ function renderMyPosts() {
       ? `<span class="my-post-status expired">마감됨${p.refunded ? (refundGranted > 0 ? ` · ${refundGranted}크레딧 환급` : creditSpent === 0 ? " · PRO 등록" : " · 환급 상한 도달") : ""}</span>`
       : `<span class="my-post-status done">등록 완료</span>`;
     return `
-    <div class="my-post-card">
+    <div class="my-post-card" data-my-post-id="${escapeHtml(p.id)}">
       <div class="my-post-head">
         <strong>${p.offered.patternName}</strong>
         ${statusHtml}
@@ -2760,20 +2761,27 @@ function formatProDate(value) {
 function renderProDiscovery() {
   const status = document.getElementById("profileProStatus");
   const button = document.getElementById("openProfilePro");
-  if (!status || !button) return;
+  const mainButton = document.getElementById("openMainPro");
+  const updateMainButton = (title, detail) => {
+    if (!mainButton) return;
+    mainButton.innerHTML = `<strong>${title}</strong><small>${detail}</small>`;
+  };
   if (state.user.proEntitlement === "lifetime") {
-    status.textContent = "PRO 영구 이용권 사용 중 · 맞춤 알림, 무제한 크레딧, 편조구성원 미리보기";
-    button.textContent = "PRO 기능 관리";
+    if (status) status.textContent = "PRO 영구 이용권 사용 중 · 맞춤 알림, 무제한 크레딧, 편조구성원 미리보기";
+    if (button) button.textContent = "PRO 기능 관리";
+    updateMainButton("👑 PRO 기능 관리", "맞춤 알림 · 무제한 크레딧");
     return;
   }
   if (isPremiumUser()) {
     const until = formatProDate(state.user.proExpiresAt || state.user.proTrialExpiresAt);
-    status.textContent = `${until ? `${until}까지 · ` : ""}맞춤 알림, 무제한 크레딧, 편조구성원 미리보기`;
-    button.textContent = "PRO 기능 관리·영구 이용권 보기";
+    if (status) status.textContent = `${until ? `${until}까지 · ` : ""}맞춤 알림, 무제한 크레딧, 편조구성원 미리보기`;
+    if (button) button.textContent = "PRO 기능 관리·영구 이용권 보기";
+    updateMainButton("👑 PRO 기능 관리", `${until ? `${until}까지 · ` : ""}혜택 사용 중`);
     return;
   }
-  status.textContent = "맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기";
-  button.textContent = "PRO 자세히·구매";
+  if (status) status.textContent = "맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기";
+  if (button) button.textContent = "PRO 자세히·구매";
+  updateMainButton("👑 PRO 안내·구매", "맞춤 알림 · 무제한 크레딧");
 }
 
 async function refreshPremiumStatus() {
@@ -2990,9 +2998,8 @@ function postMatchesSavedSearch(post, s) {
     if (b === null || !s.nights.includes(b)) return false;
   }
   if (s.keyword && s.keyword.trim()) {
-    const hay = `${o.patternName || ""} ${o.summary || ""} ${o.region || ""} ${o.type || ""}`.toUpperCase();
-    const toks = s.keyword.toUpperCase().split(/[\s,]+/).filter(Boolean);
-    if (toks.length && !toks.some(t => hay.includes(t))) return false;
+    const sourceText = `${o.patternName || ""} ${o.summary || ""} ${o.region || ""} ${o.type || ""} ${o.layoverAirport || ""}`;
+    if (!AIRPORT_ALIASES.airportKeywordMatches(sourceText, s.keyword)) return false;
   }
   return true;
 }
@@ -3357,12 +3364,19 @@ function requestSwap(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const directOffer = exactMatchedOffer(p);
-  beginScheduleSelection("request", directOffer ? null : postId);
   if (directOffer) {
+    beginScheduleSelection("request", null);
     openRequestModal(postId, directOffer);
     return;
   }
+  // 날짜가 정확히 일치하는 1:1 교환이 아니면 내 스케줄 전체를 열어야 함 — 왜 갑자기
+  // 내 근무 화면으로 넘어가는지 사용자가 모를 수 있어 미리 안내하고 취소할 수 있게 함.
+  if (!confirm("상대와 날짜가 정확히 일치하지 않아 1:1 교환이 불가능합니다.\n내 스케줄 전체를 상대에게 공개해 상대가 바꿀 날을 직접 고르게 됩니다.\n(다음 화면에서 보여주기 싫은 날짜는 숨길 수 있습니다)\n\n계속할까요?"))
+    return;
+  beginScheduleSelection("request", postId);
   // 바꿔줄 내 근무를 고르도록 항상 내 근무 화면으로 이동 — 여러 날을 고른 뒤 "다음"으로 직접 넘어가게 함
+  // 상대 글의 월로 달력을 맞춰서 이동 (안 그러면 오늘 보고 있던 달이 그대로 남아 엉뚱한 달이 열림)
+  state.currentMonth = postDeadlineMonth(p);
   switchTab("schedule", { preserveSelection: true });
   renderPendingBar();
 }
@@ -3373,11 +3387,18 @@ function askAboutPost(postId) {
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
   const directOffer = exactMatchedOffer(p);
-  beginScheduleSelection("ask", directOffer ? null : postId);
   if (directOffer) {
+    beginScheduleSelection("ask", null);
     openAskModal(postId, directOffer);
     return;
   }
+  // 날짜가 정확히 일치하는 1:1 교환이 아니면 내 스케줄 전체를 열어야 함 — 왜 갑자기
+  // 내 근무 화면으로 넘어가는지 사용자가 모를 수 있어 미리 안내하고 취소할 수 있게 함.
+  if (!confirm("상대와 날짜가 정확히 일치하지 않아 1:1 교환이 불가능합니다.\n내 스케줄 전체를 상대에게 공개해 상대가 바꿀 날을 직접 고르게 됩니다.\n(다음 화면에서 보여주기 싫은 날짜는 숨길 수 있습니다)\n\n계속할까요?"))
+    return;
+  beginScheduleSelection("ask", postId);
+  // 상대 글의 월로 달력을 맞춰서 이동 (안 그러면 오늘 보고 있던 달이 그대로 남아 엉뚱한 달이 열림)
+  state.currentMonth = postDeadlineMonth(p);
   switchTab("schedule", { preserveSelection: true });
   renderPendingBar();
 }
@@ -3638,6 +3659,7 @@ async function fetchRequests() {
         body: `${r.fromNick || "상대"} 님 · ${r.postTitle || ""}${r.message ? ` — "${r.message}"` : ""}`,
         time: r.sentAgo || "방금",
         createdAt: r.createdAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "received",
       });
       // 토스트는 최근(2분 내) 도착분만 (오래된 것 무더기 토스트 방지)
@@ -3655,6 +3677,7 @@ async function fetchRequests() {
         body: `${r.toNick || "상대"} 님이 관심을 수락했습니다 · ${r.postTitle || ""} — 정식 요청을 보내보세요`,
         time: r.sentAgo || "방금",
         createdAt: new Date().toISOString(),
+        requestId: r.id,
         viewMode: "sent",
       });
       showToast(`✓ ${r.toNick || "상대"} 님이 의향을 수락했습니다`);
@@ -3670,6 +3693,7 @@ async function fetchRequests() {
         body: `${r.toNick || "상대"} 님이 내 공개 스케줄에서 ${(r.offered.days || []).map(d => d + "일").join(", ")}을 선택했습니다 · 교환 내용을 확인해주세요`,
         time: "방금",
         createdAt: r.posterSelectedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "sent",
       });
       showToast(`🔔 ${r.toNick || "상대"} 님의 일정 선택 — 최종 승인이 필요합니다`);
@@ -3689,6 +3713,7 @@ async function fetchRequests() {
         body: `${r.toNick || "상대"} 님이 내 스케줄에서 바꿀 날을 골랐습니다${picked} · ${r.postTitle || ""} — 회사 상신 단계로 진행하세요`,
         time: "방금",
         createdAt: r.acceptedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "sent",
       });
       showToast(`✓ ${r.toNick || "상대"} 님이 스왑을 확정했습니다`);
@@ -3706,6 +3731,7 @@ async function fetchRequests() {
         body: `${r.fromNick || "상대"} 님이 선택한 교환 일정을 승인했습니다 · ${r.postTitle || ""} — 회사 상신을 진행해주세요`,
         time: "방금",
         createdAt: r.acceptedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "received",
       });
       showToast(`✓ ${r.fromNick || "상대"} 님이 스왑을 최종 승인했습니다`);
@@ -3723,6 +3749,7 @@ async function fetchRequests() {
         body: `${r.toNick || "상대"} 님 · ${r.declineMsg || "개인적 사정으로 거절"}`,
         time: "방금",
         createdAt: r.declinedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "sent",
       });
       showToast(isMogijiConflict
@@ -3743,6 +3770,7 @@ async function fetchRequests() {
         body: `${r.fromNick || "상대"} 님이 회사 상신 여부를 확인하고 있습니다 · ${r.postTitle || ""} — '회사 상신 완료로 표시'를 눌러주세요`,
         time: "방금",
         createdAt: r.submitNudgedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "received",
       });
       showToast(`🔔 ${r.fromNick || "상대"} 님이 회사 상신 여부를 확인했습니다`);
@@ -3759,6 +3787,7 @@ async function fetchRequests() {
         body: `${r.toNick || "상대"} 님이 회사에 스왑을 상신했습니다 · ${r.postTitle || ""}`,
         time: "방금",
         createdAt: r.submittedAt || new Date().toISOString(),
+        requestId: r.id,
         viewMode: "sent",
       });
       showToast(`✅ ${r.toNick || "상대"} 님이 회사 상신을 완료했습니다`);
@@ -3836,7 +3865,8 @@ function renderSavedSearches() {
           <span>${nativeApp ? 'iPhone에서 앱을 닫아도 조건에 맞는 새 스왑 알림을 받을 수 있습니다.' : '홈 화면에 설치한 웹앱/PWA에서 받을 수 있습니다.'}</span>
           <button type="button" id="premiumPushEnableBtn" class="secondary-button">${pushEnabled ? '알림 다시 확인' : '백그라운드 알림 켜기'}</button>
         </div>
-        <input id="savedKeyword" placeholder="목적지·키워드 (예: DPS, 보홀, CXR)" />
+        <input id="savedKeyword" placeholder="공항명·IATA·ICAO (예: 다낭, DAD, VVDN)" />
+        <div class="saved-keyword-help">한글명·영문명·IATA·ICAO 중 편한 방식으로 입력하세요.</div>
         <div class="saved-field-label">스케줄 유형</div>
         <div class="chip-row" id="savedTypeChips">
           ${SAVED_TYPE_OPTIONS.map(t => `<button type="button" class="filter-chip" data-stype="${t}">${t}</button>`).join("")}
@@ -4380,8 +4410,30 @@ function requestCard(r) {
         : "상대방이 아직 연락처를 등록하지 않았습니다")
     : null;
 
+  const targetPost = (state.myPosts || []).find(post => post.id === r.postId) ||
+    (state.posts || []).find(post => post.id === r.postId);
+  const targetOffer = r.postOffered || targetPost?.offered || null;
+  const targetTitle = targetOffer?.patternName || r.postTitle || "-";
+  const targetDetailRows = (() => {
+    const schedules = Array.isArray(targetOffer?.daySchedules) ? targetOffer.daySchedules : [];
+    const rows = schedules.map(schedule => {
+      const title = schedule.title && schedule.title !== schedule.type ? schedule.title : "";
+      const route = schedule.routeSummary || (schedule.dep && schedule.arr ? `${schedule.dep}→${schedule.arr}` : "");
+      const times = [
+        schedule.reportTime ? `Check-in ${schedule.reportTime}` : "",
+        schedule.releaseTime ? `Check-out ${schedule.releaseTime}` : "",
+      ].filter(Boolean).join(" · ");
+      return [title, route, times].filter(Boolean).join(" · ");
+    }).filter(Boolean);
+    if (rows.length) return rows;
+    return [targetOffer?.summary || targetOffer?.type || ""].filter(Boolean);
+  })();
+  const targetDetailsHtml = targetDetailRows
+    .map(detail => `<small class="req-ex-duty">${escapeHtml(detail)}</small>`)
+    .join("");
+
   return `
-    <article class="request-card">
+    <article class="request-card" data-req-card-id="${escapeHtml(r.id || "")}">
       <div class="card-head">
         <div>
           <h3>${r.postTitle}</h3>
@@ -4394,7 +4446,7 @@ function requestCard(r) {
       ${!r.declined && r.offered ? `<div class="req-exchange">
         <div class="req-ex-side"><span>${!isSent?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
         <div class="req-ex-arrow">⇄</div>
-        <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${r.postTitle}</strong></div>
+        <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${escapeHtml(targetTitle)}</strong>${targetDetailsHtml}</div>
       </div>` : ""}
       ${isOpenPending ? `
       <div class="open-roster-pick">
@@ -4567,6 +4619,60 @@ function setAlertPanel(open) {
   if (backdrop) backdrop.hidden = !open;
 }
 
+function alertActionLabel(a) {
+  if (!a) return "";
+  if (a.goTo === "myPostsManager" || (a.kind === "urgent" && a.title?.includes("스왑 마감"))) {
+    return "내 스왑 관리로 이동";
+  }
+  if (a.goTo === "find") return "해당 스왑 확인";
+  if (a.kind === "match") {
+    return /확정|승인|완료|거절/.test(a.title || "") ? "매칭 결과 확인" : "요청 내용 확인";
+  }
+  return "";
+}
+
+async function openAlertDestination(a) {
+  if (!a) return;
+  if (a.goTo === "find") {
+    switchTab("find");
+    setAlertPanel(false);
+    return;
+  }
+  if (a.goTo === "myPostsManager" || (a.kind === "urgent" && a.title?.includes("스왑 마감"))) {
+    await openMyPostsManager();
+    setAlertPanel(false);
+    if (a.postId) {
+      requestAnimationFrame(() => {
+        const target = [...document.querySelectorAll("#myPostList .my-post-card")]
+          .find(card => card.dataset.myPostId === String(a.postId));
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("is-alert-target");
+        setTimeout(() => target.classList.remove("is-alert-target"), 1800);
+      });
+    }
+    return;
+  }
+  if (a.kind === "match") {
+    const mode = a.viewMode || "received";
+    state.reqViewMode = mode;
+    $$('[data-req-view]').forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
+    switchTab("requests");
+    setAlertPanel(false);
+    // 알림이 가리키는 특정 요청으로 스크롤·강조 (없으면 목록 맨 위 카드가 대신 보여
+    // 클릭한 알림과 다른 내용이 뜨는 문제 방지)
+    if (a.requestId) {
+      requestAnimationFrame(() => {
+        const target = document.querySelector(`#requestList .request-card[data-req-card-id="${CSS.escape(a.requestId)}"]`);
+        if (!target) return;
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        target.classList.add("is-alert-target");
+        setTimeout(() => target.classList.remove("is-alert-target"), 1800);
+      });
+    }
+  }
+}
+
 function renderAlerts() {
   const filter = state.alertFilter;
   const allIndexed = state.alerts.map((a, i) => ({ a, i }));
@@ -4575,12 +4681,15 @@ function renderAlerts() {
     : allIndexed.filter(x => x.a.kind === filter);
   $("#alertList").innerHTML = items.length ? items.map(({ a, i }) => {
     const unread = a.kind !== "announce" && !a.read;
+    const actionLabel = alertActionLabel(a);
     return `
-    <div class="alert-item ${a.kind}${unread ? " is-unread" : ""}" data-alert-idx="${i}">
+    <div class="alert-item ${a.kind}${unread ? " is-unread" : ""}" data-alert-idx="${i}" role="button" tabindex="0" aria-expanded="false">
       <button class="alert-del-btn" data-alert-idx="${i}" title="알림 삭제" aria-label="알림 삭제">×</button>
       <strong>${unread ? '<span class="unread-dot"></span>' : ""}${escapeHtml(a.title)}</strong>
       <p class="alert-body">${escapeHtml(a.body)}</p>
       <span class="time">${alertTimeAgo(a)}</span>
+      <span class="alert-expand-hint" hidden>내용 보기 ▾</span>
+      ${actionLabel ? `<div class="alert-actions" hidden><button type="button" class="alert-action-button" data-alert-idx="${i}">${actionLabel}</button></div>` : ""}
     </div>`;
   }).join("") : `<div class="empty-state">알림이 없습니다.</div>`;
   $$("#alertList .alert-del-btn").forEach(btn => {
@@ -4600,33 +4709,51 @@ function renderAlerts() {
       renderAlerts();
     });
   });
-  // 알림 클릭 = 전체 내용 확인(읽음 처리 → 배지 감소). 매칭 알림은 요청함으로 이동, 그 외는 펼치기.
+  // 알림 카드는 내용만 펼치고, 실제 화면 이동은 펼친 뒤 나타나는 별도 버튼으로만 처리한다.
   $$("#alertList .alert-item").forEach(el => {
-    el.addEventListener("click", () => {
+    const body = el.querySelector(".alert-body");
+    const hint = el.querySelector(".alert-expand-hint");
+    const action = el.querySelector(".alert-actions");
+    const canExpand = Boolean(action) || (body && body.scrollHeight > body.clientHeight + 1);
+    if (canExpand) {
+      el.classList.add("is-collapsible");
+      if (hint) hint.hidden = false;
+    } else {
+      el.classList.add("is-static");
+      el.removeAttribute("role");
+      el.removeAttribute("tabindex");
+      el.removeAttribute("aria-expanded");
+    }
+    const toggleDetails = () => {
+      if (!el.classList.contains("is-collapsible")) return;
       const a = state.alerts[parseInt(el.dataset.alertIdx, 10)];
       if (!a) return;
       markAlertRead(a);
-      if (a.goTo === "find") {
-        // 저장검색(관심 스왑) 알림 → 스왑 찾기 탭으로
-        switchTab("find");
-        setAlertPanel(false);
-      } else if (a.goTo === "myPostsManager" || (a.kind === "urgent" && a.title?.includes("스왑 마감"))) {
-        // 신규 알림은 goTo/postId를 저장하고, 구버전 마감 알림도 제목으로 호환한다.
-        // 서버에서 최신 마감·환급 상태를 다시 읽은 뒤 독립 관리 화면으로 이동한다.
-        openMyPostsManager();
-        setAlertPanel(false);
-      } else if (a.kind === "match") {
-        const mode = a.viewMode || "received";
-        state.reqViewMode = mode;
-        $$("[data-req-view]").forEach(x => x.classList.toggle("is-active", x.dataset.reqView === mode));
-        switchTab("requests");
-        setAlertPanel(false);
-      } else {
-        // 공지 등 이동 대상이 없는 알림: 제자리에서 전체 내용 펼치기/접기
-        el.classList.toggle("is-expanded");
-        el.classList.remove("is-unread");
-        const dot = el.querySelector(".unread-dot"); if (dot) dot.remove();
-      }
+      const expanded = el.classList.toggle("is-expanded");
+      el.setAttribute("aria-expanded", String(expanded));
+      el.classList.remove("is-unread");
+      const dot = el.querySelector(".unread-dot"); if (dot) dot.remove();
+      if (hint) hint.textContent = expanded ? "접기 ▴" : "내용 보기 ▾";
+      if (action) action.hidden = !expanded;
+    };
+    el.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      toggleDetails();
+    });
+    el.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button")) return;
+      event.preventDefault();
+      toggleDetails();
+    });
+  });
+  $$("#alertList .alert-action-button").forEach(btn => {
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const a = state.alerts[parseInt(btn.dataset.alertIdx, 10)];
+      if (!a) return;
+      markAlertRead(a);
+      await openAlertDestination(a);
     });
   });
   updateBellBadge();
@@ -4777,6 +4904,7 @@ function bindEvents() {
   $("#openMyPostsManager")?.addEventListener("click", openMyPostsManager);
   $("#openPremiumAlertManager")?.addEventListener("click", openPremiumAlertManager);
   $("#openProfilePro")?.addEventListener("click", openPremiumAlertManager);
+  $("#openMainPro")?.addEventListener("click", openPremiumAlertManager);
   $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;

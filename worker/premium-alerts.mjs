@@ -1,5 +1,8 @@
+import '../airport-aliases.js';
+
 const MAX_SEARCHES = 20;
 const MAX_TEXT_LENGTH = 120;
+const airportAliases = globalThis.CrewSwapAirportAliases;
 
 function cleanText(value) {
   return String(value ?? "").trim().slice(0, MAX_TEXT_LENGTH);
@@ -54,15 +57,14 @@ export function postMatchesSavedSearch(post, search) {
   }
 
   if (search.keyword) {
-    const haystack = [
+    const sourceText = [
       offered.patternName,
       offered.summary,
       offered.region,
       offered.type,
       offered.layoverAirport,
-    ].filter(Boolean).join(" ").toUpperCase();
-    const tokens = search.keyword.toUpperCase().split(/[\s,]+/).filter(Boolean);
-    if (tokens.length && !tokens.some(token => haystack.includes(token))) return false;
+    ].filter(Boolean).join(" ");
+    if (!airportAliases.airportKeywordMatches(sourceText, search.keyword)) return false;
   }
 
   return true;

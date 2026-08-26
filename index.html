@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.12" />
+    <link rel="stylesheet" href="styles.css?v=1.1.14" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -228,8 +228,12 @@
           <div>
             <h2>내 근무</h2>
           </div>
-          <div class="actions">
+          <div class="actions schedule-head-actions">
             <button id="importScheduleButton" class="primary-button">📥 CrewConnex 불러오기</button>
+            <button id="openMainPro" type="button" class="main-pro-button">
+              <strong>👑 PRO 안내·구매</strong>
+              <small>맞춤 알림 · 무제한 크레딧</small>
+            </button>
           </div>
         </div>
 
@@ -955,7 +959,8 @@
     <script src="cabin-policy.js?v=1.1.3"></script>
     <script src="release-notice.js?v=1.1.10"></script>
     <script src="selection-flow.js?v=1.0.0"></script>
-    <script src="app.js?v=1.1.26"></script>
+    <script src="airport-aliases.js?v=1.0.0"></script>
+    <script src="app.js?v=1.1.30"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

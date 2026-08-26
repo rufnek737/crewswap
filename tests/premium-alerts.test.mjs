@@ -34,6 +34,29 @@ test('new post matches keyword, type, and layover length together', () => {
   assert.equal(matchingSearches(post, [{ id: 'A', keyword: 'TAG' }, { id: 'B', keyword: 'DPS' }]).length, 1);
 });
 
+test('airport keyword accepts Korean, English, IATA, and ICAO as the same airport', () => {
+  const daNangPost = {
+    ...post,
+    offered: {
+      ...post.offered,
+      patternName: 'ICN-DAD 1박 패턴',
+      summary: 'ICN-DAD · 1박 · DAD-ICN',
+      layoverAirport: 'DAD',
+    },
+  };
+
+  for (const keyword of ['다낭', 'Da Nang', 'DAD', 'VVDN', 'Da Nang International Airport']) {
+    assert.equal(postMatchesSavedSearch(daNangPost, { keyword }), true, keyword);
+  }
+  assert.equal(postMatchesSavedSearch(daNangPost, { keyword: '보홀' }), false);
+});
+
+test('Bohol aliases and current/legacy ICAO codes all match TAG', () => {
+  for (const keyword of ['보홀', 'Bohol', 'Panglao', 'TAG', 'RPSP', 'RPVT']) {
+    assert.equal(postMatchesSavedSearch(post, { keyword }), true, keyword);
+  }
+});
+
 test('push matching keeps pilot position and qualification rules', () => {
   assert.equal(subscriberCanUsePost({ crewType: 'PILOT', roleType: 'FO_B', aircraft: 'NG_MAX', edto: true }, post), true);
   assert.equal(subscriberCanUsePost({ crewType: 'PILOT', roleType: 'CAPTAIN_B', aircraft: 'NG_MAX', edto: true }, post), false);

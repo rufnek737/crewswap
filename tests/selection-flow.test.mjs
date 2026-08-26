@@ -72,8 +72,23 @@ test("PRO benefits and purchase entry points are visible without opening Q&A", (
   assert.match(html, /CrewSwap PRO 혜택/);
   assert.match(html, /id="openPremiumAlertManager"/);
   assert.match(html, /id="openProfilePro"/);
+  assert.match(html, /id="openMainPro"/);
   assert.match(app, /#openProfilePro.*openPremiumAlertManager/);
+  assert.match(app, /#openMainPro.*openPremiumAlertManager/);
   assert.match(app, /PRO 기능 관리·영구 이용권 보기/);
+});
+
+test("received request cards identify the posted schedule on both sides", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+
+  assert.match(app, /const targetOffer = r\.postOffered \|\| targetPost\?\.offered/);
+  assert.match(app, /targetOffer\?\.daySchedules/);
+  assert.match(app, /class="req-ex-duty"/);
+  assert.match(worker, /postOffered: requestPostOfferSnapshot\(post\.offered\)/);
+  assert.match(worker, /function requestPostOfferSnapshot\(offered\)/);
+  assert.match(worker, /편조\/연락처 등 공개 전 개인정보는 요청 응답에 포함하지 않는다/);
+  assert.match(worker, /missingPostIds/);
 });
 
 test("the PRO purchase screen uses the defined native iOS detector", () => {
@@ -118,7 +133,21 @@ test("expired swap alerts open the independent my-posts manager", () => {
 
   assert.match(app, /kind: "urgent",\s*goTo: "myPostsManager",\s*postId: p\.id/);
   assert.match(app, /a\.goTo === "myPostsManager" \|\| \(a\.kind === "urgent" && a\.title\?\.includes\("스왑 마감"\)\)/);
-  assert.match(app, /openMyPostsManager\(\);\s*setAlertPanel\(false\);/);
+  assert.match(app, /await openMyPostsManager\(\);\s*setAlertPanel\(false\);/);
+  assert.match(app, /data-my-post-id=/);
+});
+
+test("notification cards expand first and navigate only from a separate action button", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(app, /class="alert-expand-hint"/);
+  assert.match(app, /class="alert-action-button"/);
+  assert.match(app, /const expanded = el\.classList\.toggle\("is-expanded"\)/);
+  assert.match(app, /await openAlertDestination\(a\)/);
+  assert.match(app, /if \(event\.target\.closest\("button"\)\) return/);
+  assert.match(styles, /\.alert-item\.is-expanded \.alert-body/);
+  assert.match(styles, /\.alert-action-button/);
 });
 
 test("the usage guide describes the current guided swap flow", () => {

@@ -131,6 +131,11 @@ button { cursor: pointer; }
 .bell-badge { position: absolute; top: -7px; right: -16px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--bg); pointer-events: none; white-space: nowrap; }
 
 .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.schedule-head-actions { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: min(100%, 520px); }
+.schedule-head-actions > button { min-height: 52px; }
+.main-pro-button { display: grid; place-items: center; gap: 2px; padding: 8px 12px; border: 1px solid #efad58; border-radius: 8px; background: linear-gradient(145deg, #fff8ec, #ffead0); color: #a95608; }
+.main-pro-button strong { font-size: 13px; }
+.main-pro-button small { font-size: 10px; color: #9a641f; line-height: 1.25; }
 .find-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 #refreshFindBtn { white-space: nowrap; }
 
@@ -496,6 +501,7 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .saved-add-form { display: flex; flex-direction: column; gap: 8px; }
 .saved-add-form input { width: 100%; }
 .saved-field-label { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 2px; }
+.saved-keyword-help { margin: -4px 2px 2px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 /* 프리미엄(PRO) 표시 */
 .pro-badge { display: inline-block; background: linear-gradient(135deg, #ffb02e, #ff7a00); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 6px; margin: 0 4px; vertical-align: middle; letter-spacing: .5px; }
 .saved-search-box.premium-feature { border-color: #ffcf8a; background: linear-gradient(180deg, #fffaf2, var(--panel)); }
@@ -655,7 +661,9 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .req-ex-side { min-width: 0; }
 .req-ex-side span { display: block; font-size: 10px; color: #1d3a7a; font-weight: 700; }
 .req-ex-side strong { display: block; font-size: 12px; color: var(--text); overflow-wrap: break-word; }
-.req-ex-side small { font-size: 11px; color: var(--muted); }
+.req-ex-side small { display: block; font-size: 11px; color: var(--muted); line-height: 1.45; overflow-wrap: anywhere; }
+.req-ex-duty { margin-top: 3px; color: #4d5d70 !important; }
+.req-ex-duty + .req-ex-duty { margin-top: 2px; }
 .req-ex-arrow { font-size: 16px; color: var(--primary); font-weight: 800; }
 .card-unavailable { flex: 1; text-align: center; padding: 10px; font-size: 12px; color: var(--muted); background: #f1f3f6; border-radius: 8px; }
 .card-actions button { flex: 1; }
@@ -796,21 +804,29 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .alert-filters button { flex: 1; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); font-size: 12px; font-weight: 600; }
 .alert-filters button.is-active { background: #243449; color: #fff; border-color: #243449; }
 .alert-list { overflow-y: auto; padding: 12px; display: grid; gap: 8px; }
-.alert-item { position: relative; padding: 12px 48px 12px 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 6px; cursor: pointer; }
+.alert-item { position: relative; padding: 12px 48px 12px 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: 6px; cursor: default; }
+.alert-item.is-collapsible { cursor: pointer; }
+.alert-item.is-collapsible:focus-visible { outline: 3px solid rgba(238, 116, 20, 0.28); outline-offset: 2px; }
 .alert-item strong { display: block; font-size: 13px; margin-bottom: 4px; }
 /* 기본: 본문 2줄로 축약. 클릭(is-expanded)하면 전체 표시 */
 .alert-item .alert-body { font-size: 12px; margin-bottom: 6px; color: var(--text); white-space: pre-line;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .alert-item.is-expanded .alert-body { display: block; -webkit-line-clamp: unset; overflow: visible; }
 .alert-item .time { font-size: 11px; color: var(--muted); }
+.alert-expand-hint { float: right; margin-left: 8px; color: var(--primary); font-size: 11px; font-weight: 700; }
+.alert-actions { clear: both; padding-top: 12px; }
+.alert-action-button { width: 100%; min-height: 40px; border: 1px solid var(--primary); border-radius: 8px; background: #fff; color: var(--primary); font-size: 12px; font-weight: 800; cursor: pointer; }
+.alert-action-button:active { background: rgba(238, 116, 20, 0.1); }
 /* 미읽음 표시: 굵은 제목 + 주황 점 */
 .alert-item.is-unread strong { font-weight: 800; }
 .unread-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff5d3d; margin-right: 6px; vertical-align: middle; }
-.alert-item.match { border-left-color: var(--c-pass); background: var(--green-soft); cursor: pointer; }
+.alert-item.match { border-left-color: var(--c-pass); background: var(--green-soft); }
 .alert-item.urgent { border-left-color: var(--c-fail); background: #fdecea; }
 .alert-item.announce { border-left-color: var(--c-dom); background: var(--blue-soft); }
 .alert-del-btn { position: absolute; top: 4px; right: 4px; width: 36px; height: 36px; border: none; background: transparent; color: var(--muted); font-size: 24px; font-weight: 600; line-height: 1; cursor: pointer; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
 .alert-del-btn:hover { background: rgba(0,0,0,0.08); color: var(--text); }
+.my-post-card.is-alert-target { animation: alertTargetPulse 0.9s ease-in-out 2; }
+@keyframes alertTargetPulse { 50% { box-shadow: 0 0 0 4px rgba(238, 116, 20, 0.3); } }
 
 /* ===== 회원 탈퇴 ===== */
 .withdraw-zone { padding: 24px 16px 12px; text-align: center; border-top: 1px solid var(--line); margin-top: 16px; }
@@ -1176,6 +1192,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   body { overflow-x: hidden; }
   .app { padding: 16px 16px 16px; padding-top: calc(16px + env(safe-area-inset-top)); overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
+  .schedule-head-actions { width: 100%; }
   .status-strip { justify-content: flex-start; }
   .topbar.is-compact { flex-direction: row; align-items: center; }
   .topbar.is-compact .status-strip { width: auto; justify-content: flex-end; }
