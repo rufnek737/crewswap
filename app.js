@@ -6337,9 +6337,24 @@ if (!document.getElementById("splashScreen")) {
     }, 400);
   }
 
-  // 이미 로그인된(서버 계정 인증된) 사용자 — 스플래시 없이 바로 현재 화면 유지
+  // 이미 로그인된 사용자에게는 로그인·회원가입 버튼이 필요 없으므로 숨긴다.
+  // 다만 앱을 새로 켰을 때는 인트로 영상을 잠깐 보여주고 자동으로 넘어간다.
+  // (백그라운드에서 돌아온 경우는 이 스크립트가 다시 실행되지 않으므로 자연히 생략된다.)
   if (state.user.hasSignedUp && state.user.serverAuthed) {
-    hideSplash(queueReleaseNotice);
+    const buttons = splash.querySelector(".splash-buttons");
+    if (buttons) buttons.hidden = true;
+    splash.classList.add("is-intro");
+    const done = () => hideSplash(() => { queueReleaseNotice(); queueBetaNotice(); });
+    // 영상이 짧으면 끝나는 시점에, 길면 INTRO_MS 후에 넘어간다. 재생 실패해도 멈추지 않도록 타이머를 둔다.
+    const INTRO_MS = 2200;
+    const timer = setTimeout(done, INTRO_MS);
+    // 기다리기 싫으면 아무 데나 눌러 바로 넘어갈 수 있게 한다.
+    splash.addEventListener("click", () => { clearTimeout(timer); done(); }, { once: true });
+    if (video) {
+      video.loop = false;
+      video.addEventListener("ended", () => { clearTimeout(timer); done(); }, { once: true });
+      video.play?.().catch(() => { clearTimeout(timer); done(); });
+    }
     return;
   }
 
