@@ -860,6 +860,34 @@ function areConsecCalendarDays(k1, k2) {
   return (new Date(k2) - new Date(k1)) === 86400000;
 }
 
+// 선택한 날짜들을 '연속된 날짜' 단위로 끊어 독립 패턴 목록을 만든다.
+// 예: 2, 11, 12, 26 → [[2], [11,12], [26]] — 각각 별개의 스왑 글이고 크레딧도 따로 든다.
+// 등록 시점과 화면 표시가 같은 기준을 쓰도록 여기 한 곳에서만 판단한다.
+function groupConsecutiveDayKeys(dayKeys) {
+  const sorted = [...dayKeys].sort();
+  if (!sorted.length) return [];
+  const groups = [];
+  let cur = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    if (areConsecCalendarDays(sorted[i - 1], sorted[i])) cur.push(sorted[i]);
+    else { groups.push(cur); cur = [sorted[i]]; }
+  }
+  groups.push(cur);
+  return groups;
+}
+
+// 현재 선택을 독립 패턴 단위로 묶어, 각 그룹의 스케줄 배열로 돌려준다.
+function selectedScheduleGroups() {
+  return groupConsecutiveDayKeys([...state.selectedDays])
+    .map(keys => keys
+      .map(key => {
+        const { day, month } = parseDayKey(key);
+        return state.schedules.find(s => s.day === day && (s.month || state.currentMonth) === month);
+      })
+      .filter(Boolean))
+    .filter(g => g.length);
+}
+
 
 function selectPattern(day) {
   if (!state.selectionPurpose) {
@@ -2219,22 +2247,30 @@ function renderSelection() {
     $("#ruleCheck").innerHTML = "";
     return;
   }
-  const totalBlockMin = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
-  const totalDutyMin = ss.reduce((sum, s) => sum + dutyMinutesOf(s), 0);
-  const dd = dDayInfo(ss[0].day, ss[0].month);
-  const ddText = dd.expired ? "마감됨" : `${companyDeadlineDueText(dd)}까지`;
+  // 날짜가 이어지지 않은 선택은 서로 다른 패턴이라 각각 별개의 글로 등록된다.
+  // 예전에는 전부 한 덩어리로 요약해 보여줘서, 통으로 하나의 스왑이 올라간다고 오해하기 쉬웠다.
+  const groups = selectedScheduleGroups();
+  const patternHtml = groups.map(g => {
+    const blockMin = g.reduce((sum, s) => sum + flightMinutesOf(s), 0);
+    const dutyMin = g.reduce((sum, s) => sum + dutyMinutesOf(s), 0);
+    const gdd = dDayInfo(g[0].day, g[0].month);
+    const gddText = gdd.expired ? "마감됨" : `${companyDeadlineDueText(gdd)}까지`;
+    return `
+    <div class="pattern-summary">
+      <strong>${patternTitleFor(g)}</strong>
+      <div class="meta">
+        <span>승무(BLH) <b>${formatHM(blockMin)}</b></span>
+        <span>근무 <b>${formatHM(dutyMin)}</b></span>
+        <span>일수 <b>${g.length}일</b></span>
+        <span>회사 제출 <b>${gddText}</b></span>
+      </div>
+    </div>`;
+  }).join("");
 
   $("#selectedSummary").className = "";
   $("#selectedSummary").innerHTML = `
-    <div class="pattern-summary">
-      <strong>${patternTitleFor(ss)}</strong>
-      <div class="meta">
-        <span>승무(BLH) <b>${formatHM(totalBlockMin)}</b></span>
-        <span>근무 <b>${formatHM(totalDutyMin)}</b></span>
-        <span>일수 <b>${ss.length}일</b></span>
-        <span>회사 제출 <b>${ddText}</b></span>
-      </div>
-    </div>
+    ${groups.length > 1 ? `<div class="split-notice">📌 날짜가 이어지지 않아 <strong>${groups.length}개의 별개 스왑</strong>으로 나뉘어 등록됩니다${isPremiumUser() ? "" : ` · <strong>${groups.length}크레딧</strong> 사용`}</div>` : ""}
+    ${patternHtml}
     <div class="selected-list">
       ${ss.map(s => {
         const pair = crewPairingCheck(s);
@@ -2591,7 +2627,11 @@ function renderPostFooter() {
       document.getElementById("cancelEditPostButton").onclick = exitEditPostMode;
     }
   } else {
-    submitBtn.textContent = isPremiumUser() ? "등록하기 · PRO 무제한" : "등록하기 · 1크레딧";
+    // 날짜가 이어지지 않으면 여러 글로 나뉘어 등록되므로 크레딧도 그만큼 든다.
+    const postCount = Math.max(1, selectedScheduleGroups().length);
+    submitBtn.textContent = isPremiumUser()
+      ? (postCount > 1 ? `${postCount}건 등록하기 · PRO 무제한` : "등록하기 · PRO 무제한")
+      : (postCount > 1 ? `${postCount}건 등록하기 · ${postCount}크레딧` : "등록하기 · 1크레딧");
     if (existingBanner) existingBanner.remove();
   }
 
@@ -5580,20 +5620,8 @@ function bindEvents() {
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
     // 선택된 날짜를 연속 그룹으로 분리 (비연속 = 독립 패턴 = 각 1크레딧)
-    const allDayKeys = [...state.selectedDays].sort();
-    if (allDayKeys.length === 0) return;
-
-    const groups = [];
-    let cur = [allDayKeys[0]];
-    for (let i = 1; i < allDayKeys.length; i++) {
-      if (areConsecCalendarDays(allDayKeys[i - 1], allDayKeys[i])) {
-        cur.push(allDayKeys[i]);
-      } else {
-        groups.push(cur);
-        cur = [allDayKeys[i]];
-      }
-    }
-    groups.push(cur);
+    if (state.selectedDays.size === 0) return;
+    const groups = groupConsecutiveDayKeys([...state.selectedDays]);
 
     const needed = groups.length;
     const unlimitedCredits = isPremiumUser();

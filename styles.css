@@ -387,6 +387,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .selected-item dt { color: var(--muted); font-size: 11px; font-weight: 700; }
 .selected-item dd { margin: 0; color: var(--text); font-size: 12px; line-height: 1.4; }
 
+/* 날짜가 이어지지 않은 선택이 여러 글로 나뉘어 등록된다는 안내 */
+.split-notice { padding: 10px 12px; margin-bottom: 12px; border-radius: 8px; background: #fff3e0; border: 1px solid #f3c98a; color: #7c4a08; font-size: 12.5px; line-height: 1.5; }
 .pattern-summary { padding: 12px; border-radius: 8px; background: #f6f8fb; margin-bottom: 12px; }
 .pattern-summary strong { display: block; font-size: 14px; margin-bottom: 4px; }
 .pattern-summary .meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
