@@ -63,14 +63,14 @@ cat > build/ExportOptions.plist <<PLIST
 </plist>
 PLIST
 
+# 서명은 Xcode에 로그인된 Apple 계정으로 한다.
+# API 키(App Manager)로 클라우드 서명을 시도하면 인증서 생성 권한이 없어
+# "No signing certificate iOS Distribution found"로 실패한다. API 키는 업로드에만 쓴다.
 echo "▶ IPA 내보내는 중..."
 xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   -exportOptionsPlist build/ExportOptions.plist \
   -exportPath "$EXPORT_DIR" \
-  -allowProvisioningUpdates \
-  -authenticationKeyPath "$KEY_FILE" \
-  -authenticationKeyID "$KEY_ID" \
-  -authenticationKeyIssuerID "$ISSUER_ID" > /dev/null
+  -allowProvisioningUpdates > /dev/null
 
 IPA=$(find "$EXPORT_DIR" -name "*.ipa" | head -1)
 [ -z "$IPA" ] && { echo "❌ IPA를 찾을 수 없습니다"; exit 1; }
