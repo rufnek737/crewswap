@@ -590,7 +590,8 @@
         <!-- 등록 전 요약 -->
         <div class="post-footer">
           <div class="preview-stats" id="previewStats">
-            <div class="stat-cell"><span>등록 비용</span><strong>무료 1크레딧</strong><small>PRO는 무제한</small></div>
+            <!-- 실제 등록 건수(연속 날짜 묶음 수)에 따라 renderPostFooter에서 갱신 -->
+            <div class="stat-cell"><span>등록 비용</span><strong id="previewCostValue">무료 1크레딧</strong><small id="previewCostNote">PRO는 무제한</small></div>
           </div>
           <div class="rule-check-summary" id="postRuleCheck"></div>
           <div class="post-footer-btns">
@@ -966,7 +967,7 @@
     <script src="release-notice.js?v=1.1.10"></script>
     <script src="selection-flow.js?v=1.0.0"></script>
     <script src="airport-aliases.js?v=1.0.0"></script>
-    <script src="app.js?v=1.1.36"></script>
+    <script src="app.js?v=1.1.37"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

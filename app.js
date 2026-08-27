@@ -2632,6 +2632,15 @@ function renderPostFooter() {
     submitBtn.textContent = isPremiumUser()
       ? (postCount > 1 ? `${postCount}건 등록하기 · PRO 무제한` : "등록하기 · PRO 무제한")
       : (postCount > 1 ? `${postCount}건 등록하기 · ${postCount}크레딧` : "등록하기 · 1크레딧");
+    // 상단 '등록 비용' 요약도 실제 건수에 맞춘다 (예전에는 항상 '무료 1크레딧' 고정)
+    const costValue = document.getElementById("previewCostValue");
+    const costNote = document.getElementById("previewCostNote");
+    if (costValue) costValue.textContent = isPremiumUser()
+      ? (postCount > 1 ? `${postCount}건 · PRO 무제한` : "PRO 무제한")
+      : (postCount > 1 ? `${postCount}건 · ${postCount}크레딧` : "무료 1크레딧");
+    if (costNote) costNote.textContent = postCount > 1
+      ? "날짜가 이어지지 않아 글이 나뉩니다"
+      : (isPremiumUser() ? "PRO 이용 중" : "PRO는 무제한");
     if (existingBanner) existingBanner.remove();
   }
 
