@@ -829,7 +829,10 @@ async function handlePostsGet(request, env) {
     const auth = await authenticateRequest(request, env);
     const viewerIsPro = auth ? await isPremiumAccount(env, auth.email) : false;
     const idx = await getPostsIndex(env);
-    const posts = idx.filter(p => p && p.status === 'active').map(p => {
+    // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
+    // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
+    // 보여주되 클라이언트에서 요청 버튼을 막는다.
+    const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting')).map(p => {
       const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
@@ -1088,6 +1091,8 @@ async function handleRequestsAccept(request, env, authEmail) {
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
+    // 성사된 글은 다른 사람이 중복 요청하지 못하도록 '회사 상신중'으로 잠근다.
+    await lockPostAsSubmitting(env, rec.postId);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -1244,6 +1249,8 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
+    // 성사된 글은 다른 사람이 중복 요청하지 못하도록 '회사 상신중'으로 잠근다.
+    await lockPostAsSubmitting(env, rec.postId);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -1352,6 +1359,23 @@ async function handleRequestsSubmitNudge(request, env, authEmail) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* 상호 수락된 글은 더 이상 다른 사람이 요청할 수 없어야 한다.
+   글을 목록에서 지우는 대신 'submitting'(회사 상신중)으로 바꿔, 남들에게는
+   진행 중이라는 사실이 보이되 선택은 막는다. 실제 삭제는 글 작성자가
+   회사 상신을 완료했다고 표시할 때 이뤄진다. */
+async function lockPostAsSubmitting(env, postId) {
+  if (!postId) return;
+  const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
+  if (!post || post.status !== 'active') return;
+  post.status = 'submitting';
+  post.matched = true;
+  post.matchedAt = new Date().toISOString();
+  await env.POSTS.put(`post:${postId}`, JSON.stringify(post));
+  const idx = await getPostsIndex(env);
+  const i = idx.findIndex(p => p && p.id === postId);
+  if (i >= 0) { idx[i] = post; await savePostsIndex(env, idx); }
+}
+
 /* ── requests-submit-done (글작성자가 "회사 상신 완료" 표시) ───────── */
 
 async function handleRequestsSubmitDone(request, env, authEmail) {
@@ -1369,6 +1393,14 @@ async function handleRequestsSubmitDone(request, env, authEmail) {
     rec.status = '✅ 회사 상신 완료';
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
+    // 상신까지 끝난 글은 역할을 다했으므로 목록에서 지운다.
+    // (요청 레코드는 남아 양쪽이 진행 이력을 계속 볼 수 있다.)
+    if (rec.postId) {
+      await env.POSTS.delete(`post:${rec.postId}`);
+      const idx = await getPostsIndex(env);
+      const next = idx.filter(p => p && p.id !== rec.postId);
+      if (next.length !== idx.length) await savePostsIndex(env, next);
+    }
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }

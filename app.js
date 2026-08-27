@@ -2741,11 +2741,12 @@ function renderMatches() {
   list.innerHTML = items.map(({post, score}) => {
     const dd = score.dDay;
     const wantedTxt = wantedSummary(post.wanted);
+    const isSubmitting = post.status === "submitting";
     return `
-    <article class="match-card">
+    <article class="match-card${isSubmitting ? " is-submitting" : ""}">
       <div class="card-head">
         <div>
-          <h3>${post.offered.patternName}</h3>
+          <h3>${post.offered.patternName}${isSubmitting ? ` <span class="badge badge-submitting">회사 상신중</span>` : ""}</h3>
           <p>${post.offered.summary}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</p>
           <div class="badges">
             <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${post.offered.type}</span>
@@ -2763,7 +2764,9 @@ function renderMatches() {
       ${matchPostDetailsHtml(post.offered)}
 
       <div class="card-actions">
-        ${post.contactable === false
+        ${post.status === "submitting"
+          ? `<div class="card-unavailable submitting">🔒 이미 스왑이 성사되어 <strong>회사 상신 중</strong>입니다 — 요청할 수 없습니다</div>`
+          : post.contactable === false
           ? `<div class="card-unavailable">이전 버전 글이라 요청할 수 없습니다</div>`
           : `<button class="secondary-button" data-action="ask" data-post="${post.id}">💬 양도 의향 묻기</button>
         <button class="primary-button" data-action="request" data-post="${post.id}">${isPremiumUser() ? "요청하기 · PRO 무제한" : "요청하기 · 1크레딧"}</button>`}
@@ -5909,6 +5912,7 @@ function bindEvents() {
     markAllAlertsRead(); // 확인한 것으로 처리해 배지를 지운다
   });
   $("#releaseNoticeConfirm")?.addEventListener("click", acknowledgeReleaseNotice);
+  $("#betaNoticeConfirm")?.addEventListener("click", acknowledgeBetaNotice);
   // 알림창 좌측 배경(backdrop) 클릭 시 닫힘 (우측 상단 X 대체)
   $("#alertBackdrop")?.addEventListener("click", () => setAlertPanel(false));
   document.getElementById("clearAllAlerts")?.addEventListener("click", () => {
@@ -6126,6 +6130,43 @@ function queueReleaseNotice() {
   setTimeout(showReleaseNoticeIfNeeded, 450);
 }
 
+/* ── 베타 테스트 안내 ────────────────────────────────────────────
+   앱에서 스왑이 성사돼도 실제 근무는 교환되지 않는다는 점을 로그인 후
+   첫 화면에서 확실히 알린다. '오늘 하루 보지 않기'로 접어둘 수 있고,
+   날짜가 바뀌면 다시 뜬다. 정식 출시 때 BETA_NOTICE_ACTIVE만 false로 두면 된다. */
+const BETA_NOTICE_ACTIVE = true;
+const BETA_NOTICE_KEY = "crewswap_beta_notice_hidden_until";
+
+function showBetaNoticeIfNeeded() {
+  if (!BETA_NOTICE_ACTIVE) return;
+  if (!state.user.hasSignedUp || !state.user.serverAuthed) return;
+  // 업데이트 공지가 떠 있으면 겹치지 않게 그 뒤로 미룬다.
+  if (!document.getElementById("releaseNoticeDialog")?.hidden) { setTimeout(showBetaNoticeIfNeeded, 800); return; }
+  let hiddenUntil = "";
+  try { hiddenUntil = localStorage.getItem(BETA_NOTICE_KEY) || ""; } catch { /* 저장 불가 환경은 매번 표시 */ }
+  if (hiddenUntil === todayKeyLocal()) return;
+  const check = document.getElementById("betaNoticeHideToday");
+  if (check) check.checked = false;
+  openGenericModal("betaNoticeDialog", "betaNoticeOverlay");
+}
+
+function todayKeyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function acknowledgeBetaNotice() {
+  const check = document.getElementById("betaNoticeHideToday");
+  if (check?.checked) {
+    try { localStorage.setItem(BETA_NOTICE_KEY, todayKeyLocal()); } catch { /* 무시 */ }
+  }
+  closeGenericModal("betaNoticeDialog", "betaNoticeOverlay");
+}
+
+function queueBetaNotice() {
+  setTimeout(showBetaNoticeIfNeeded, 700);
+}
+
 function openSignupModal() {
   const sp = document.getElementById("signupPanel");
   const ov = document.getElementById("signupOverlay");
@@ -6209,6 +6250,7 @@ function applyLoggedInProfile(email, profile, premiumStatus = null, wallet = nul
   syncPremiumAlertSettings();
   refreshNativeStoreEntitlement();
   queueReleaseNotice();
+  queueBetaNotice();
   pullSchedulesFromServer();
 }
 
@@ -6276,7 +6318,7 @@ function maybeAutoShowSignup() {
 // 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
 if (!document.getElementById("splashScreen")) {
   setTimeout(maybeAutoShowSignup, 150);
-  if (state.user.hasSignedUp && state.user.serverAuthed) queueReleaseNotice();
+  if (state.user.hasSignedUp && state.user.serverAuthed) { queueReleaseNotice(); queueBetaNotice(); }
 }
 
 /* ====== 스플래시 화면 (영상 + 로그인/회원가입) ====== */
