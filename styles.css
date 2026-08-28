@@ -385,6 +385,8 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .empty-reasons { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .empty-reasons li { line-height: 1.5; }
 .empty-note { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.empty-state.is-error { border-color: #e2a03f; background: #fff8ec; }
+.empty-state.is-error .secondary-button { margin-top: 10px; justify-self: start; }
 
 .selected-list, .card-list { display: grid; gap: 12px; }
 .selected-item { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }

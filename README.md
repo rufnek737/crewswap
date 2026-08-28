@@ -185,8 +185,8 @@ netlify dev          # http://localhost:8889
 - **검증**: 회귀 테스트 9개 추가(`tests/swap-direction.test.mjs`) — 전부 통과. 수정 전 코드로 재현 스크립트를 돌려
   `FLY_TO_OFF`에서 예외가 나는 것을 확인하고, 수정 후 같은 스크립트에서 방향별로 의도한 글만 남는 것까지 확인했다.
   (`npm test`의 기존 실패 4건은 `node_modules` 미설치로 `web-push`를 못 찾는 것으로, 이 수정과 무관하다.)
-- 웹 `app.js?v=1.1.41`·`styles.css?v=1.1.20`·`swap-direction.js?v=1.0.0`·`match-exclusions.js?v=1.0.0`,
-  PWA `crewswap-v141`, 버전 표기 `2026.08.28`.
+- 웹 `app.js?v=1.1.42`·`styles.css?v=1.1.21`·`swap-direction.js?v=1.0.0`·`match-exclusions.js?v=1.0.0`,
+  PWA `crewswap-v142`, 버전 표기 `2026.08.28`.
 
 #### 계정별로 보이는 건수가 달랐던 건(2 / 0 / 5)의 실제 원인
 테스터 3명의 화면 캡쳐를 서버 글과 대조해 재현 스크립트로 확인했다. 세 명 모두 **정상 동작**이었고,
@@ -203,6 +203,26 @@ netlify dev          # http://localhost:8889
 - `fetchPosts`가 목록에서 뺀 내 글 건수를 `state.myPostsHiddenInFind`에 남기고, 요약 줄과 빈 목록
   안내에 `내 글 3` / `내가 올린 글 3건은 이 목록에 나오지 않습니다`로 표시한다.
 - 참고: 카드의 `✈ 737-800` 배지는 `aircraft: "NG"`의 표시 라벨이며(`aircraftLabel`), 정규화 누락이 아니다.
+
+#### 불러오기 실패가 "0건"으로 보이던 문제
+`Ssjinu` 테스터는 직책·기종·등급이 다른 테스터와 같은데도 0건이었다. 자동 필터로는 설명되지 않는다.
+남는 경로는 `state.posts`가 비어 있는 경우인데, `fetchPosts`가 이를 조용히 삼키고 있었다.
+
+```js
+const res = await apiFetch(`${API_BASE}/api/posts-get`);
+if (!res.ok) return;              // ← 아무 표시 없이 종료, state.posts는 []
+...
+} catch (e) { console.warn(...); } // ← 네트워크 실패도 콘솔에만
+```
+
+즉 **불러오기 실패와 "서버에 글이 0건"이 화면에서 완전히 똑같이 보였다.** 한 번 실패하면 탭을 다시
+열거나 당겨서 새로고침하기 전까지 계속 빈 목록이라, 다른 테스터와 건수가 달라도 원인을 알 수 없었다.
+
+- `state.postsLoadError` / `state.postsLoadedAt` 추가. 실패 시 요약 줄에 `⚠️ 스왑 글을 불러오지
+  못했습니다 — 서버 응답 오류 (HTTP 500)`, 본문에 사유와 **다시 시도** 버튼, 마지막으로 불러온 시각을 띄운다.
+- 실패해도 직전에 받아둔 목록은 지우지 않는다. 비우면 "글이 사라졌다"로 보인다.
+- 서버 쪽은 확인 결과 특정 계정만 실패할 구조가 아니다. `/api/posts-get`은 `PUBLIC_PATHS`라
+  401 게이트를 타지 않고, `authenticateRequest`는 토큰이 깨져도 예외를 삼키고 `null`을 돌려준다.
 
 #### 함께 확인했지만 코드 문제가 아니었던 것
 - **회사 제출 마감이 지난 글은 목록에서 제외된다**(조종사 영업 2일 전 17시, 객실 영업 3일 전). 테스트하려고

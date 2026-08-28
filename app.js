@@ -200,6 +200,8 @@ const state = {
   posts: [],
   myPosts: [],      // 내가 등록한 글
   myPostsHiddenInFind: 0, // 내 글이라 스왑 찾기 목록에서 뺀 건수
+  postsLoadError: null,   // 스왑 글 불러오기 실패 사유 (성공하면 null)
+  postsLoadedAt: null,    // 마지막으로 목록을 받아온 시각
   postDraft: null,  // 임시 저장된 등록 폼
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
@@ -2741,6 +2743,16 @@ function emptyMatchHtml() {
     ? `<p class="empty-note">내가 올린 글 ${hiddenMine}건은 이 목록에 나오지 않습니다 — <strong>내가 올린 스왑 관리</strong>에서 확인하세요.</p>`
     : "";
 
+  // 불러오기가 실패한 상태 — "0건"과 구분해서 보여주고 다시 시도할 수 있게 한다.
+  if (state.postsLoadError) {
+    return `<div class="empty-state is-detailed is-error">
+      <strong>스왑 글을 불러오지 못했습니다.</strong>
+      <p>${escapeHtml(state.postsLoadError)} · 목록이 비어 보이는 것은 서버에 글이 없어서가 아닙니다.</p>
+      <button class="secondary-button" data-action="retry-posts">다시 시도</button>
+      ${state.postsLoadedAt ? `<p class="empty-note">마지막으로 불러온 시각 ${new Date(state.postsLoadedAt).toLocaleTimeString("ko-KR")}</p>` : ""}
+    </div>`;
+  }
+
   if (!state.posts.length) {
     return `<div class="empty-state"><strong>지금 올라온 다른 사람의 스왑 글이 없습니다.</strong>
       <p>${hint}</p>${mine}</div>`;
@@ -2772,6 +2784,16 @@ function renderMatches() {
   const autoExcluded = exclusionRows.reduce((sum, row) => sum + row.count, 0);
   // 자동 필터는 통과했지만 내가 건 조건에 걸린 글
   const filteredOut = state.posts.length - autoExcluded - items.length;
+  if (state.postsLoadError) {
+    $("#matchSummary").textContent = `⚠️ 스왑 글을 불러오지 못했습니다 — ${state.postsLoadError}`;
+    list.innerHTML = emptyMatchHtml();
+    list.querySelector("[data-action='retry-posts']")?.addEventListener("click", () => {
+      state.postsLoadError = null;
+      renderMatches();
+      fetchPosts();
+    });
+    return;
+  }
   $("#matchSummary").textContent = items.length
     ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleLabel}${pilotQualStr}`
       + matchExclusionSummaryText(exclusionRows, filteredOut)
@@ -3333,7 +3355,9 @@ async function enablePremiumBackgroundAlerts() {
 async function fetchPosts() {
   try {
     const res = await apiFetch(`${API_BASE}/api/posts-get`);
-    if (!res.ok) return;
+    // 예전에는 여기서 그냥 return 해서, 불러오기 실패와 "글이 0건"이 화면에서
+    // 구분되지 않았다. 테스터마다 보이는 건수가 달라도 원인을 알 수 없던 이유다.
+    if (!res.ok) { setPostsLoadError(`서버 응답 오류 (HTTP ${res.status})`); return; }
     const data = await res.json();
     const myIds = new Set(state.myPosts.map(p => p.id));
     const now = Date.now();
@@ -3349,11 +3373,21 @@ async function fetchPosts() {
           ? Math.max(0, Math.round((now - new Date(p.registeredAt).getTime()) / 3600000))
           : 0,
       }));
+    state.postsLoadError = null;
+    state.postsLoadedAt = Date.now();
     renderMatches();
     scanSavedSearches();
   } catch (e) {
     console.warn("fetchPosts error:", e);
+    setPostsLoadError(e.message || "네트워크 오류");
   }
+}
+
+// 불러오기 실패를 화면에 남긴다. 직전에 받아둔 목록은 지우지 않는다 —
+// 실패했다고 목록을 비우면 "글이 사라졌다"로 보인다.
+function setPostsLoadError(reason) {
+  state.postsLoadError = reason;
+  renderMatches();
 }
 
 // 매칭 성사(상호 수락) 시 호출 — 월/연 스왑 횟수 카운팅
