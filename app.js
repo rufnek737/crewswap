@@ -13,7 +13,7 @@ const API_BASE = "https://crewswap-api.tae26001.workers.dev";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.1.8";
-const APP_RELEASE_DATE = "2026.08.27";
+const APP_RELEASE_DATE = "2026.08.28";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -1665,20 +1665,12 @@ function matchScore(post) {
 }
 
 function matchesDirection(post, dir) {
-  // 내가 원하는 변환 방향과 post.offered ↔ post.wanted 가 부합하는가
-  const o = post.offered.type;
-  const w = post.wanted.types;
-  switch (dir) {
-    case "AM_TO_PM": return post.offered && post.wanted.time?.includes("PM");
-    case "PM_TO_AM": return post.offered && post.wanted.time?.includes("AM");
-    case "FLY_TO_OFF": return ["국내선","국제선","LAYOV"].includes(o) && w.includes("OFF");
-    case "OFF_TO_FLY": return o === "OFF" && (w.includes("국내선") || w.includes("국제선") || w.includes("비행(전체)"));
-    case "RSV_TO_OFF": return o === "RSV" && w.includes("OFF");
-    case "OFF_TO_RSV": return o === "OFF" && w.includes("RSV");
-    case "LAY_TO_DOM": return o === "LAYOV" && w.includes("국내선");
-    case "INTL_TO_DOM": return o === "국제선" && w.includes("국내선");
-    default: return false;
-  }
+  // 내가 원하는 변환 방향과 post.offered ↔ post.wanted 가 부합하는가.
+  // 판정은 swap-direction.js가 한다 — 새 글에는 wanted.types가 없어서 예전처럼
+  // 여기서 직접 읽으면 예외가 나고 매칭 목록 전체가 그려지지 않았다.
+  const api = window.CrewSwapSwapDirection;
+  if (!api) return true; // 모듈 로드 실패 시에도 글을 감추지 않는다
+  return api.matches(post, dir);
 }
 
 function visiblePosts() {
@@ -1780,9 +1772,7 @@ function candidateCountForOffered() {
     const roleOK = isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
       : p.ownerRole === state.user.roleType;
-    const typeOK = p.wanted.types.includes(myType)
-      || p.wanted.types.includes("아무거나")
-      || (isFlight && p.wanted.types.includes("비행(전체)"));
+    const typeOK = !!window.CrewSwapSwapDirection?.wantsOfferedType(p, myType);
     return roleOK && typeOK;
   }).length;
 }
