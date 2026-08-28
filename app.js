@@ -1604,43 +1604,40 @@ function checkRulesForSelection() {
 }
 
 /* ====== 7. 매칭 / 점수 ====== */
+// 이 글이 자동 필터에서 빠지는 이유 (통과하면 null).
+// 매칭 점수와 빈 목록 안내가 같은 기준을 쓰도록 판정은 match-exclusions.js 한 곳에서 한다.
+function matchExclusionReason(post) {
+  const api = window.CrewSwapMatchExclusions;
+  if (!api) return null;
+  const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
+  return api.reasonFor(post, state.user, { expired: dd.expired });
+}
+
 function matchScore(post) {
-  // 필수 통과: 동일 회사 + 동일 직군
-  if ((post.airline || "JEJU") !== state.user.airline) return null;
-  if ((post.crewType || "PILOT") !== state.user.crewType) return null;
+  // 자동 필터(회사·직군·직책·기종·자격·마감)에 걸리면 목록에 올리지 않는다.
+  if (matchExclusionReason(post)) return null;
 
   // 객실: 포지션 무관 매칭 (직책 규정은 룰 체크에서 안내)
   if (state.user.crewType === "CABIN") {
     const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
-    if (dd.expired) return null; // 마감 지난 글은 스왑 찾기 목록에서 제외 (서버 정리 전 클라이언트 안전망)
     const breakdown = {
       roleMatch: 30,
       aircraftMatch: 20,
       qualMatch: 15,
       baseBonus: post.ownerBase === state.user.base ? 10 : 0,
       timeMatch: state.filters.direction === "all" ? 5 : (matchesDirection(post, state.filters.direction) ? 10 : 0),
-      deadlineUrgency: !dd.expired ? (dd.days <= 1 ? 10 : dd.days <= 3 ? 6 : 3) : 0,
+      deadlineUrgency: dd.days <= 1 ? 10 : dd.days <= 3 ? 6 : 3,
       ratingBonus: post.ownerRating >= 4.5 ? 5 : 0,
     };
     const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
     return { total: Math.min(100, total), breakdown, dDay: dd };
   }
 
-  // 조종사: 동일 포지션(기장↔기장, 부기장↔부기장) 필수
-  const myPos = state.user.roleType.startsWith("CAPTAIN") ? "CAPTAIN" : "FO";
-  const postPos = (post.ownerRole || "").startsWith("CAPTAIN") ? "CAPTAIN" : "FO";
-  if (myPos !== postPos) return null;
-  // 기종 호환
-  let aircraftOK = !post.offered.aircraft || state.user.aircraft === "NG_MAX" || post.offered.aircraft === state.user.aircraft;
-  if (!aircraftOK) return null;
-  // 자격
-  if (post.offered.edto && !state.user.edto) return null;
-  if (post.offered.cat3 && !state.user.cat3) return null;
-
+  // 조종사 — 포지션·기종·자격은 위 자동 필터에서 이미 통과한 상태다.
   // 점수 계산 (100 만점)
   const breakdown = {
     roleMatch: 30,           // 동일 등급
-    aircraftMatch: aircraftOK ? 20 : 0,
+    aircraftMatch: 20,
     qualMatch: 15,           // 자격 통과
     baseBonus: post.ownerBase === state.user.base ? 10 : 0,
     timeMatch: 0,            // 시간대 (방향 변환 일치 시)
@@ -1649,12 +1646,9 @@ function matchScore(post) {
   };
   // 마감 임박 시 가중치
   const dd = dDayInfo(post.deadlineDay, postDeadlineMonth(post));
-  if (dd.expired) return null; // 마감 지난 글은 스왑 찾기 목록에서 제외 (서버 정리 전 클라이언트 안전망)
-  if (!dd.expired) {
-    if (dd.days <= 1) breakdown.deadlineUrgency = 10;
-    else if (dd.days <= 3) breakdown.deadlineUrgency = 6;
-    else breakdown.deadlineUrgency = 3;
-  }
+  if (dd.days <= 1) breakdown.deadlineUrgency = 10;
+  else if (dd.days <= 3) breakdown.deadlineUrgency = 6;
+  else breakdown.deadlineUrgency = 3;
   // 방향 변환 일치
   const dir = state.filters.direction;
   if (dir === "all") breakdown.timeMatch = 5;
@@ -2713,6 +2707,34 @@ function matchPostDetailsHtml(offered) {
     </details>`;
 }
 
+// 목록이 비었을 때 "왜 안 보이는지"를 그대로 보여준다.
+// 이유 없이 빈 화면만 나오면 앱이 고장 난 것으로 보이고, 실제로 문의로 이어졌다.
+function emptyMatchHtml() {
+  const hint = `저장 검색에 등록해두면 조건에 맞는 새 글이 올라올 때 알림을 받을 수 있습니다.`;
+  const mine = state.myPosts.length
+    ? `<p class="empty-note">내가 올린 글 ${state.myPosts.length}건은 이 목록에 나오지 않습니다 — <strong>내가 올린 스왑 관리</strong>에서 확인하세요.</p>`
+    : "";
+
+  if (!state.posts.length) {
+    return `<div class="empty-state"><strong>지금 올라온 다른 사람의 스왑 글이 없습니다.</strong>
+      <p>${hint}</p>${mine}</div>`;
+  }
+
+  const api = window.CrewSwapMatchExclusions;
+  const rows = api ? api.summarize(state.posts.map(matchExclusionReason)) : [];
+  const excluded = rows.reduce((sum, row) => sum + row.count, 0);
+  const byMyFilters = state.posts.length - excluded; // 자동 필터는 통과했지만 내가 건 필터에 걸린 글
+  const lines = rows.map(row => `<li>${escapeHtml(row.label)} · ${row.count}건</li>`);
+  if (byMyFilters > 0) {
+    lines.push(`<li>내가 선택한 조건(종류·날짜·시간·권역)에 걸린 글 · ${byMyFilters}건 — <strong>조건 수정</strong>에서 완화해보세요.</li>`);
+  }
+
+  return `<div class="empty-state is-detailed">
+    <strong>지금 올라온 스왑 글 ${state.posts.length}건이 모두 제외됐습니다.</strong>
+    <ul class="empty-reasons">${lines.join("")}</ul>
+    <p>${hint}</p>${mine}</div>`;
+}
+
 function renderMatches() {
   const list = $("#matchList");
   const items = visiblePosts();
@@ -2723,9 +2745,9 @@ function renderMatches() {
     ? ` · ${state.user.aircraft==="NG_MAX"?"NG+MAX":"NG"}${state.user.edto?" · EDTO":""}${state.user.cat3?" · CAT III":""}` : "";
   $("#matchSummary").textContent = items.length
     ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleLabel}${pilotQualStr}`
-    : `현재 조건으로 매칭 가능한 글이 없습니다. (다른 회사·직군·등급/직책 글은 자동 제외)`;
+    : `올라온 글 ${state.posts.length}건 중 매칭 가능한 글이 없습니다 · 아래에서 제외 사유를 확인하세요.`;
   if (items.length === 0) {
-    list.innerHTML = `<div class="empty-state">조건을 완화하거나 저장 검색에 등록하면 새 글이 올라올 때 알림을 받을 수 있습니다.</div>`;
+    list.innerHTML = emptyMatchHtml();
     return;
   }
   list.innerHTML = items.map(({post, score}) => {
