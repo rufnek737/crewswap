@@ -2707,6 +2707,28 @@ function matchPostDetailsHtml(offered) {
     </details>`;
 }
 
+// 자동 필터에 걸린 글을 사유별로 센다. 요약 줄과 빈 목록 안내가 같은 값을 쓴다.
+// 같은 서버 글을 봐도 계정마다 보이는 건수가 다른 것이 정상인지 아닌지를
+// 사용자가 직접 확인할 수 있어야 해서, 목록이 비지 않았을 때도 보여준다.
+function matchExclusionRows() {
+  const api = window.CrewSwapMatchExclusions;
+  if (!api) return [];
+  return api.summarize(state.posts.map(matchExclusionReason));
+}
+
+const EXCLUSION_SHORT_LABELS = {
+  airline: "다른 항공사", crewType: "다른 직군", position: "다른 직책",
+  aircraft: "기종", edto: "EDTO", cat3: "CAT III", deadline: "마감",
+};
+
+// "· 제외 8건 (마감 5 · 다른 직책 3)" 형태의 짧은 요약
+function matchExclusionSummaryText(rows, filteredOut) {
+  const parts = rows.map(row => `${EXCLUSION_SHORT_LABELS[row.reason] || row.reason} ${row.count}`);
+  if (filteredOut > 0) parts.push(`내 조건 ${filteredOut}`);
+  const total = rows.reduce((sum, row) => sum + row.count, 0) + Math.max(0, filteredOut);
+  return total ? ` · 제외 ${total}건 (${parts.join(" · ")})` : "";
+}
+
 // 목록이 비었을 때 "왜 안 보이는지"를 그대로 보여준다.
 // 이유 없이 빈 화면만 나오면 앱이 고장 난 것으로 보이고, 실제로 문의로 이어졌다.
 function emptyMatchHtml() {
@@ -2720,8 +2742,7 @@ function emptyMatchHtml() {
       <p>${hint}</p>${mine}</div>`;
   }
 
-  const api = window.CrewSwapMatchExclusions;
-  const rows = api ? api.summarize(state.posts.map(matchExclusionReason)) : [];
+  const rows = matchExclusionRows();
   const excluded = rows.reduce((sum, row) => sum + row.count, 0);
   const byMyFilters = state.posts.length - excluded; // 자동 필터는 통과했지만 내가 건 필터에 걸린 글
   const lines = rows.map(row => `<li>${escapeHtml(row.label)} · ${row.count}건</li>`);
@@ -2743,8 +2764,13 @@ function renderMatches() {
   const roleLabel = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
   const pilotQualStr = state.user.crewType !== "CABIN"
     ? ` · ${state.user.aircraft==="NG_MAX"?"NG+MAX":"NG"}${state.user.edto?" · EDTO":""}${state.user.cat3?" · CAT III":""}` : "";
+  const exclusionRows = matchExclusionRows();
+  const autoExcluded = exclusionRows.reduce((sum, row) => sum + row.count, 0);
+  // 자동 필터는 통과했지만 내가 건 조건에 걸린 글
+  const filteredOut = state.posts.length - autoExcluded - items.length;
   $("#matchSummary").textContent = items.length
     ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleLabel}${pilotQualStr}`
+      + matchExclusionSummaryText(exclusionRows, filteredOut)
     : `올라온 글 ${state.posts.length}건 중 매칭 가능한 글이 없습니다 · 아래에서 제외 사유를 확인하세요.`;
   if (items.length === 0) {
     list.innerHTML = emptyMatchHtml();
