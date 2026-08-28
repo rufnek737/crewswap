@@ -199,6 +199,7 @@ const state = {
   schedules: [],
   posts: [],
   myPosts: [],      // 내가 등록한 글
+  myPostsHiddenInFind: 0, // 내 글이라 스왑 찾기 목록에서 뺀 건수
   postDraft: null,  // 임시 저장된 등록 폼
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
@@ -2723,9 +2724,11 @@ const EXCLUSION_SHORT_LABELS = {
 
 // "· 제외 8건 (마감 5 · 다른 직책 3)" 형태의 짧은 요약
 function matchExclusionSummaryText(rows, filteredOut) {
+  const mine = state.myPostsHiddenInFind || 0;
   const parts = rows.map(row => `${EXCLUSION_SHORT_LABELS[row.reason] || row.reason} ${row.count}`);
   if (filteredOut > 0) parts.push(`내 조건 ${filteredOut}`);
-  const total = rows.reduce((sum, row) => sum + row.count, 0) + Math.max(0, filteredOut);
+  if (mine > 0) parts.push(`내 글 ${mine}`);
+  const total = rows.reduce((sum, row) => sum + row.count, 0) + Math.max(0, filteredOut) + mine;
   return total ? ` · 제외 ${total}건 (${parts.join(" · ")})` : "";
 }
 
@@ -2733,8 +2736,9 @@ function matchExclusionSummaryText(rows, filteredOut) {
 // 이유 없이 빈 화면만 나오면 앱이 고장 난 것으로 보이고, 실제로 문의로 이어졌다.
 function emptyMatchHtml() {
   const hint = `저장 검색에 등록해두면 조건에 맞는 새 글이 올라올 때 알림을 받을 수 있습니다.`;
-  const mine = state.myPosts.length
-    ? `<p class="empty-note">내가 올린 글 ${state.myPosts.length}건은 이 목록에 나오지 않습니다 — <strong>내가 올린 스왑 관리</strong>에서 확인하세요.</p>`
+  const hiddenMine = state.myPostsHiddenInFind || 0;
+  const mine = hiddenMine
+    ? `<p class="empty-note">내가 올린 글 ${hiddenMine}건은 이 목록에 나오지 않습니다 — <strong>내가 올린 스왑 관리</strong>에서 확인하세요.</p>`
     : "";
 
   if (!state.posts.length) {
@@ -3333,7 +3337,11 @@ async function fetchPosts() {
     const data = await res.json();
     const myIds = new Set(state.myPosts.map(p => p.id));
     const now = Date.now();
-    state.posts = (data.posts || [])
+    const serverPosts = data.posts || [];
+    // 내가 올린 글은 스왑 찾기에 띄우지 않는다. 몇 건을 뺐는지 남겨서
+    // "다른 사람보다 왜 적게 보이지?"를 화면에서 바로 알 수 있게 한다.
+    state.myPostsHiddenInFind = serverPosts.filter(p => myIds.has(p.id)).length;
+    state.posts = serverPosts
       .filter(p => !myIds.has(p.id))
       .map(p => ({
         ...p,
