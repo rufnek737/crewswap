@@ -672,6 +672,11 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .card-unavailable.submitting { color: #7c4a08; background: #fff3e0; border: 1px solid #f3c98a; }
 .match-card.is-submitting { opacity: .78; }
 .badge-submitting { background: #fff3e0 !important; color: #b45309 !important; font-size: 11px; vertical-align: middle; margin-left: 6px; }
+/* 등급 조합이 안 맞는 글 — 목록에는 남기되 요청은 막고 사유를 보여준다 */
+.card-unavailable.grade-blocked { color: #9f1239; background: #fff1f2; border: 1px solid #fecdd3; line-height: 1.5; }
+.card-unavailable-sub { font-size: 11px; opacity: .8; }
+.match-card.is-grade-blocked { opacity: .78; }
+.badge-grade-blocked { background: #fff1f2 !important; color: #9f1239 !important; font-size: 11px; vertical-align: middle; margin-left: 6px; }
 .card-actions button { flex: 1; }
 
 /* ===== 양방향 등록 폼 ===== */

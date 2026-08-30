@@ -35,8 +35,11 @@ VERSION=$(grep -m1 -E "MARKETING_VERSION = " ios/App/App.xcodeproj/project.pbxpr
 
 echo "▶ CrewSwap ${VERSION} (${BUILD_NO}) 업로드 준비"
 
-# 웹 자산을 네이티브 번들로 동기화 (www는 gitignore 대상이라 매번 복사해야 한다)
-cp app.js styles.css sw.js index.html www/
+# 웹 자산을 네이티브 번들로 동기화 (www는 gitignore 대상이라 매번 복사해야 한다).
+# 파일명을 하나씩 적으면 새 모듈을 추가할 때마다 빠뜨리고, 네이티브 빌드에서만
+# 그 스크립트가 404가 나 "폰에서만 안 된다"로 나타난다. 그래서 통째로 복사한다.
+mkdir -p www
+cp *.js *.html styles.css manifest.json icon-192.png icon-512.png splash-poster.jpg splash.mp4 www/
 npx cap sync ios > /dev/null
 
 ARCHIVE="build/CrewSwap-${VERSION}-${BUILD_NO}.xcarchive"

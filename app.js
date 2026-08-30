@@ -53,8 +53,8 @@ const CABIN_ROLE_LABELS = {
 const CABIN_RANK = { CC:1, AP:2, PS:3, SP:4, CP:5 };
 
 const FO_GRADES_BY_CAPTAIN_GRADE = { A: ["A","B","C"], B: ["A","B"], C: ["A"] };
-// 내 등급에서 스왑 가능한 상대 등급: A는 모두, B는 A/B, C는 C만
-const VIEWABLE_GRADES = { A: ["A","B","C"], B: ["A","B"], C: ["C"] };
+// 등급 조합 판정은 grade-policy.js 한 곳에서만 한다 (목록 노출은 포지션만, 요청은 등급까지)
+const GRADE_POLICY = window.CrewSwapGradePolicy;
 
 function today() { return new Date(); }
 const HOLIDAYS = new Set(["2026-06-06"]); // 현충일 가정
@@ -1565,11 +1565,13 @@ function checkRulesForSelection() {
   });
 
   return [
-    { label:"동일 등급/직책 매칭", status:"PASS", detail: (() => {
-        const pos = state.user.roleType.startsWith("CAPTAIN") ? "기장" : "부기장";
-        return `${ROLE_LABELS[state.user.roleType]} · 동일 포지션(${pos}) 글만 노출`;
+    { label:"포지션/등급 매칭", status:"PASS", detail: (() => {
+        const pos = GRADE_POLICY.positionLabelOf(state.user.roleType) || "동일 포지션";
+        const mutual = GRADE_POLICY.mutualGrades(state.user.roleType);
+        const gradeTxt = mutual.length ? ` · 요청 가능 등급 ${mutual.join("/")}` : "";
+        return `${ROLE_LABELS[state.user.roleType]} · ${pos} 글 전체 노출${gradeTxt}`;
       })(),
-      ref: "편조 기준 — 기장↔기장, 부기장↔부기장 간 스왑만 가능. 기장 A/B등급 간 교환은 가능하나 부기장↔기장 교환 불가." },
+      ref: "편조 기준 — 기장↔기장, 부기장↔부기장 간 스왑만 가능. 목록에는 등급과 무관하게 같은 포지션 글이 모두 뜨고, 등급이 맞지 않는 글은 요청 단계에서 차단됩니다. A/B등급은 서로 교환 가능하며 C등급은 C등급끼리만 가능합니다." },
     { label:"비행 편조 기준", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
       detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족",
       ref: "편조 기준표 — 기장 등급(A/B), 부기장 등급(A/B) 별 운항 가능 노선 제한. B등급 기장+A등급 FO 조합, A등급 기장+B등급 FO 조합 가능 여부 편조팀 확인 필요." },
@@ -1681,6 +1683,13 @@ function matchesDirection(post, dir) {
   }
 }
 
+// 이 글에 요청/의향을 보낼 수 있는가 — 목록 노출(포지션)과 별개로 등급까지 본다.
+// 등급이 안 맞아도 목록에는 그대로 두고 여기 결과로 버튼만 막는다.
+function postGradeCheck(post) {
+  if (state.user.crewType === "CABIN") return { status:"NA", reason:"", detail:"" };
+  return GRADE_POLICY.check(state.user.roleType, post?.ownerRole, { known: !!state.user.hasSignedUp });
+}
+
 function visiblePosts() {
   const scored = state.posts.map(p => ({ post:p, score: matchScore(p) })).filter(x => x.score !== null);
 
@@ -1759,12 +1768,13 @@ function visiblePosts() {
   return list;
 }
 
+// 내 글이 노출되는 범위 = 목록 필터와 같은 기준(동일 포지션). 등급은 노출을 가르지 않는다.
 function exposureCount() {
   const isCabin = state.user.crewType === "CABIN";
   return state.posts.filter(p =>
     isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
-      : p.ownerRole === state.user.roleType
+      : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole)
   ).length;
 }
 
@@ -1779,7 +1789,8 @@ function candidateCountForOffered() {
   return state.posts.filter(p => {
     const roleOK = isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
-      : p.ownerRole === state.user.roleType;
+      : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole)
+        && GRADE_POLICY.isCompatible(state.user.roleType, p.ownerRole);
     const typeOK = p.wanted.types.includes(myType)
       || p.wanted.types.includes("아무거나")
       || (isFlight && p.wanted.types.includes("비행(전체)"));
@@ -2731,9 +2742,13 @@ function renderMatches() {
   const roleLabel = ROLE_LABELS[state.user.roleType] || CABIN_ROLE_LABELS[state.user.roleType] || state.user.roleType;
   const pilotQualStr = state.user.crewType !== "CABIN"
     ? ` · ${state.user.aircraft==="NG_MAX"?"NG+MAX":"NG"}${state.user.edto?" · EDTO":""}${state.user.cat3?" · CAT III":""}` : "";
+  // 목록은 포지션까지만 거른다 — 등급을 필터로 적으면 "왜 저 글이 뜨지"로 읽힌다
+  const roleFilterLbl = state.user.crewType === "CABIN"
+    ? roleLabel
+    : `${GRADE_POLICY.positionLabelOf(state.user.roleType) || roleLabel} 전체`;
   $("#matchSummary").textContent = items.length
-    ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleLabel}${pilotQualStr}`
-    : `현재 조건으로 매칭 가능한 글이 없습니다. (다른 회사·직군·등급/직책 글은 자동 제외)`;
+    ? `${items.length}건의 매칭 가능 글 · 자동 필터: ${airlineLbl} · ${crewLbl} · ${roleFilterLbl}${pilotQualStr}`
+    : `현재 조건으로 매칭 가능한 글이 없습니다. (다른 회사·직군·포지션 글은 자동 제외)`;
   if (items.length === 0) {
     list.innerHTML = `<div class="empty-state">조건을 완화하거나 저장 검색에 등록하면 새 글이 올라올 때 알림을 받을 수 있습니다.</div>`;
     return;
@@ -2742,11 +2757,13 @@ function renderMatches() {
     const dd = score.dDay;
     const wantedTxt = wantedSummary(post.wanted);
     const isSubmitting = post.status === "submitting";
+    const grade = postGradeCheck(post);
+    const gradeBlocked = grade.status === "FAIL";
     return `
-    <article class="match-card${isSubmitting ? " is-submitting" : ""}">
+    <article class="match-card${isSubmitting ? " is-submitting" : ""}${gradeBlocked ? " is-grade-blocked" : ""}">
       <div class="card-head">
         <div>
-          <h3>${post.offered.patternName}${isSubmitting ? ` <span class="badge badge-submitting">회사 상신중</span>` : ""}</h3>
+          <h3>${post.offered.patternName}${isSubmitting ? ` <span class="badge badge-submitting">회사 상신중</span>` : ""}${gradeBlocked ? ` <span class="badge badge-grade-blocked">등급 불가</span>` : ""}</h3>
           <p>${post.offered.summary}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</p>
           <div class="badges">
             <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${post.offered.type}</span>
@@ -2768,6 +2785,8 @@ function renderMatches() {
           ? `<div class="card-unavailable submitting">🔒 이미 스왑이 성사되어 <strong>회사 상신 중</strong>입니다 — 요청할 수 없습니다</div>`
           : post.contactable === false
           ? `<div class="card-unavailable">이전 버전 글이라 요청할 수 없습니다</div>`
+          : gradeBlocked
+          ? `<div class="card-unavailable grade-blocked">🚫 <strong>${escapeHtml(grade.reason)}</strong><br><span class="card-unavailable-sub">${escapeHtml(grade.detail)}</span></div>`
           : `<button class="secondary-button" data-action="ask" data-post="${post.id}">💬 양도 의향 묻기</button>
         <button class="primary-button" data-action="request" data-post="${post.id}">${isPremiumUser() ? "요청하기 · PRO 무제한" : "요청하기 · 1크레딧"}</button>`}
       </div>
@@ -3422,6 +3441,9 @@ function requestSwap(postId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 요청을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  // 카드에서 이미 막지만, 알림 링크 등 다른 경로로도 들어올 수 있어 여기서 한 번 더 본다
+  const gradeCheck = postGradeCheck(p);
+  if (gradeCheck.status === "FAIL") { showToast(gradeCheck.reason); return; }
   const directOffer = exactMatchedOffer(p);
   if (directOffer) {
     beginScheduleSelection("request", null);
@@ -3445,6 +3467,8 @@ function askAboutPost(postId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없어 의향을 보낼 수 없습니다. 다시 가입해주세요."); return; }
   const p = state.posts.find(x => x.id === postId);
   if (!p) return;
+  const gradeCheck = postGradeCheck(p);
+  if (gradeCheck.status === "FAIL") { showToast(gradeCheck.reason); return; }
   const directOffer = exactMatchedOffer(p);
   if (directOffer) {
     beginScheduleSelection("ask", null);
