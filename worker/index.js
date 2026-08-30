@@ -1405,6 +1405,99 @@ async function handleRequestsSubmitDone(request, env, authEmail) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* ── requests-submit-rejected (상신했으나 회사가 반려함 — 사유 직접입력) ──
+   상호 수락까지 갔는데도 회사에서 반려되는 경우가 있다. 그 사유를 모아
+   두면 어떤 조건을 앱이 미리 못 걸러내는지 알 수 있어, 룰 체크를 넓히는
+   근거가 된다. 그래서 요청 레코드에 남기고 분석용 로그에도 함께 쌓는다. ── */
+
+const SUBMIT_REJECTION_LOG_KEY = 'idx:submit-rejections';
+const SUBMIT_REJECTION_LOG_MAX = 500;
+const SUBMIT_REJECT_REASON_MAX = 300;
+
+async function appendSubmitRejectionLog(env, entry) {
+  try {
+    const log = (await env.POSTS.get(SUBMIT_REJECTION_LOG_KEY, { type: 'json' })) || [];
+    log.push(entry);
+    // 오래된 것부터 버려 무한정 커지지 않게 한다
+    const trimmed = log.slice(-SUBMIT_REJECTION_LOG_MAX);
+    await env.POSTS.put(SUBMIT_REJECTION_LOG_KEY, JSON.stringify(trimmed));
+  } catch (e) {
+    // 로그 적재 실패가 거절 기록 자체를 막지는 않는다
+    console.warn('submit rejection log failed:', e && e.message);
+  }
+}
+
+/* 반려됐으면 스왑은 없던 일이 된다. 'submitting'으로 잠가둔 글을 그대로 두면
+   아무도 요청할 수 없는 죽은 글로 남으므로 다시 'active'로 되돌린다.
+   이미 상신 완료 표시로 글이 지워진 뒤라면 되돌릴 대상이 없다. */
+async function reopenSubmittingPost(env, postId) {
+  if (!postId) return false;
+  const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
+  if (!post || post.status !== 'submitting') return false;
+  post.status = 'active';
+  post.matched = false;
+  delete post.matchedAt;
+  await env.POSTS.put(`post:${postId}`, JSON.stringify(post));
+  const idx = await getPostsIndex(env);
+  const i = idx.findIndex(p => p && p.id === postId);
+  if (i >= 0) { idx[i] = post; await savePostsIndex(env, idx); }
+  return true;
+}
+
+/* 쌓인 반려 사유를 읽는다. 읽기 전용이고 개인정보가 없지만, 운영자만
+   보도록 SUBMIT_REJECTION_VIEWERS(쉼표로 구분된 이메일)에 있는 계정에만
+   허용한다. 값이 비어 있으면 아무도 볼 수 없다(기본 잠금). */
+async function handleSubmitRejectionsGet(env, authEmail) {
+  const allowed = String(env.SUBMIT_REJECTION_VIEWERS || '')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!allowed.includes(String(authEmail || '').toLowerCase()))
+    return json({ error: '조회 권한이 없습니다' }, 403);
+  const log = (await env.POSTS.get(SUBMIT_REJECTION_LOG_KEY, { type: 'json' })) || [];
+  return json({ ok: true, count: log.length, rejections: log.slice().reverse() });
+}
+
+async function handleRequestsSubmitRejected(request, env, authEmail) {
+  let id, reason;
+  try { ({ id, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const email = authEmail;
+  if (!id) return json({ error: '필수 필드 누락' }, 400);
+  reason = String(reason || '').trim();
+  if (!reason) return json({ error: '거절 사유를 입력해주세요' }, 400);
+  if (reason.length > SUBMIT_REJECT_REASON_MAX)
+    reason = reason.slice(0, SUBMIT_REJECT_REASON_MAX);
+  try {
+    const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
+    if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
+    if (rec.toEmail !== email) return json({ error: '상신 결과를 기록할 권한이 없습니다 (글 작성자만)' }, 403);
+    if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 기록할 수 있습니다' }, 400);
+    if (rec.submitRejected) return json({ ok: true, alreadyRejected: true });
+
+    rec.submitRejected = true;
+    rec.submitRejectedAt = new Date().toISOString();
+    rec.submitRejectedReason = reason;
+    rec.status = '⛔ 회사 상신 반려됨';
+    await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+
+    const postReopened = await reopenSubmittingPost(env, rec.postId);
+    await appendSubmitRejectionLog(env, {
+      reqId: rec.id,
+      at: rec.submitRejectedAt,
+      reason,
+      // 이메일·실명·사번은 담지 않는다 — 사유 분석에 필요 없다.
+      // 어떤 조건에서 반려되는지 보려면 아래 정도면 충분하다.
+      postTitle: rec.postTitle || null,
+      offeredType: rec.postOffered?.type || null,
+      ownerRole: rec.postOwnerRole || null,
+      aircraft: rec.aircraft || null,
+      base: rec.base || null,
+      requestType: rec.type || null,
+      wasSubmitted: !!rec.submitted,
+    });
+    return json({ ok: true, postReopened });
+  } catch (e) { return json({ error: e.message }, 500); }
+}
+
 /* ── requests-delete (보낸/받은 요청·의향 삭제) ──────────────────── */
 
 async function handleRequestsDelete(request, env, authEmail) {
@@ -1986,6 +2079,8 @@ export default {
       else if (path === '/api/requests-decline') response = await handleRequestsDecline(request, env, auth.email);
       else if (path === '/api/requests-submit-nudge') response = await handleRequestsSubmitNudge(request, env, auth.email);
       else if (path === '/api/requests-submit-done') response = await handleRequestsSubmitDone(request, env, auth.email);
+      else if (path === '/api/requests-submit-rejected') response = await handleRequestsSubmitRejected(request, env, auth.email);
+      else if (path === '/api/submit-rejections') response = await handleSubmitRejectionsGet(env, auth.email);
       else if (path === '/api/requests-delete') response = await handleRequestsDelete(request, env, auth.email);
       else if (path === '/api/premium-alert-config') response = await handlePremiumAlertConfig(env);
       else if (path === '/api/premium-status') response = await handlePremiumStatus(env, auth.email, allowSandboxPro);

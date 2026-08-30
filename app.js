@@ -3876,6 +3876,23 @@ async function fetchRequests() {
       showToast(`✅ ${r.toNick || "상대"} 님이 회사 상신을 완료했습니다`);
     });
     localStorage.setItem("crewswap_seen_submitted", JSON.stringify([...seenSubmitted].slice(-200)));
+    // #4-c: 양쪽 모두에게 회사 상신 반려 알림 — 성사된 줄 알고 있으면 실제 근무를 착각한다
+    const seenRejected = new Set(JSON.parse(localStorage.getItem("crewswap_seen_submit_rejected") || "[]"));
+    sent.forEach(r => {
+      if (!r.submitRejected || seenRejected.has(r.id)) return;
+      seenRejected.add(r.id); changed = true;
+      state.alerts.unshift({
+        kind: "match",
+        title: "⛔ 회사 상신 반려됨",
+        body: `${r.postTitle || "스왑"} — 회사에서 반려되어 스왑이 성사되지 않았습니다. 사유: ${r.submitRejectedReason || "미기재"}`,
+        time: "방금",
+        createdAt: r.submitRejectedAt || new Date().toISOString(),
+        requestId: r.id,
+        viewMode: "sent",
+      });
+      showToast("⛔ 회사 상신이 반려되었습니다 — 스왑이 성사되지 않았습니다");
+    });
+    localStorage.setItem("crewswap_seen_submit_rejected", JSON.stringify([...seenRejected].slice(-200)));
     if (changed) { saveAlertedReqIds(alerted); saveSeenAskAcceptedIds(seenAccepted); saveState(); renderAlerts(); }
     state.requests.received = received;
     renderRequests();
@@ -4035,6 +4052,7 @@ function renderRequests() {
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
   $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
   $$("#requestList .submit-done-btn").forEach(b => b.onclick = () => markSubmitDone(b.dataset.reqId));
+  $$("#requestList .submit-rejected-btn").forEach(b => b.onclick = () => openSubmitRejectDialog(b.dataset.reqId));
   // 내 달력 날짜는 교환 선택과 무관하게 세부 일정만 확인한다.
   $$("#requestList .cmp-own-cell.has-own").forEach(b => b.onclick = () => {
     const reqId = b.dataset.req, day = parseInt(b.dataset.day, 10);
@@ -4396,6 +4414,37 @@ async function markSubmitDone(reqId) {
   } catch (e) { showToast("처리 실패 — 네트워크 오류"); }
 }
 
+// 회사 상신이 반려됐을 때 — 사유를 직접 입력받아 기록한다.
+// 상호 수락까지 갔는데도 회사에서 막히는 경우가 있고, 그 사유를 모아 두면
+// 룰 체크가 무엇을 놓치고 있는지 알 수 있어 다음 업데이트의 근거가 된다.
+let _submitRejectReqId = null;
+
+function openSubmitRejectDialog(reqId) {
+  if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  _submitRejectReqId = reqId;
+  const field = $("#submitRejectReason");
+  if (field) field.value = "";
+  const status = $("#submitRejectStatus");
+  if (status) status.textContent = "";
+  openGenericModal("submitRejectDialog", "submitRejectOverlay");
+  setTimeout(() => field?.focus(), 50);
+}
+
+function closeSubmitRejectDialog() {
+  _submitRejectReqId = null;
+  closeGenericModal("submitRejectDialog", "submitRejectOverlay");
+}
+
+async function markSubmitRejected(reqId, reason) {
+  const res = await apiFetch(`${API_BASE}/api/requests-submit-rejected`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: reqId, reason }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "기록 실패");
+  return data;
+}
+
 // 상대가 내 양도 의향을 수락했을 때 — 다시 스케줄 고를 필요 없이 바로 정식 요청 모달로
 async function proceedToRequestFromAsk(reqId) {
   const r = (state.requests.sent || []).find(x => x.id === reqId);
@@ -4589,18 +4638,35 @@ function requestCard(r) {
         const iAmPoster = !isSent;
         const myId = state.user.nickname || "나";
         const submitted = !!r.submitted;
+        const submitRejected = !!r.submitRejected;
         const submitterBanner = iAmPoster
           ? `<div class="submit-owner me">📮 회사 상신은 <strong>${escapeHtml(myId)}(글 작성자)</strong>님이 진행합니다.</div>`
           : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? escapeHtml(r.nickname) : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
-        // 상신 진행 상태 + 독촉/완료 버튼
+        // 상신 반려 버튼 — 상신 전후 모두 필요하다. 상신하자마자 반려될 수도 있고,
+        // 완료 표시를 한 뒤에 회사에서 반려 통보가 올 수도 있다.
+        const rejectBtn = `<button class="withdraw-button submit-rejected-btn" data-req-id="${r.id}">⛔ 회사에서 반려됨</button>`;
+        // 상신 진행 상태 + 독촉/완료/반려 버튼
         let submitAction = "";
-        if (submitted) {
-          submitAction = iAmPoster
+        if (submitRejected) {
+          const when = r.submitRejectedAt ? new Date(r.submitRejectedAt) : null;
+          const whenTxt = when && !Number.isNaN(when.getTime()) ? ` (${when.getMonth() + 1}/${when.getDate()})` : "";
+          submitAction = `<div class="submit-status rejected">⛔ <strong>회사 상신이 반려되었습니다${whenTxt}</strong>
+            <div class="submit-reject-reason">사유: ${escapeHtml(r.submitRejectedReason || "사유 미기재")}</div>
+            <div class="hint" style="margin-top:6px;">이 스왑은 성사되지 않았습니다. 글은 다시 목록에 노출되며, 필요하면 새 상대를 찾을 수 있습니다.</div></div>`;
+        } else if (submitted) {
+          const doneMsg = iAmPoster
             ? `<div class="submit-status done">✅ 회사 상신 완료 표시함 — 상대에게 알림이 전송되었습니다.</div>`
             : `<div class="submit-status done">✅ 글 작성자가 회사 상신을 완료했습니다.</div>`;
+          // 완료 표시 뒤에 반려 통보가 오는 경우가 있어 글 작성자에게는 버튼을 남겨둔다
+          submitAction = iAmPoster
+            ? `${doneMsg}<div class="submit-actions" style="margin-top:8px;">${rejectBtn}</div>`
+            : doneMsg;
         } else if (iAmPoster) {
           const nudged = r.submitNudgeCount ? `<div class="submit-status nudged">🔔 상대가 회사 상신 여부를 확인하고 있습니다 (${r.submitNudgeCount}회).</div>` : "";
-          submitAction = `${nudged}<button class="primary-button submit-done-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">✅ 회사 상신 완료로 표시</button>`;
+          submitAction = `${nudged}<div class="submit-actions" style="margin-top:8px;">
+            <button class="primary-button submit-done-btn" data-req-id="${r.id}">✅ 회사 상신 완료로 표시</button>
+            ${rejectBtn}
+          </div>`;
         } else {
           submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">📩 상신 확인 메세지 보내기</button>`;
         }
@@ -5504,6 +5570,34 @@ function bindEvents() {
     const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
     const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
     showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
+  });
+
+  // 회사 상신 반려 사유 입력
+  document.getElementById("submitRejectCancel")?.addEventListener("click", closeSubmitRejectDialog);
+  document.getElementById("submitRejectOverlay")?.addEventListener("click", closeSubmitRejectDialog);
+  document.getElementById("submitRejectForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const reqId = _submitRejectReqId;
+    const field = document.getElementById("submitRejectReason");
+    const status = document.getElementById("submitRejectStatus");
+    const button = document.getElementById("submitRejectConfirm");
+    const reason = (field?.value || "").trim();
+    if (!reqId) { closeSubmitRejectDialog(); return; }
+    if (!reason) { if (status) status.textContent = "반려 사유를 입력해주세요."; return; }
+    if (button) { button.disabled = true; button.textContent = "기록 중…"; }
+    try {
+      const data = await markSubmitRejected(reqId, reason);
+      closeSubmitRejectDialog();
+      showToast(data?.postReopened
+        ? "⛔ 반려로 기록했습니다. 글이 다시 목록에 노출됩니다."
+        : "⛔ 반려로 기록했습니다.");
+      fetchRequests();
+      fetchPosts();
+    } catch (err) {
+      if (status) status.textContent = err?.message || "기록 실패 — 네트워크 오류";
+    } finally {
+      if (button) { button.disabled = false; button.textContent = "반려로 기록"; }
+    }
   });
 
   document.getElementById("withdrawButton")?.addEventListener("click", () => {

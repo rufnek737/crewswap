@@ -653,6 +653,13 @@ button.cmp-cell.has-req.is-swap-blocked { cursor: not-allowed; opacity: 0.45; fi
 .submit-status { font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 8px; margin-top: 8px; line-height: 1.4; }
 .submit-status.done { background: #e6f4ea; color: #1a7a3f; }
 .submit-status.nudged { background: #fff4e5; color: #b06400; }
+/* 회사 상신 반려 — 성사된 줄 알고 실제 근무를 착각하면 안 되므로 눈에 띄게 */
+.submit-status.rejected { background: #fff5f5; color: #c53030; border: 1px solid #feb2b2; }
+.submit-reject-reason { margin-top: 6px; font-weight: 600; overflow-wrap: anywhere; }
+.submit-status.rejected .hint { color: #9b2c2c; font-weight: 500; }
+/* 상신 완료 / 반려 버튼을 한 줄에 나란히 */
+.submit-actions { display: flex; gap: 8px; }
+.submit-actions button { flex: 1; padding: 10px 8px; font-size: 13px; }
 .pending-action-buttons { display: flex; gap: 8px; flex-shrink: 0; }
 .pending-action-buttons button { padding: 8px 14px; font-size: 13px; font-weight: 800; }
 .pending-action-buttons .secondary-button { background: rgba(255,255,255,0.25); color: #fff; border: none; }

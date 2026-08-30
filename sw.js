@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v141';
-const SHELL = ['./index.html', './styles.css?v=1.1.20', './credit-policy.js?v=1.1.4', './post-dates.js?v=1.1.3', './schedule-continuity.js?v=1.1.3', './request-disclosure.js?v=1.1.3', './swap-usage.js?v=1.1.3', './post-history.js?v=1.1.3', './post-details.js?v=1.1.3', './mogiji-policy.js?v=1.1.3', './cabin-policy.js?v=1.1.3', './release-notice.js?v=1.1.10', './selection-flow.js?v=1.0.0', './airport-aliases.js?v=1.0.0', './grade-policy.js?v=1.0.0', './app.js?v=1.1.40', './manifest.json', './privacy.html', './terms.html'];
+const CACHE = 'crewswap-v142';
+const SHELL = ['./index.html', './styles.css?v=1.1.21', './credit-policy.js?v=1.1.4', './post-dates.js?v=1.1.3', './schedule-continuity.js?v=1.1.3', './request-disclosure.js?v=1.1.3', './swap-usage.js?v=1.1.3', './post-history.js?v=1.1.3', './post-details.js?v=1.1.3', './mogiji-policy.js?v=1.1.3', './cabin-policy.js?v=1.1.3', './release-notice.js?v=1.1.10', './selection-flow.js?v=1.0.0', './airport-aliases.js?v=1.0.0', './grade-policy.js?v=1.0.0', './app.js?v=1.1.41', './manifest.json', './privacy.html', './terms.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {
