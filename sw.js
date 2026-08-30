@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v142';
-const SHELL = ['./index.html', './styles.css?v=1.1.21', './credit-policy.js?v=1.1.4', './post-dates.js?v=1.1.3', './schedule-continuity.js?v=1.1.3', './request-disclosure.js?v=1.1.3', './swap-usage.js?v=1.1.3', './post-history.js?v=1.1.3', './post-details.js?v=1.1.3', './mogiji-policy.js?v=1.1.3', './cabin-policy.js?v=1.1.3', './release-notice.js?v=1.1.10', './selection-flow.js?v=1.0.0', './airport-aliases.js?v=1.0.0', './grade-policy.js?v=1.0.0', './app.js?v=1.1.41', './manifest.json', './privacy.html', './terms.html'];
+const CACHE = 'crewswap-v143';
+const SHELL = ['./index.html', './styles.css?v=1.1.21', './credit-policy.js?v=1.1.4', './post-dates.js?v=1.1.3', './schedule-continuity.js?v=1.1.3', './request-disclosure.js?v=1.1.3', './swap-usage.js?v=1.1.3', './post-history.js?v=1.1.3', './post-details.js?v=1.1.3', './mogiji-policy.js?v=1.1.3', './cabin-policy.js?v=1.1.3', './release-notice.js?v=1.1.10', './selection-flow.js?v=1.0.0', './airport-aliases.js?v=1.0.0', './grade-policy.js?v=1.0.0', './app.js?v=1.1.42', './manifest.json', './privacy.html', './terms.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {
@@ -22,8 +22,12 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // Netlify Functions — 네트워크 우선 (오프라인 시 빈 응답)
-  if (url.includes('/.netlify/functions/')) {
+  // API 호출 — 항상 네트워크 우선 (오프라인 시 빈 응답).
+  // 예전에는 '/.netlify/functions/'를 보고 있었는데 API가 Cloudflare Worker로
+  // 옮겨간 뒤로 이 분기에 아무것도 걸리지 않았다. 그 결과 posts-get·requests-get
+  // 같은 GET API 응답이 아래 캐시 우선 분기에 걸려 한 번 캐시되면 계속 옛 목록이
+  // 나왔다. 호스트가 아니라 '/api/' 경로로 판단해 다시 옮겨가도 깨지지 않게 한다.
+  if (url.includes('/api/')) {
     e.respondWith(
       fetch(e.request).catch(() =>
         new Response(JSON.stringify({ error: 'offline' }), {

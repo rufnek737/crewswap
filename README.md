@@ -1,7 +1,7 @@
 # CrewSwap — 제주항공 승무원 스케줄 스왑 앱
 
 제주항공 승무원 전용 스케줄 스왑 매칭 앱 (베타)  
-프론트: Netlify 정적 호스팅 · 백엔드: Cloudflare Workers + KV · 네이티브: Capacitor(iOS/Android)
+프론트: GitHub Pages (https://rufnek737.github.io/crewswap/) · 백엔드: Cloudflare Workers + D1 · 네이티브: Capacitor(iOS/Android)
 
 ---
 
@@ -26,13 +26,13 @@
 ## 현재 구현 범위
 
 ### 핵심 기능
-- CrewConnex 자동 로그인 → 스케줄 파싱 (Netlify Function)
+- CrewConnex 자동 로그인 → 스케줄 파싱 (Worker `/api/crewconnex`)
 - 월간 달력 기반 스케줄 표시 + 패턴 선택
 - 회사 룰 사전 체크 (편조 기준·기종·EDTO·CAT III·마감·승무시간·연속근무)
 - WARN 항목 확인 팝업 후 등록 진행
 - 양방향 스왑 등록 (내놓는 패턴 + 원하는 조건)
-- **공유 스왑 글** — Netlify Blobs에 저장, 테스터 간 실시간 공유
-- 동일 등급·직책·기종 자동 필터 + 매칭 점수 정렬
+- **공유 스왑 글** — Cloudflare D1에 저장, 테스터 간 실시간 공유
+- 동일 포지션·기종 자동 필터 + 매칭 점수 정렬 (등급은 요청 단계에서 판정)
 - 스왑 요청 / 양도 의향 묻기
 - 요청함 3단계 (발송 → 상호 수락 → 회사 상신)
 - 알림 개별 삭제 / 모두 삭제 (새로고침 후에도 유지)
@@ -46,9 +46,9 @@
 | 구분 | 내용 |
 |---|---|
 | 프론트엔드 | Vanilla HTML/CSS/JS (SPA) |
-| 배포 | Netlify (정적 호스팅 + Functions) |
-| 서버리스 함수 | Node.js (Netlify Functions v1) |
-| 공유 데이터 저장소 | Netlify Blobs (`posts` store) |
+| 웹 배포 | GitHub Pages — `main`에 push하면 30초~2분 내 자동 반영. Worker CORS 허용 오리진은 `rufnek737.github.io`, `rufnekcrew.com` |
+| API | Cloudflare Workers (`crewswap-api.tae26001.workers.dev`) |
+| 데이터 저장소 | Cloudflare D1 (`worker/schema.sql`) |
 | 이메일 발송 | Resend API (선택, 없으면 테스트 모드) |
 | 로컬 데이터 | localStorage (`jjswap_v1` v3 스키마) |
 
@@ -119,25 +119,46 @@ npx wrangler deploy   # https://crewswap-api.tae26001.workers.dev
 
 ```bash
 npm install
-netlify dev          # http://localhost:8889
+npm test                              # 자동 테스트 (npm install 먼저 해야 통과한다)
+npx wrangler dev --config worker/wrangler.toml   # API
+python3 -m http.server 8889           # 정적 파일 → http://localhost:8889
 ```
 
 ---
 
-## Netlify Functions
+## Worker API (`worker/index.js`)
 
-| 함수 | 역할 |
+모든 API는 Cloudflare Worker 한 곳에 있다. 주요 엔드포인트만 적는다.
+
+| 경로 | 역할 |
 |---|---|
-| `send-verify` | @jejuair.net 이메일 인증 코드 발송 |
-| `check-verify` | 인증 코드 검증 (HMAC) |
+| `send-verify` / `check-verify` | @jejuair.net 이메일 인증 코드 발송·검증(HMAC) |
+| `user-signup` / `user-login` / `user-update` | 계정. 가입은 @jejuair.net만, **로그인은 도메인 검사 없음**(심사용 계정) |
 | `crewconnex` | CrewConnex 자동 로그인 + 스케줄 파싱 |
-| `posts-get` | 공유 스왑 글 목록 조회 |
-| `posts-create` | 스왑 글 등록 (Netlify Blobs 저장) |
-| `posts-delete` | 스왑 글 삭제 (deleteToken 검증) |
+| `posts-get` / `posts-create` / `posts-delete` | 스왑 글. **`posts-get`은 현재 인증 없이 열려 있다** |
+| `requests-*` | 요청·의향, 상호 수락, 회사 상신 완료/반려 |
+| `submit-rejections` | 상신 반려 사유 조회 (`SUBMIT_REJECTION_VIEWERS`에 등록된 계정만) |
 
 ---
 
 ## Work Log
+
+### 2026-08-30 (밤) — Netlify 잔재 제거, 그 과정에서 드러난 API 캐시 버그
+
+#### API 응답이 서비스워커에 캐시돼 옛 목록이 나오던 문제
+- `sw.js`의 네트워크 우선 분기가 `/.netlify/functions/`를 보고 있었다. API가 Worker로 옮겨간 뒤로 **이 분기에 아무것도 걸리지 않았고**, 그래서 `posts-get`·`requests-get`·`credits-status` 같은 **GET API 응답 7종이 아래 캐시 우선 분기로 떨어져** 한 번 캐시되면 계속 옛 데이터가 나왔다.
+- 호스트가 아니라 `/api/` 경로로 판단하도록 바꿔, 나중에 API가 또 옮겨가도 깨지지 않게 했다. 캐시 `v142 → v143`.
+
+#### 상신 반려 로그가 운영에서 조용히 유실되던 문제
+- 낮에 추가한 `idx:submit-rejections` 키는 D1 store의 `route()`에 걸리지 않는다. `put()`이 **아무것도 하지 않고 조용히 반환**하므로, 반려 사유가 운영(D1)에서만 저장되지 않고 있었다. KV mock으로만 테스트해서 놓쳤다.
+- `premium_alerts`가 `idx:` 배열에서 행으로 옮겨간 선례대로 `submit_rejections` 테이블을 만들고 `listSubmitRejections`/`appendSubmitRejection` 헬퍼를 거치게 했다. `req_id`가 기본키라 두 기기에서 동시에 눌러도 중복 행이 생기지 않는다.
+- **D1 경로 테스트를 추가**했다(`tests/d1-store.test.mjs`). KV mock만 지나가는 테스트로는 이 계열 버그를 못 잡는다.
+- ⚠️ 배포 시 마이그레이션 필요: `npx wrangler d1 execute <DB> --file=worker/schema.sql --remote`
+
+#### 제거한 것
+- `netlify.toml`, `netlify/functions/` 6개 파일, `package.json`의 `@netlify/blobs` 의존성.
+- `app.js`·`worker/index.js`의 낡은 주석(Netlify Blobs / Netlify Function 등).
+- README의 기술 스택·로컬 개발·함수 목록을 실제 구성(GitHub Pages + Worker + D1)으로 갱신. Work Log의 과거 기록은 그대로 둔다.
 
 ### 2026-08-30 (오후) — 회사 상신 반려 사유 수집
 

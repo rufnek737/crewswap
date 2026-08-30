@@ -8,6 +8,7 @@ import { buildAccountDeletionPlan } from './account-delete.mjs';
 import {
   createStore, listPosts, listRequests,
   listPremiumAlerts, savePremiumAlerts, saveIndex,
+  listSubmitRejections, appendSubmitRejection,
   POSTS_INDEX_KEY, REQUESTS_INDEX_KEY,
 } from './store.js';
 import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-entitlement.mjs';
@@ -1410,19 +1411,15 @@ async function handleRequestsSubmitDone(request, env, authEmail) {
    두면 어떤 조건을 앱이 미리 못 걸러내는지 알 수 있어, 룰 체크를 넓히는
    근거가 된다. 그래서 요청 레코드에 남기고 분석용 로그에도 함께 쌓는다. ── */
 
-const SUBMIT_REJECTION_LOG_KEY = 'idx:submit-rejections';
-const SUBMIT_REJECTION_LOG_MAX = 500;
 const SUBMIT_REJECT_REASON_MAX = 300;
 
+// 저장은 반드시 store 헬퍼를 거친다. D1 경로에서 idx:* 키는 route()에 걸리지 않아
+// put()이 조용히 아무것도 하지 않으므로, 직접 env.POSTS에 쓰면 운영에서만 유실된다.
 async function appendSubmitRejectionLog(env, entry) {
   try {
-    const log = (await env.POSTS.get(SUBMIT_REJECTION_LOG_KEY, { type: 'json' })) || [];
-    log.push(entry);
-    // 오래된 것부터 버려 무한정 커지지 않게 한다
-    const trimmed = log.slice(-SUBMIT_REJECTION_LOG_MAX);
-    await env.POSTS.put(SUBMIT_REJECTION_LOG_KEY, JSON.stringify(trimmed));
+    await appendSubmitRejection(env.DB, env.rawKv || env.POSTS, entry);
   } catch (e) {
-    // 로그 적재 실패가 거절 기록 자체를 막지는 않는다
+    // 로그 적재 실패가 반려 기록 자체를 막지는 않는다
     console.warn('submit rejection log failed:', e && e.message);
   }
 }
@@ -1452,7 +1449,7 @@ async function handleSubmitRejectionsGet(env, authEmail) {
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!allowed.includes(String(authEmail || '').toLowerCase()))
     return json({ error: '조회 권한이 없습니다' }, 403);
-  const log = (await env.POSTS.get(SUBMIT_REJECTION_LOG_KEY, { type: 'json' })) || [];
+  const log = await listSubmitRejections(env.DB, env.rawKv || env.POSTS);
   return json({ ok: true, count: log.length, rejections: log.slice().reverse() });
 }
 
@@ -1596,7 +1593,7 @@ async function handlePostsDelete(request, env, authEmail) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
-/* ── crewconnex (Netlify 로직 그대로 포팅) ──────────────────── */
+/* ── crewconnex (CrewConnex 자동 로그인·스케줄 파싱) ─────────── */
 
 const BASE = 'https://crewconnex.jejuair.net';
 

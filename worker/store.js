@@ -167,3 +167,36 @@ export async function savePremiumAlerts(db, kv, records) {
       .prepare('DELETE FROM premium_alerts WHERE email = ?').bind(r.email).run()),
   ]);
 }
+
+export const SUBMIT_REJECTION_INDEX_KEY = 'idx:submit-rejections';
+const SUBMIT_REJECTION_MAX = 500;
+
+// 회사 상신 반려 사유. D1에서는 건당 한 행, KV에서는 예전처럼 배열 하나.
+export async function listSubmitRejections(db, kv) {
+  if (!db) {
+    const value = await kv.get(SUBMIT_REJECTION_INDEX_KEY, { type: 'json' });
+    return Array.isArray(value) ? value : [];
+  }
+  const { results } = await db
+    .prepare('SELECT data FROM submit_rejections ORDER BY at ASC')
+    .all();
+  return parseRows(results);
+}
+
+// 같은 요청이 두 번 기록되지 않도록 req_id를 기본키로 쓴다(호출부에서도 한 번 막지만
+// 두 기기에서 동시에 눌리는 경우가 있다). KV 경로에서만 오래된 것부터 잘라낸다 —
+// D1은 행 단위라 잘라낼 이유가 없고, 잘라내면 분석 표본이 사라진다.
+export async function appendSubmitRejection(db, kv, entry) {
+  if (!entry?.reqId) return;
+  if (!db) {
+    const list = await listSubmitRejections(null, kv);
+    if (list.some(r => r?.reqId === entry.reqId)) return;
+    list.push(entry);
+    await kv.put(SUBMIT_REJECTION_INDEX_KEY, JSON.stringify(list.slice(-SUBMIT_REJECTION_MAX)));
+    return;
+  }
+  await db
+    .prepare('INSERT OR IGNORE INTO submit_rejections (req_id, data, at) VALUES (?, ?, ?)')
+    .bind(entry.reqId, JSON.stringify(entry), entry.at || new Date().toISOString())
+    .run();
+}

@@ -73,3 +73,13 @@ CREATE TABLE IF NOT EXISTS schedules (
   data       TEXT NOT NULL,
   updated_at TEXT
 );
+
+-- 회사 상신 반려 사유. 상호 수락까지 갔는데도 회사에서 반려된 건을 모아
+-- 룰 체크가 무엇을 놓치는지 분석한다. 요청 레코드가 지워져도(양쪽 삭제·탈퇴)
+-- 사유는 남아야 하므로 별도 테이블에 둔다. 개인 식별 정보는 담지 않는다.
+CREATE TABLE IF NOT EXISTS submit_rejections (
+  req_id TEXT PRIMARY KEY,
+  data   TEXT NOT NULL,
+  at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_submit_rejections_at ON submit_rejections(at);

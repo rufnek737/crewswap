@@ -4,7 +4,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStore, listPosts, listRequests, listPremiumAlerts, savePremiumAlerts } from '../worker/store.js';
+import { createStore, listPosts, listRequests, listPremiumAlerts, savePremiumAlerts,
+  listSubmitRejections, appendSubmitRejection } from '../worker/store.js';
 
 function createFakeD1() {
   const tables = new Map(); // table -> Map(pk -> row)
@@ -39,6 +40,21 @@ function createFakeD1() {
     }
     if ((m = /^SELECT data FROM (\w+)$/.exec(sql))) {
       return { results: [...tableOf(m[1]).values()].map(r => ({ data: r.data })) };
+    }
+    if ((m = /^SELECT data FROM (\w+) ORDER BY (\w+) ASC$/.exec(sql))) {
+      const [, table, col] = m;
+      const rows = [...tableOf(table).values()].sort((a, b) => String(a[col]).localeCompare(String(b[col])));
+      return { results: rows.map(r => ({ data: r.data })) };
+    }
+    if ((m = /^INSERT OR IGNORE INTO (\w+) \(([^)]+)\) VALUES \(([^)]+)\)$/.exec(sql))) {
+      const [, table, colList] = m;
+      const cols = colList.split(',').map(s => s.trim());
+      const pk = String(binds[0]);
+      if (tableOf(table).has(pk)) return { first: null }; // IGNORE — 기존 행 유지
+      const row = {};
+      cols.forEach((c, i) => { row[c] = binds[i]; });
+      tableOf(table).set(pk, row);
+      return { first: null };
     }
     if ((m = /^SELECT data FROM requests WHERE from_email = \? OR to_email = \?$/.exec(sql))) {
       const results = [...tableOf('requests').values()]
@@ -211,4 +227,48 @@ test('요청 수락 흐름이 D1 저장소에서 그대로 동작한다', async 
   const accepted = JSON.parse([...db._tables.get('requests').values()][0].data);
   assert.equal(accepted.stage, 3);
   assert.equal(accepted.status, '상호 수락 — 회사 상신 필요');
+});
+
+// 상신 반려 사유는 idx:* 배열이 아니라 행으로 저장돼야 한다.
+// D1 store의 route()는 idx:* 키를 처리하지 않아, 직접 put하면 운영에서만 조용히 사라진다.
+test('상신 반려 사유가 D1에 행으로 저장·조회된다', async () => {
+  const db = createFakeD1();
+  await appendSubmitRejection(db, null, {
+    reqId: 'REQ-1', at: '2026-08-30T01:00:00.000Z', reason: '편조 기준 미충족',
+  });
+  await appendSubmitRejection(db, null, {
+    reqId: 'REQ-2', at: '2026-08-30T02:00:00.000Z', reason: '마감 경과',
+  });
+
+  const rows = await listSubmitRejections(db, null);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(r => r.reqId), ['REQ-1', 'REQ-2']); // at 오름차순
+  assert.equal(rows[0].reason, '편조 기준 미충족');
+});
+
+test('같은 요청을 두 번 기록해도 행이 늘지 않는다', async () => {
+  const db = createFakeD1();
+  const entry = { reqId: 'REQ-1', at: '2026-08-30T01:00:00.000Z', reason: '편조 기준 미충족' };
+  await appendSubmitRejection(db, null, entry);
+  await appendSubmitRejection(db, null, { ...entry, reason: '다른 사유' });
+
+  const rows = await listSubmitRejections(db, null);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].reason, '편조 기준 미충족'); // 먼저 기록된 것이 남는다
+});
+
+test('D1 바인딩이 없으면 KV 배열로 떨어진다', async () => {
+  const values = new Map();
+  const kv = {
+    async get(key, options) {
+      const v = values.get(key);
+      return v == null ? null : (options?.type === 'json' ? JSON.parse(v) : v);
+    },
+    async put(key, value) { values.set(key, String(value)); },
+  };
+  await appendSubmitRejection(null, kv, { reqId: 'REQ-1', at: '2026-08-30T01:00:00.000Z', reason: 'A' });
+  await appendSubmitRejection(null, kv, { reqId: 'REQ-1', at: '2026-08-30T01:00:00.000Z', reason: 'B' });
+  const rows = await listSubmitRejections(null, kv);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].reason, 'A');
 });

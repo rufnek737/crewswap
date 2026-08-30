@@ -4,9 +4,9 @@
    ============================================================ */
 
 /* ====== 1. 상수 ====== */
-// 네이티브 앱(Capacitor)에서는 capacitor://localhost 등에서 로드되므로
-// Netlify Functions를 절대경로로 호출해야 함. 웹(Netlify 배포)에서는 상대경로로 동작.
-// Workers 배포 후 실제 URL로 교체: npx wrangler deploy 실행 후 출력된 URL
+// 네이티브 앱(Capacitor)은 capacitor://localhost에서 로드되므로 API를 절대경로로 부른다.
+// API는 Cloudflare Worker 한 곳뿐이다 — 서버리스 함수는 모두 Worker로 이관했다.
+// URL 변경 시: npx wrangler deploy 출력값으로 교체.
 const API_BASE = "https://crewswap-api.tae26001.workers.dev";
 // 앱 버전 표기 — 대부분의 앱처럼 '내 정보' 맨 아래에 버전과 배포일을 담백하게 보여준다.
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
@@ -2797,7 +2797,7 @@ function renderMatches() {
   list.querySelectorAll("[data-action='ask']").forEach(b => b.onclick = () => askAboutPost(b.dataset.post));
 }
 
-/* ====== 공유 포스트 API 로드 (Netlify Blobs) ====== */
+/* ====== 공유 포스트 API 로드 (Cloudflare Worker + D1) ====== */
 /* ====== PRO 권한 ======
  * 핵심 스왑 기능은 무료이며, PRO는 저장조건 자동 알림, 무제한 크레딧, 편조구성원 미리보기를 제공한다.
  * 가입 즉시가 아니라 사용자가 원할 때 계정당 한 번 30일 무료 이용권을 시작한다. */
@@ -5472,7 +5472,7 @@ function bindEvents() {
     });
   });
 
-  // 🚀 자동 로그인 (Netlify Function)
+  // 🚀 자동 로그인 (CrewConnex — Worker의 /api/crewconnex)
   $("#ccLoginButton").addEventListener("click", async () => {
     const username = ($("#ccUsername").value || "").trim();
     const password = $("#ccPassword").value || "";
@@ -5494,7 +5494,7 @@ function bindEvents() {
       });
       const data = await resp.json();
       window.__lastCrewconnex = data; // 디버그용 — 마지막 응답 저장
-      console.log("%c📡 Netlify 함수 응답", "background:#7a4fcf;color:#fff;padding:3px 8px;border-radius:4px;", data);
+      console.log("%c📡 CrewConnex 응답", "background:#7a4fcf;color:#fff;padding:3px 8px;border-radius:4px;", data);
       if (!resp.ok || data.error) {
         status.style.color = "var(--c-fail)";
         status.textContent = "❌ " + (data.error || "로그인 실패");
