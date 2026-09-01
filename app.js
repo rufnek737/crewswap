@@ -142,10 +142,18 @@ const RULES = {
     pairingRule: { A: ["A","B","C"], B: ["A","B"], C: ["A"] },
     specialAirports: ["CXR","TAG","BKI"],
     monthlyHoursLimit: 90,
-    consecutive24hLimit: 7,
-    consecutive30dLimit: 95,
+    // 아래 한도는 FOM 5.5.2.2 표(REV.70, 2023.08.30) 기준.
+    // 기본은 기장 1명 + 기장 외 조종사 1명(2인 편조) 행이고, 근무코드가 3으로 시작하는
+    // 3인 편조(기장2+부기장1, 예: 발리 3PC/3NC)는 승무시간 12h 행이 적용된다.
+    consecutive24hLimit: 8,   // 2인 편조 연속 24시간 최대 승무시간 8h
+    consecutive24hAugmentedLimit: 12, // 3인 편조(기장2+부기장1) 연속 24시간 최대 승무시간
+    consecutive24hFdpLimit: 13, // 연속 24시간 최대 비행근무시간 13h
+    consecutive28dLimit: 100, // 연속 28일 최대 승무시간 100h (종전 consecutive30dLimit 95h는 기간·값 모두 오류)
+    yearlyHoursLimit: 1000,   // 연속 365일 최대 승무시간
+    duty7dLimit: 60,          // 연속 7일 최대 근무시간 (승무시간이 아니라 근무시간)
+    duty28dLimit: 190,        // 연속 28일 최대 근무시간
     dutyConsecLimit: 5,
-    fdpHourLimit: 11,
+    fdpHourLimit: 13,         // = consecutive24hFdpLimit. 기존 이름 유지(참조하는 코드 대비)
     qualifications: ["EDTO","CAT II","CAT III"],
     parser: "crewconnex_jejuair",
     submitMenu: "J-CREW → 스케줄 변경 → 스케줄 변경 신청",
@@ -1555,12 +1563,16 @@ function consecutive24hCheck(ss, rules) {
     seen.add(key);
     return true;
   });
-  const result = api.check(entries, { limitHours, fallbackMonth: state.currentMonth });
+  const result = api.check(entries, {
+    limitHours,
+    augmentedLimitHours: rules?.consecutive24hAugmentedLimit || limitHours,
+    fallbackMonth: state.currentMonth,
+  });
   return {
     label: result.label,
     status: result.status,
     detail: result.detail,
-    ref: `연속 24시간 이내 승무시간 한도 ${limitHours}시간. 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
+    ref: `연속 24시간 이내 승무시간 한도는 편조 구성에 따라 2인 편조 ${limitHours}시간, 3인 편조(기장2+부기장1) ${rules?.consecutive24hAugmentedLimit || limitHours}시간입니다(FOM 5.5.2.2). 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
   };
 }
 

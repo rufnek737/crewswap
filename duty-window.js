@@ -86,10 +86,27 @@
     return worst;
   }
 
-  /* limitHours: 회사 한도(제주항공 조종사 7h).
+  /* 한도는 편조 구성에 따라 다르다(FOM 5.5.2.2).
+       기장1 + 기장 외 조종사1 (2인 편조) → 승무시간 8시간
+       기장2 + 부기장1 (3인 편조)        → 승무시간 12시간
+     CrewConnex 근무코드가 3으로 시작하면(3PC·3NC 등) 3인 편조다. 발리(ICN-DPS)가 여기
+     해당하고, 편도만으로 7h30이라 2인 편조 한도를 그대로 씌우면 정상 비행이 통째로 막힌다.
+
+     창에 편조가 섞이면 더 엄격한 쪽(작은 한도)을 쓴다. 그 창 안에서 2인 편조로 비행하는
+     구간이 있는 이상 그 구간의 한도를 넘길 수는 없기 때문이다.
+
      결과는 기존 룰 체크 카드와 같은 모양({status, label, detail, ref})으로 돌려준다. */
-  function check(entries, { limitHours = 7, fallbackMonth = null, warnRatio = 0.85 } = {}) {
-    const limitMin = limitHours * 60;
+  function limitHoursFor(entry, limits) {
+    return Number(entry?.crewSet) === 3 ? limits.augmented : limits.standard;
+  }
+
+  function check(entries, {
+    limitHours = 8,
+    augmentedLimitHours = 12,
+    fallbackMonth = null,
+    warnRatio = 0.85,
+  } = {}) {
+    const limits = { standard: limitHours, augmented: augmentedLimitHours };
     const worst = worstWindow(entries, fallbackMonth);
 
     if (!worst) {
@@ -97,24 +114,29 @@
       // 검사하지 않은 것을 충족으로 보이게 하는 것이 이번 반려의 원인이었다.
       return {
         status: "NA",
-        label: `연속 24시간 승무시간 (${limitHours}h 미만)`,
+        label: `연속 24시간 승무시간 (최대 ${limitHours}h)`,
         detail: "승무시간(BLH) 정보가 없어 판정할 수 없습니다 — 직접 확인 필요",
       };
     }
 
     const total = worst.totalMinutes;
-    // 한도에 '도달'하면 FAIL — 라벨이 "7h 미만"이고, 기존 월 승무시간(90h) 판정도
-    // `>= 90`을 FAIL로 본다. 안전 쪽으로 붙이는 편이 실제 반려를 덜 놓친다.
-    const status = total >= limitMin ? "FAIL" : total >= limitMin * warnRatio ? "WARN" : "PASS";
+    const appliedHours = Math.min(...worst.entries.map(e => limitHoursFor(e, limits)));
+    const limitMin = appliedHours * 60;
+    // FOM 5.5.2.2는 "연속 24시간 동안 **최대** 승무시간"이라 정확히 한도까지는 적법하다.
+    // 따라서 초과(>)만 FAIL로 본다. 다만 한도에 근접하면 다른 근무를 하나도 더 얹을 수
+    // 없다는 뜻이라 WARN으로 알린다.
+    const status = total > limitMin ? "FAIL" : total >= limitMin * warnRatio ? "WARN" : "PASS";
+    const crewNote = appliedHours === limits.augmented ? "3인 편조" : "2인 편조";
     const list = worst.entries.map(e => labelOf(e, fallbackMonth)).join(" + ");
     const detail = status === "PASS"
-      ? `최대 ${fmt(total)} (한도 ${limitHours}시간)`
-      : `${list} = ${fmt(total)} · 한도 ${limitHours}시간`;
+      ? `최대 ${fmt(total)} (${crewNote} 한도 ${appliedHours}시간)`
+      : `${list} = ${fmt(total)} · ${crewNote} 한도 ${appliedHours}시간`;
 
     return {
       status,
-      label: `연속 24시간 승무시간 (${limitHours}h 미만)`,
+      label: `연속 24시간 승무시간 (최대 ${appliedHours}h)`,
       detail,
+      limitHours: appliedHours,
       totalMinutes: total,
       entries: worst.entries,
     };

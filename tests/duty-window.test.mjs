@@ -100,8 +100,43 @@ test('자정을 넘어가도 날짜가 달라 창을 놓치지 않는다', () =>
   assert.equal(worst.entries.length, 2);
 });
 
-test('한도에 정확히 도달하면 FAIL로 본다', () => {
-  // 라벨이 "7h 미만"이고 기존 월 승무시간(90h) 판정도 `>= 90`을 FAIL로 본다.
-  const entries = [flight(10, 'A', '09:00', 7 * 60)];
-  assert.equal(check(entries, { limitHours: 7, fallbackMonth: M }).status, 'FAIL');
+test('한도에 정확히 도달하는 것은 적법 — 초과해야 FAIL', () => {
+  // FOM 5.5.2.2는 "연속 24시간 동안 최대 승무시간"이라 정확히 한도까지는 허용된다.
+  const exact = check([flight(10, 'A', '09:00', 8 * 60)], { limitHours: 8, fallbackMonth: M });
+  assert.equal(exact.status, 'WARN');   // 적법하되 여유가 없어 경고
+
+  const over = check([flight(10, 'A', '09:00', 8 * 60 + 1)], { limitHours: 8, fallbackMonth: M });
+  assert.equal(over.status, 'FAIL');
+});
+
+test('3인 편조(발리)는 12시간 한도를 적용한다', () => {
+  // 실제 로스터: 9/6 7C5303L ICN-DPS 7h05(3NC), 9/7 DPS-ICN 7h30(3PC) — 둘 다 crewSet 3.
+  // 2인 편조 한도 8h를 씌우면 발리 편도 하나만으로 FAIL이 되어 정상 비행이 통째로 막힌다.
+  const bali = { month: M, day: 7, title: 'DPS-ICN', type: '국제선', reportTime: '10:00', blockMinutes: 450, crewSet: 3 };
+  const r = check([bali], { limitHours: 8, augmentedLimitHours: 12, fallbackMonth: M });
+  assert.equal(r.status, 'PASS');
+  assert.equal(r.limitHours, 12);
+  assert.match(r.detail, /3인 편조/);
+
+  // 같은 7h30이라도 2인 편조면 8h 한도에 바짝 붙어 경고가 뜬다.
+  const twoCrew = check([{ ...bali, crewSet: 2 }], { limitHours: 8, augmentedLimitHours: 12, fallbackMonth: M });
+  assert.equal(twoCrew.limitHours, 8);
+  assert.equal(twoCrew.status, 'WARN');
+});
+
+test('편조가 섞인 창은 더 엄격한 쪽(2인 편조)을 적용한다', () => {
+  const entries = [
+    { month: M, day: 6, title: 'ICN-DPS', reportTime: '20:00', blockMinutes: 425, crewSet: 3 },
+    { month: M, day: 7, title: '국내선', reportTime: '10:00', blockMinutes: 120, crewSet: 2 },
+  ];
+  const r = check(entries, { limitHours: 8, augmentedLimitHours: 12, fallbackMonth: M });
+  assert.equal(r.limitHours, 8);
+  assert.equal(r.status, 'FAIL');   // 합계 9h05 > 8h
+});
+
+test('편조 정보가 없으면 2인 편조로 보수적으로 판정한다', () => {
+  // 로스터의 Capt (PIC) 같은 코드는 crewSet이 비어 있고 실제로 2인 편조다.
+  const r = check([flight(10, 'A', '09:00', 9 * 60)], { limitHours: 8, augmentedLimitHours: 12, fallbackMonth: M });
+  assert.equal(r.limitHours, 8);
+  assert.equal(r.status, 'FAIL');
 });
