@@ -24,12 +24,16 @@ test("shows a release once and shows again when the release id changes", () => {
   assert.equal(releaseNotice.shouldShow(storage, nextRelease), true);
 });
 
+// 버전 문자열을 여기 박아두면 릴리스마다 테스트가 깨진다. current에서 읽어 비교한다.
 test("keeps the current release notes in the announcement list", () => {
+  const { current } = releaseNotice;
   const item = releaseNotice.announcement();
   assert.equal(item.kind, "announce");
-  assert.match(item.title, /v1\.1\.8/);
-  assert.match(item.body, /기기 간 크레딧 동기화/);
-  assert.equal(item.releaseVersion, "1.1.8");
+  assert.ok(item.title.includes(`v${current.version}`), `제목에 버전이 없음: ${item.title}`);
+  current.changes.forEach(change => {
+    assert.ok(item.body.includes(change), `변경사항이 본문에 없음: ${change}`);
+  });
+  assert.equal(item.releaseVersion, current.version);
 });
 
 test("replaces old update notices while preserving all other alerts", () => {

@@ -6,14 +6,15 @@
   const SEEN_RELEASE_KEY = "crewswap_seen_release";
 
   const current = Object.freeze({
-    id: "1.1.8-20260821",
-    version: "1.1.8",
-    date: "2026.08.21",
-    title: "CrewSwap v1.1.8 업데이트",
-    summary: "크레딧 처리 오류를 수정했습니다.",
+    id: "1.1.9-20260901",
+    version: "1.1.9",
+    date: "2026.09.01",
+    title: "CrewSwap v1.1.9 업데이트",
+    summary: "연속 24시간 승무시간 한도를 사전에 걸러냅니다.",
     changes: Object.freeze([
-      "기기 간 크레딧 동기화",
-      "중복 차감·환급 오류 방지",
+      "연속 24시간 승무시간 한도 자동 체크 (실제 회사 반려 사례 반영)",
+      "기장·부기장 글이 등급과 무관하게 모두 보이고, 등급 제한은 요청 단계에서 안내",
+      "회사 상신이 반려된 경우 사유를 기록할 수 있는 버튼 추가",
     ]),
   });
 

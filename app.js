@@ -12,8 +12,8 @@ const API_BASE = "https://crewswap-api.tae26001.workers.dev";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.1.8";
-const APP_RELEASE_DATE = "2026.08.27";
+const APP_VERSION = "1.1.9";
+const APP_RELEASE_DATE = "2026.09.01";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -55,6 +55,7 @@ const CABIN_RANK = { CC:1, AP:2, PS:3, SP:4, CP:5 };
 const FO_GRADES_BY_CAPTAIN_GRADE = { A: ["A","B","C"], B: ["A","B"], C: ["A"] };
 // 등급 조합 판정은 grade-policy.js 한 곳에서만 한다 (목록 노출은 포지션만, 요청은 등급까지)
 const GRADE_POLICY = window.CrewSwapGradePolicy;
+const DUTY_LIMITS = window.CrewSwapDutyLimits;
 
 function today() { return new Date(); }
 const HOLIDAYS = new Set(["2026-06-06"]); // 현충일 가정
@@ -1545,6 +1546,11 @@ function checkRulesForSelection() {
   const pairFail = pairChecks.some(c => c.status === "FAIL");
   const pairWarn = !pairFail && pairChecks.some(c => c.status === "WARN");
   const pairDetailObj = pairChecks.find(c => c.status === "FAIL") || pairChecks.find(c => c.status === "WARN") || pairChecks.find(c => c.status === "PASS");
+  // 연속 24시간 승무시간: 선택한 날짜만 보면 앞뒤 근무와 겹치는 창을 놓친다.
+  // (2026-08-31 실제 반려 사유) 그래서 그 달 전체를 시각 축에 올려 훑는다.
+  const rolling24h = DUTY_LIMITS.checkRolling24h(currentMonthSchedules(), {
+    limitHours: rules.consecutive24hLimit || 7,
+  });
   const needsEdto = ss.some(s => s.requiresEdto);
   const needsCat3 = ss.some(s => s.requiresCat3);
   const hasLocked = ss.some(s => s.lockReason);
@@ -1587,6 +1593,9 @@ function checkRulesForSelection() {
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
       ref: "스왑 성사 후 J-CREW에 근무교환 신청서를 변경 시작일의 2영업일 전 17:00까지 제출해야 합니다. 예: 수요일 비행 변경 건은 전주 월요일 17시까지이며, 이후에는 회사 접수가 불가합니다." },
+    { label:`연속 24시간 승무시간 (${rules.consecutive24hLimit || 7}h 이하)`,
+      status: rolling24h.status, detail: rolling24h.detail,
+      ref: "연속 24시간 내 승무시간 한도 — 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 창의 합계로 판정합니다. 공항별 현지시각을 UTC로 환산해 계산하므로 시차가 있는 노선도 정확히 잡힙니다. 2026-08-31 이 사유로 실제 회사 반려가 있었습니다." },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
       ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
