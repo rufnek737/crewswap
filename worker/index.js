@@ -953,9 +953,59 @@ function publicOpenRoster(openRoster, lockedDays) {
     .filter(entry => !hidden.has(Number(entry?.day)));
 }
 
-function requestWithPrivateDaysRemoved(record) {
-  if (!record || !Array.isArray(record.openRoster)) return record;
-  return { ...record, openRoster: publicOpenRoster(record.openRoster, record.lockedDays) };
+// 편조구성원에서 내가 대체할 자리(같은 직책)를 빼고 남는 동료만 보여준다.
+// 클라이언트 buildCrewPublic과 같은 규칙이다.
+function crewPublicFor(crewComposition, ownerRole) {
+  if (!crewComposition) return null;
+  const isCapt = !!ownerRole && String(ownerRole).startsWith('CAPTAIN');
+  if (crewComposition.includes('(Capt)') || crewComposition.includes('(FO)')) {
+    const parts = crewComposition.split(',').map(p => p.trim());
+    const foIdx = parts.findIndex(x => x.includes('(FO)'));
+    const filtered = isCapt
+      ? parts.filter(p => !p.includes('(Capt)'))
+      : parts.filter((p, i) => !(p.includes('(FO)') && i === foIdx));
+    return filtered.join(', ') || null;
+  }
+  const parts = crewComposition.split('·').map(p => p.trim());
+  const filtered = isCapt ? parts.filter(p => !p.startsWith('PIC')) : parts.filter(p => !/^FO\b/.test(p));
+  return filtered.join(' · ') || null;
+}
+
+// 공개 로스터에는 편조구성원 원문이 그대로 실려 있었다. 그대로 내려주면 상호 수락
+// 전에도 동료 실명이 노출되고, PRO 혜택으로 만든 편조 공개와도 어긋난다.
+// 원문은 항상 지우고, 볼 자격이 있는 사람에게만 걸러낸 값을 붙인다.
+function openRosterForViewer(openRoster, { ownerRole, includeCrew }) {
+  return (Array.isArray(openRoster) ? openRoster : []).map(entry => {
+    const { crewComposition, ...rest } = entry || {};
+    const crewPublic = includeCrew ? crewPublicFor(crewComposition, ownerRole) : null;
+    return crewPublic ? { ...rest, crewPublic } : rest;
+  });
+}
+
+// 요청에서 상대가 내주는 근무의 편조. 원문은 openRoster에만 있으므로 조회 시 만든다.
+function offeredCrewPublicOf(record, includeCrew) {
+  if (!includeCrew) return null;
+  if (record?.offered?.crewPublic) return record.offered.crewPublic;
+  const days = new Set((record?.offered?.days || []).map(Number));
+  const source = (record?.openRoster || [])
+    .filter(e => !days.size || days.has(Number(e?.day)))
+    .find(e => e?.crewComposition && e.crewComposition !== '편조 없음');
+  return crewPublicFor(source?.crewComposition, record?.fromRole);
+}
+
+function requestWithPrivateDaysRemoved(record, viewerIsPro = false) {
+  if (!record) return record;
+  // PRO 구독 혜택: 편조구성원을 상호 수락 전에도 미리 볼 수 있다.
+  // 상호 수락이 끝난 뒤에는(postCrewPublic이 채워짐) 무료 사용자에게도 공개된다.
+  const includeCrew = viewerIsPro || !!record.postCrewPublic;
+  const out = { ...record, offeredCrewPublic: offeredCrewPublicOf(record, includeCrew) };
+  if (Array.isArray(record.openRoster)) {
+    out.openRoster = openRosterForViewer(
+      publicOpenRoster(record.openRoster, record.lockedDays),
+      { ownerRole: record.fromRole, includeCrew },
+    );
+  }
+  return out;
 }
 
 // 요청 화면에서 글 작성자의 근무를 식별하는 데 필요한 정보만 전달한다.
@@ -1521,13 +1571,17 @@ async function handleRequestsDelete(request, env, authEmail) {
 
 async function handleRequestsGet(request, env, authEmail) {
   const email = authEmail;
+  const viewerIsPro = await isPremiumAccount(env, email);
 
   try {
     const idx = await getRequestsIndex(env);
     // 구버전 요청에는 대상 글의 상세 일정이 저장되지 않았다. 현재 글이 남아 있으면
     // 조회 시 보강해 요청 카드에서 양쪽 근무를 모두 확인할 수 있게 한다.
     const relevant = idx.filter(r => r.fromEmail === email || r.toEmail === email);
-    const missingPostIds = [...new Set(relevant.filter(r => !r.postOffered && r.postId).map(r => r.postId))];
+    // PRO는 글 작성자의 편조도 미리 보므로, 상호 수락 전이라도 원본 글을 읽어와야 한다.
+    const missingPostIds = [...new Set(relevant
+      .filter(r => r.postId && (!r.postOffered || (viewerIsPro && !r.postCrewPublic)))
+      .map(r => r.postId))];
     const loadedPosts = await Promise.all(missingPostIds.map(async postId => [
       postId,
       await env.POSTS.get(`post:${postId}`, { type: 'json' }),
@@ -1538,9 +1592,16 @@ async function handleRequestsGet(request, env, authEmail) {
       const post = postById.get(record.postId);
       return post?.offered ? { ...record, postOffered: requestPostOfferSnapshot(post.offered) } : record;
     };
+    // 글 작성자의 편조 — 상호 수락 시 저장되지만, PRO는 그전에도 볼 수 있다.
+    const withPostCrew = record => {
+      if (record.postCrewPublic || !viewerIsPro) return record;
+      const crew = postById.get(record.postId)?.offered?.crewPublic;
+      return crew ? { ...record, postCrewPublic: crew } : record;
+    };
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
-    const sent = idx.filter(r => r.fromEmail === email).map(withPostDetails).map(requestWithPrivateDaysRemoved);
-    const received = idx.filter(r => r.toEmail === email).map(withPostDetails).map(requestWithPrivateDaysRemoved);
+    const forViewer = record => requestWithPrivateDaysRemoved(withPostCrew(withPostDetails(record)), viewerIsPro);
+    const sent = idx.filter(r => r.fromEmail === email).map(forViewer);
+    const received = idx.filter(r => r.toEmail === email).map(forViewer);
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }

@@ -83,7 +83,11 @@ test("received request cards identify the posted schedule on both sides", () => 
   const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
 
   assert.match(app, /const targetOffer = r\.postOffered \|\| targetPost\?\.offered/);
-  assert.match(app, /targetOffer\?\.daySchedules/);
+  // 교환하는 두 근무 모두 같은 헬퍼로 상세를 펼친다 — 한쪽만 요약이면 받을 근무의
+  // 편명·Check-in/out을 알 수 없다.
+  assert.match(app, /const exchangeDetailsHtml = offer =>/);
+  assert.match(app, /const targetDetailsHtml = exchangeDetailsHtml\(targetOffer\)/);
+  assert.match(app, /const offeredDetailsHtml = exchangeDetailsHtml\(r\.offered\)/);
   assert.match(app, /class="req-ex-duty"/);
   assert.match(worker, /postOffered: requestPostOfferSnapshot\(post\.offered\)/);
   assert.match(worker, /function requestPostOfferSnapshot\(offered\)/);
@@ -198,4 +202,22 @@ test("swap restrictions are checked by rules without a calendar lock icon", () =
   assert.doesNotMatch(selectPattern, /if \(s\.lockReason\)/);
   assert.match(app, /const hasLocked = ss\.some\(s => s\.lockReason\)/);
   assert.match(app, /자격 갱신 지정 비행 포함 — SWAP 불가/);
+});
+
+test("request cards disclose the counterpart's crew, and PRO sees it early", () => {
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+
+  // 공개 정보는 전부 상대의 정보다. 받은 요청에서는 요청자(offered), 보낸 요청에서는
+  // 글 작성자(post)의 편조여야 한다 — 예전에는 양쪽 다 글 작성자를 가리켰다.
+  assert.match(app, /const otherCrew = isSent \? r\.postCrewPublic : r\.offeredCrewPublic/);
+  assert.match(app, /isPremiumUser\(\) \? "상대가 바꿀 날을 고르면 공개됩니다"/);
+
+  // 서버: PRO는 상호 수락 전에도 양쪽 편조를 본다.
+  assert.match(worker, /function offeredCrewPublicOf\(record, includeCrew\)/);
+  assert.match(worker, /const includeCrew = viewerIsPro \|\| !!record\.postCrewPublic/);
+  assert.match(worker, /const viewerIsPro = await isPremiumAccount\(env, email\)/);
+
+  // 공개 로스터에 편조 원문이 실려 나가면 무료 사용자에게도 동료 실명이 새어 나간다.
+  assert.match(worker, /const \{ crewComposition, \.\.\.rest \} = entry \|\| \{\}/);
 });

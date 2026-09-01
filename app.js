@@ -4621,8 +4621,10 @@ function requestCard(r) {
     (state.posts || []).find(post => post.id === r.postId);
   const targetOffer = r.postOffered || targetPost?.offered || null;
   const targetTitle = targetOffer?.patternName || r.postTitle || "-";
-  const targetDetailRows = (() => {
-    const schedules = Array.isArray(targetOffer?.daySchedules) ? targetOffer.daySchedules : [];
+  // 교환하는 두 근무를 같은 깊이로 보여준다. 예전에는 이쪽만 편명·Check-in/out을
+  // 펼치고 상대 근무는 요약 한 줄이라, 정작 받을 근무가 몇 시 비행인지 알 수 없었다.
+  const exchangeDetailsHtml = offer => {
+    const schedules = Array.isArray(offer?.daySchedules) ? offer.daySchedules : [];
     const rows = schedules.map(schedule => {
       const title = schedule.title && schedule.title !== schedule.type ? schedule.title : "";
       const route = schedule.routeSummary || (schedule.dep && schedule.arr ? `${schedule.dep}→${schedule.arr}` : "");
@@ -4632,12 +4634,11 @@ function requestCard(r) {
       ].filter(Boolean).join(" · ");
       return [title, route, times].filter(Boolean).join(" · ");
     }).filter(Boolean);
-    if (rows.length) return rows;
-    return [targetOffer?.summary || targetOffer?.type || ""].filter(Boolean);
-  })();
-  const targetDetailsHtml = targetDetailRows
-    .map(detail => `<small class="req-ex-duty">${escapeHtml(detail)}</small>`)
-    .join("");
+    const detailRows = rows.length ? rows : [offer?.summary || offer?.type || ""].filter(Boolean);
+    return detailRows.map(detail => `<small class="req-ex-duty">${escapeHtml(detail)}</small>`).join("");
+  };
+  const targetDetailsHtml = exchangeDetailsHtml(targetOffer);
+  const offeredDetailsHtml = exchangeDetailsHtml(r.offered);
 
   return `
     <article class="request-card" data-req-card-id="${escapeHtml(r.id || "")}">
@@ -4651,7 +4652,7 @@ function requestCard(r) {
       ${!r.declined && r.message ? `<div class="notice" style="margin-bottom:10px;">💬 ${escapeHtml(r.message)}</div>` : ""}
       ${r.declined && r.declineMsg ? `<div class="notice" style="margin-bottom:10px;border-color:#e53e3e;background:#fff5f5;">${r.declineReason === "MOGIJI_REST_CONFLICT" ? "⚠️" : "💔"} ${escapeHtml(r.declineMsg)}</div>` : ""}
       ${!r.declined && r.offered ? `<div class="req-exchange">
-        <div class="req-ex-side"><span>${!isSent?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${r.offered.patternName}</strong><small>${r.offered.summary || r.offered.type || ""}</small></div>
+        <div class="req-ex-side"><span>${!isSent?"상대가 줄 근무":"내가 줄 근무"}</span><strong>${escapeHtml(r.offered.patternName || "-")}</strong>${offeredDetailsHtml}</div>
         <div class="req-ex-arrow">⇄</div>
         <div class="req-ex-side"><span>${!isSent?"내가 줄 근무":"상대가 줄 근무"}</span><strong>${escapeHtml(targetTitle)}</strong>${targetDetailsHtml}</div>
       </div>` : ""}
@@ -4672,7 +4673,18 @@ function requestCard(r) {
         <div class="info-row"><span>베이스</span><strong>${r.base && r.base !== "비공개" ? r.base : "GMP"}</strong></div>
         <div class="info-row"><span>닉네임</span><strong>${r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)"}</strong></div>
         <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? `✓ ${contactLine}` : "🔒 상호 수락 후 공개"}</strong></div>
-        ${!isAsk ? `<div class="info-row"><span>편조구성원</span><strong class="${!accepted && !r.postCrewPublic?"locked":""}">${r.postCrewPublic ? `✓ ${escapeHtml(r.postCrewPublic)}` : (accepted ? "정보 없음" : "🔒 상호 수락 후 공개 (PRO는 스왑 목록에서 미리 확인 가능)")}</strong></div>` : ""}
+        ${!isAsk ? (() => {
+          // 여기 공개 정보는 전부 '상대'의 정보다. 편조만 언제나 글 작성자(postCrewPublic)를
+          // 가리키고 있어서, 받은 요청에서는 내 편조가 상대 것처럼 보였다.
+          const otherCrew = isSent ? r.postCrewPublic : r.offeredCrewPublic;
+          const locked = !otherCrew;
+          const text = otherCrew
+            ? `✓ ${escapeHtml(otherCrew)}`
+            : accepted ? "정보 없음"
+            : isPremiumUser() ? "상대가 바꿀 날을 고르면 공개됩니다"
+            : "🔒 상호 수락 후 공개 (PRO는 미리 확인 가능)";
+          return `<div class="info-row"><span>편조구성원</span><strong class="${locked?"locked":""}">${text}</strong></div>`;
+        })() : ""}
       </div>` : ""}
       ${r.declined
         ? `<div class="decline-closed-note">${r.declineReason === "MOGIJI_REST_CONFLICT"
