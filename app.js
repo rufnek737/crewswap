@@ -3445,13 +3445,23 @@ function exactMatchedOffer(post) {
     validationRosterSnapshot(),
     state.currentMonth,
   );
-  return entries?.length ? offeredFromRosterDays(entries) : null;
+  // 검증용 스냅샷에는 편조가 빠져 있다(서버로 나가는 값이라 일부러 뺐다).
+  // 내 근무이므로 원본 로스터에서 편조만 되찾아 붙인다.
+  const withCrew = (entries || []).map(e => {
+    const src = (state.schedules || []).find(s => s.day === e.day && (s.month || state.currentMonth) === (e.month || state.currentMonth));
+    return src?.crewComposition ? { ...e, crewComposition: src.crewComposition } : e;
+  });
+  return withCrew.length ? offeredFromRosterDays(withCrew) : null;
 }
 
 // 공개 로스터 항목 배열 → offered 요약 객체 (상대가 고른 날들로 만듦; 휴식/표시용)
-function offeredFromRosterDays(rosterEntries) {
+function offeredFromRosterDays(rosterEntries, ownerRole = state.user.roleType) {
   const ss = [...rosterEntries].sort((a, b) => a.day - b.day);
   if (!ss.length) return null;
+  // 편조는 offered에 함께 실어 보낸다. 원문(crewComposition)은 공개 로스터에서 걷어냈고
+  // 서버에는 남지 않으므로, 여기서 걸러 담아두지 않으면 나중에 되살릴 방법이 없다.
+  const crewSource = ss.find(x => x.crewPublic) || ss.find(x => x.crewComposition && x.crewComposition !== "편조 없음");
+  const crewPublic = crewSource?.crewPublic || buildCrewPublic(crewSource?.crewComposition, ownerRole) || null;
   const dLabel = ss.map(s => `${schedMonthNumFromEntry(s)}/${s.day}`).join(",");
   const routes = ss.map(s => s.routeSummary || s.type).join(" · ");
   return {
@@ -3473,6 +3483,7 @@ function offeredFromRosterDays(rosterEntries) {
       arrivalTime: s.arrivalTime || null,
       releaseTime: s.releaseTime || null,
     })),
+    crewPublic,
     aircraft: ss[0].aircraft || null,
     reportTime: (ss.find(s => s.reportTime && /^\d/.test(s.reportTime)) || {}).reportTime || null,
     firstDepartureTime: (ss.find(s => s.departureTime && /^\d/.test(s.departureTime)) || {}).departureTime || null,
@@ -4323,7 +4334,7 @@ function posterPickRestCheck(reqId) {
   const days = [...(_posterPick[reqId] || [])];
   if (!days.length) return { offered: null, msg: null, fixed: false };
   const entries = (r.openRoster || []).filter(s => days.includes(s.day));
-  const offered = offeredFromRosterDays(entries);
+  const offered = offeredFromRosterDays(entries, r.requesterRole || r.fromRole);
   const givenDays = myPost ? (myPost.offered.days || []) : [];
   if (state.user.crewType === "CABIN") {
     const cabinPolicy = window.CrewSwapCabinPolicy;
@@ -4680,7 +4691,7 @@ function requestCard(r) {
           const locked = !otherCrew;
           const text = otherCrew
             ? `✓ ${escapeHtml(otherCrew)}`
-            : accepted ? "정보 없음"
+            : r.offered ? "정보 없음 (편조 공개 전에 올라온 요청입니다)"
             : isPremiumUser() ? "상대가 바꿀 날을 고르면 공개됩니다"
             : "🔒 상호 수락 후 공개 (PRO는 미리 확인 가능)";
           return `<div class="info-row"><span>편조구성원</span><strong class="${locked?"locked":""}">${text}</strong></div>`;
