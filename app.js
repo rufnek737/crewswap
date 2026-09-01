@@ -1526,6 +1526,44 @@ function checkRulesCabin(ss, rules) {
   ];
 }
 
+/* 연속 24시간 승무시간 한도 (제주항공 조종사 7h).
+ *
+ * 2026-08-31 실제 반려("연속 24시간내 승무시간 초과")로 드러난 구멍이다.
+ * RULES에 consecutive24hLimit가 정의만 되어 있고 읽는 코드가 없어, 앱이 "충족"이라고
+ * 답했지만 실제로는 그 항목을 보지도 않았다.
+ *
+ * 중요한 건 한도 값이 아니라 보는 범위다. 회사는 앞뒤 근무와 겹치는 24시간 창을 보는데,
+ * 기존 룰 체크는 사용자가 고른 날짜만 봤다. 그래서 선택한 날들만으로는 한도 안이어도
+ * 바로 앞뒤 비행과 합쳐지면 초과하는 조합이 그대로 통과했다.
+ * 여기서는 선택 구간 앞뒤 하루씩을 더해 내 로스터 전체에서 창을 계산한다. */
+function consecutive24hCheck(ss, rules) {
+  const api = window.CrewSwapDutyWindow;
+  const limitHours = rules?.consecutive24hLimit;
+  if (!api || !limitHours) {
+    return { label: "연속 24시간 승무시간", status: "NA", detail: "이 직군에는 해당 기준이 없습니다" };
+  }
+  // 선택한 날 + 앞뒤 1일까지의 내 근무를 함께 넘긴다. 24시간 창은 하루를 걸쳐 잡히므로
+  // 인접 근무를 빼면 이번 반려와 같은 조합을 다시 놓친다.
+  const days = new Set();
+  ss.forEach(s => { const d = Number(s.day); if (Number.isInteger(d)) { days.add(d - 1); days.add(d); days.add(d + 1); } });
+  const neighbors = (state.schedules || []).filter(s => days.has(Number(s.day)));
+  // 선택분이 로스터에 없을 수도 있어(다른 월 등) 합쳐서 중복을 제거한다.
+  const seen = new Set();
+  const entries = [...neighbors, ...ss].filter(s => {
+    const key = `${s.month || state.currentMonth}|${s.day}|${s.title || s.type}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const result = api.check(entries, { limitHours, fallbackMonth: state.currentMonth });
+  return {
+    label: result.label,
+    status: result.status,
+    detail: result.detail,
+    ref: `연속 24시간 이내 승무시간 한도 ${limitHours}시간. 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
+  };
+}
+
 function checkRulesForSelection() {
   const ss = selectedSchedules();
   if (ss.length === 0) return [];
@@ -1590,6 +1628,7 @@ function checkRulesForSelection() {
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
       ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
+    consecutive24hCheck(ss, rules),
     { label:"연속 근무일 (5일 미만)", status: cum.maxConsec >= 6 ? "FAIL" : cum.maxConsec >= 5 ? "WARN" : "PASS",
       detail:`최대 ${cum.maxConsec}일`,
       ref: "항공법 승무기준 — 조종사 연속 근무 한도 5일(OFF 제외). 5일째 WARN, 6일 이상 FAIL. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },

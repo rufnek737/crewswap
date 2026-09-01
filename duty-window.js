@@ -1,0 +1,126 @@
+/* 연속 24시간 승무시간 한도 검사.
+ *
+ * 2026-08-31 실제 반려("SKD SWAP 신청건 반려 / 사유: 연속 24시간내 승무시간 초과")로 드러난
+ * 구멍이다. RULES.JEJU_PILOT.consecutive24hLimit(7h)가 정의만 되어 있고 읽는 코드가 없었다.
+ *
+ * 핵심은 한도 값이 아니라 **보는 범위**다. 기존 룰 체크는 사용자가 고른 날짜만 봤는데,
+ * 회사는 앞뒤 근무와 겹치는 24시간 창을 본다. 그래서 10일 비행 + 11일 비행이 각각은
+ * 한도 안이어도 두 출발 시각이 24시간 안에 들어오면 합산되어 초과한다.
+ *
+ * 시각은 절대분(day*1440 + 분)으로 다룬다. 로스터는 현지 시각이 섞여 있고 '+1'(익일 도착)
+ * 표기가 있어 문자열 비교로는 창을 못 잡는다.
+ */
+(function attachCrewSwapDutyWindow(root) {
+  const WINDOW_MIN = 24 * 60;
+
+  function parseAbsMinutes(day, time) {
+    const m = /^(\d{1,2}):(\d{2})(\+1)?$/.exec(String(time || "").trim());
+    if (!m || !Number.isInteger(day)) return null;
+    return day * 1440 + parseInt(m[1], 10) * 60 + parseInt(m[2], 10) + (m[3] ? 1440 : 0);
+  }
+
+  // 월이 다른 근무를 한 줄에 놓기 위해 월을 일 수로 환산해 더한다.
+  // 정확한 달력 일수까지 필요하지 않고, 인접 월 사이의 앞뒤 관계만 유지되면 된다.
+  function dayIndexOf(entry, fallbackMonth) {
+    const month = String(entry?.month || fallbackMonth || "");
+    const day = Number(entry?.day);
+    if (!Number.isInteger(day)) return null;
+    const m = /^(\d{4})-(\d{2})$/.exec(month);
+    if (!m) return day;
+    return (Number(m[1]) * 12 + Number(m[2])) * 31 + day;
+  }
+
+  // 승무시간(블록타임)이 있는 근무만 창 계산 대상이다.
+  // OFF·RSV·STBY·지상근무는 승무시간이 없어 합산에 들어가지 않는다.
+  function flightMinutesOf(entry) {
+    if (typeof entry?.blockMinutes === "number" && entry.blockMinutes > 0) return entry.blockMinutes;
+    return 0;
+  }
+
+  // 창의 기준 시각. 출두(C/I)가 있으면 그것을, 없으면 출발 시각을 쓴다.
+  function startMinutesOf(entry, fallbackMonth) {
+    const dayIdx = dayIndexOf(entry, fallbackMonth);
+    if (dayIdx === null) return null;
+    const t = entry?.reportTime || entry?.departureTime || null;
+    return parseAbsMinutes(dayIdx, t);
+  }
+
+  function labelOf(entry, fallbackMonth) {
+    const month = String(entry?.month || fallbackMonth || "");
+    const mm = /^\d{4}-(\d{2})$/.exec(month);
+    const monthNum = mm ? String(Number(mm[1])) : "";
+    const day = entry?.day;
+    const date = monthNum && day ? `${monthNum}/${day}` : day ? `${day}일` : "";
+    const title = entry?.title || entry?.type || "근무";
+    return date ? `${date} ${title}` : title;
+  }
+
+  function fmt(min) {
+    const h = Math.floor(min / 60), m = Math.round(min % 60);
+    return m ? `${h}시간 ${m}분` : `${h}시간`;
+  }
+
+  /* 각 비행의 시작 시각을 창의 왼쪽 끝으로 삼아, 그 시점부터 24시간 안에 시작하는
+     모든 비행의 승무시간을 합산한다. 회사가 어느 지점을 기준으로 자르는지 알 수 없으므로
+     가능한 모든 시작점을 검사해 가장 큰 합계를 찾는다. */
+  function worstWindow(entries, fallbackMonth) {
+    const flights = (Array.isArray(entries) ? entries : [])
+      .map(e => ({ entry: e, start: startMinutesOf(e, fallbackMonth), minutes: flightMinutesOf(e) }))
+      .filter(f => f.start !== null && f.minutes > 0)
+      .sort((a, b) => a.start - b.start);
+    if (!flights.length) return null;
+
+    let worst = null;
+    for (let i = 0; i < flights.length; i++) {
+      const windowEnd = flights[i].start + WINDOW_MIN;
+      let total = 0;
+      const members = [];
+      for (let j = i; j < flights.length && flights[j].start < windowEnd; j++) {
+        total += flights[j].minutes;
+        members.push(flights[j].entry);
+      }
+      if (!worst || total > worst.totalMinutes) {
+        worst = { totalMinutes: total, entries: members };
+      }
+    }
+    return worst;
+  }
+
+  /* limitHours: 회사 한도(제주항공 조종사 7h).
+     결과는 기존 룰 체크 카드와 같은 모양({status, label, detail, ref})으로 돌려준다. */
+  function check(entries, { limitHours = 7, fallbackMonth = null, warnRatio = 0.85 } = {}) {
+    const limitMin = limitHours * 60;
+    const worst = worstWindow(entries, fallbackMonth);
+
+    if (!worst) {
+      // 승무시간 데이터가 없으면 '통과'가 아니라 '판정 불가'로 알린다.
+      // 검사하지 않은 것을 충족으로 보이게 하는 것이 이번 반려의 원인이었다.
+      return {
+        status: "NA",
+        label: `연속 24시간 승무시간 (${limitHours}h 미만)`,
+        detail: "승무시간(BLH) 정보가 없어 판정할 수 없습니다 — 직접 확인 필요",
+      };
+    }
+
+    const total = worst.totalMinutes;
+    // 한도에 '도달'하면 FAIL — 라벨이 "7h 미만"이고, 기존 월 승무시간(90h) 판정도
+    // `>= 90`을 FAIL로 본다. 안전 쪽으로 붙이는 편이 실제 반려를 덜 놓친다.
+    const status = total >= limitMin ? "FAIL" : total >= limitMin * warnRatio ? "WARN" : "PASS";
+    const list = worst.entries.map(e => labelOf(e, fallbackMonth)).join(" + ");
+    const detail = status === "PASS"
+      ? `최대 ${fmt(total)} (한도 ${limitHours}시간)`
+      : `${list} = ${fmt(total)} · 한도 ${limitHours}시간`;
+
+    return {
+      status,
+      label: `연속 24시간 승무시간 (${limitHours}h 미만)`,
+      detail,
+      totalMinutes: total,
+      entries: worst.entries,
+    };
+  }
+
+  const api = { check, worstWindow, WINDOW_MIN };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.CrewSwapDutyWindow = api;
+})(typeof window !== "undefined" ? window : globalThis);
