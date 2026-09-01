@@ -12,8 +12,8 @@ const API_BASE = "https://crewswap-api.tae26001.workers.dev";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.1.8";
-const APP_RELEASE_DATE = "2026.08.27";
+const APP_VERSION = "1.1.9";
+const APP_RELEASE_DATE = "2026.09.01";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -4688,10 +4688,12 @@ function requestCard(r) {
           // 여기 공개 정보는 전부 '상대'의 정보다. 편조만 언제나 글 작성자(postCrewPublic)를
           // 가리키고 있어서, 받은 요청에서는 내 편조가 상대 것처럼 보였다.
           const otherCrew = isSent ? r.postCrewPublic : r.offeredCrewPublic;
+          // 편조를 저장하기 전에 올라온 요청은 채울 값이 없다. 안내를 띄워봐야 사용자가
+          // 할 수 있는 일이 없으므로 줄 자체를 내보내지 않는다.
+          if (!otherCrew && r.offered) return "";
           const locked = !otherCrew;
           const text = otherCrew
             ? `✓ ${escapeHtml(otherCrew)}`
-            : r.offered ? "정보 없음 (편조 공개 전에 올라온 요청입니다)"
             : isPremiumUser() ? "상대가 바꿀 날을 고르면 공개됩니다"
             : "🔒 상호 수락 후 공개 (PRO는 미리 확인 가능)";
           return `<div class="info-row"><span>편조구성원</span><strong class="${locked?"locked":""}">${text}</strong></div>`;
