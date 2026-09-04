@@ -1180,6 +1180,15 @@ function setImportBusy(busy) {
 // 국내선 비행으로 오인·스왑되지 않게 한다. (parseDayBlock의 수동 파싱과 동일 기준)
 function reclassifyGroundDuty(s) {
   if (!s || !["국내선", "국제선", "UNKNOWN"].includes(s.type)) return s;
+  // 근태성 근무코드(휴가·돌봄 등)는 풀근무형 00:01~23:59로 실려 GMP-GMP 한 구간처럼
+  // 보인다. 출두 시각도 승무시간도 없으면 지상근무가 아니라 근태다.
+  if (!s.reportTime && !s.blockMinutes && /^00:0[01]$/.test(s.departureTime || "") && /^(23:59|24:00)$/.test(s.arrivalTime || "")) {
+    s.type = "VAC";
+    s.title = s.activityCode || s.pairingCode || s.title || "휴가";
+    s.crewComposition = "비행 아님 · 근태";
+    delete s.dep; delete s.arr; delete s.routeSummary; delete s.legs; delete s.aircraft;
+    return s;
+  }
   const title = s.title || "";
   if (/7C\s?\d/i.test(title)) return s; // 실제 여객편은 제외
   const NON_AIRPORT = new Set(["SIM","OPC","LPC","LOFT","SPT","GND","JCRM","RSV","OFF","VAC","REST","STBY","PICK","LAYOV"]);

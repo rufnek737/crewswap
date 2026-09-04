@@ -1746,7 +1746,22 @@ const STBY_CODES = /^S[AB]\d*$/i;
 //   OV_FE(경조) OV_MAT(배우자출산) OV_MV(주거이전) OV_FLT(비행휴직) OVSICK(공상)
 //   OVAC(공무/장기근속) UV_ML(여성보건) VAC(연차) VASICK(연차소진병가) VO(연차/OFF)
 //   + 한글 키워드 fallback
-const VAC_CODES = /^(OV|UV|VA|VO)([_A-Z0-9]|$)|연차|휴가|경조|병가|공가|공상|휴직|보건|출산|환갑|고희|주거이전/i;
+const VAC_CODES = /^(OV|UV|VA|VO)([_A-Z0-9]|$)|연차|휴가|경조|병가|공가|공상|휴직|보건|출산|환갑|고희|주거이전|돌봄|난임|육아|가족/i;
+
+// 근태성 근무코드는 로스터에 '풀근무형(00:01~24:00)'으로 실린다(운항승무원 GUIDE
+// '미확정 스케줄에 대한 임시 근무코드'). 출발·도착 공항이 같아 GMP-GMP 한 구간짜리
+// 국내선처럼 보이지만, 출두(C/I)도 승무시간(BLH)도 없다. 그 조합이면 비행이 아니다.
+// 실제 지상근무(JCRM)는 12:00~18:00처럼 시각이 잡히므로 여기 걸리지 않는다.
+function isFullDayDutyCode(rows, cols) {
+  const val = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
+  const clean = v => (/^\|*$/.test(v) ? '' : v);
+  const std = rows.map(r => clean(val(r, cols.iSTD))).find(Boolean) || '';
+  const sta = rows.map(r => clean(val(r, cols.iSTA))).reverse().find(Boolean) || '';
+  if (!/00:0[01]/.test(std) || !/23:59|24:00/.test(sta)) return false;
+  const hasCheckIn = rows.some(r => clean(val(r, cols.iCI)));
+  const hasBlh = cols.iBLH >= 0 && rows.some(r => clean(val(r, cols.iBLH)));
+  return !hasCheckIn && !hasBlh;
+}
 
 function parseRosterToSchedules(html, userNameHint) {
   const tableHtml = findRosterTable(html);
@@ -1789,6 +1804,11 @@ function parseRosterToSchedules(html, userNameHint) {
       type = 'STBY'; const sc = STBY_CODES.test(activity) ? activity : STBY_CODES.test(pairing) ? pairing : 'STBY'; title = `STBY ${sc}`;
     } else if (/^OFF/i.test(activity) || /^OFF/i.test(pairing)) { type = 'OFF'; title = 'OFF'; }
     else if (VAC_CODES.test(activity) || VAC_CODES.test(pairing)) { type = 'VAC'; title = '휴가'; }
+    else if (isFullDayDutyCode(allRowsG, cols)) {
+      // 코드 종류까지는 알 수 없으므로 원본 코드를 그대로 제목에 남긴다.
+      // 비행이 아니라는 것만 확실하므로 스왑 대상에서 빠지는 것이 중요하다.
+      type = 'VAC'; title = renameF(pairing) || activity || '휴가';
+    }
     else if (/RSV/i.test(activity + ' ' + pairing)) { type = 'RSV'; title = 'RSV'; }
     else if (/LAYOV/i.test(activity + ' ' + pairing)) {
       type = 'LAYOV'; const m = /LAYOV\s*\(?([A-Z]{3})/i.exec(activity + ' ' + pairing);
@@ -1854,6 +1874,8 @@ function parseRosterToSchedules(html, userNameHint) {
       if (FO_CODES.test(userPos) || /^FO\b/i.test(userPos)) e.foGrade = 'B';
       if (/^3/i.test(userPos)) e.crewSet = 3; else if (/^2|^[PN]C$/i.test(userPos)) e.crewSet = 2;
     }
+    if (activity) e.activityCode = activity;
+    if (pairing) e.pairingCode = pairing;
     if (pairing) e._pairing = pairing;
     if (overnightInfo) e._overnightArrival = overnightInfo;
     entries.push(e);
