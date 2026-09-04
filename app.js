@@ -1158,18 +1158,21 @@ function fillLayoverGaps(schedules) {
   return arr;
 }
 
-/* ====== 5c. 파싱 미리보기 / 편집 ====== */
-let previewSchedules = [];
-
-const TYPE_OPTIONS = ["OFF","VAC","국내선","국제선","LAYOV","RSV","STBY","PICK UP","ARRIVAL","GND","UNKNOWN"];
-const GRADE_OPTIONS = ["","A","B","C"];
+/* ====== 5c. CrewConnex 불러오기 ====== */
 
 function openImportDialog() {
-  $("#parsePreview").hidden = true;
-  $("#defaultDialogActions").hidden = false;
-  $$(".import-mode").forEach(el => { el.hidden = el.id !== "autoMode"; });
-  $$(".import-tab").forEach(t => t.classList.toggle("is-active", t.dataset.mode === "auto"));
+  setImportBusy(false);
+  $("#ccLoginStatus").textContent = "";
   openGenericModal("crewDialog", "crewOverlay");
+}
+
+// 불러오는 동안 화면을 덮어 진행 중임을 알린다. 10~20초 걸리는 작업이라
+// 안내가 없으면 멈춘 것으로 오해하고 앱을 닫는다.
+function setImportBusy(busy) {
+  const overlay = $("#ccImportBusy");
+  if (overlay) overlay.hidden = !busy;
+  const form = $("#autoMode");
+  if (form) form.classList.toggle("is-busy", busy);
 }
 
 // CrewConnex 서버 파싱은 지상근무(JCRM)·SIM을 GMP-GMP 형태의 '비행'으로 내려준다.
@@ -1197,102 +1200,46 @@ function reclassifyGroundDuty(s) {
   return s;
 }
 
-function showPreview(schedules) {
-  // 월 → 일 순으로 정렬 (다중 월 시 같은 일자가 섞이지 않도록)
-  previewSchedules = schedules.map(reclassifyGroundDuty).sort((a, b) => {
-    const ma = a.month || "", mb = b.month || "";
-    if (ma !== mb) return ma < mb ? -1 : 1;
-    return a.day - b.day;
-  });
-  $$(".import-mode").forEach(el => el.hidden = true);
-  $("#parsePreview").hidden = false;
-  $("#defaultDialogActions").hidden = true;
-  renderPreviewTable();
+
+// 편조는 CrewConnex가 등급만 내려주는 날이 있어, 기장/부기장 등급이 있으면 만들어 채운다.
+function fillCrewComposition(s) {
+  if (s.captainGrade && s.foGrade && s.type !== "OFF" && !s.crewComposition) {
+    s.crewComposition = `PIC ${s.captainGrade} · FO ${s.foGrade}`;
+    if (s.requiresEdto) s.crewComposition += " · EDTO";
+    if (s.requiresCat3) s.crewComposition += " · CAT III";
+  }
+  return s;
 }
 
-function renderPreviewTable() {
-  const html = `
-    <table class="preview-table">
-      <thead><tr>
-        <th>월</th><th>일</th><th>유형</th><th>편명/타이틀</th><th>출-도/LAYOV</th>
-        <th>리포트</th><th>도착</th><th>릴리즈</th><th>기종</th>
-        <th>CAPT</th><th>FO</th><th>EDTO</th><th>CAT3</th><th>패턴ID</th><th></th>
-      </tr></thead>
-      <tbody>
-        ${previewSchedules.map((s, i) => {
-          const route = s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : (s.layoverAirport || ""));
-          const warn = s.type === "UNKNOWN" || (s.type === "국제선" && !s.captainGrade);
-          const monthLabel = s.month ? s.month.slice(2).replace("-", "/") : "—";
-          return `<tr class="${warn?"has-warning":""}">
-            <td style="font-weight:700;color:var(--muted);font-size:11px;white-space:nowrap;">${monthLabel}</td>
-            <td><input type="number" min="1" max="31" value="${s.day}" data-i="${i}" data-k="day" /></td>
-            <td><select data-i="${i}" data-k="type">${TYPE_OPTIONS.map(t => `<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></td>
-            <td><input value="${s.title||""}" data-i="${i}" data-k="title" /></td>
-            <td><input value="${route}" data-i="${i}" data-k="route" placeholder="ICN-CJU 또는 CXR" /></td>
-            <td><input value="${s.reportTime||""}" data-i="${i}" data-k="reportTime" placeholder="HH:MM" /></td>
-            <td><input value="${s.arrivalTime||""}" data-i="${i}" data-k="arrivalTime" placeholder="HH:MM" /></td>
-            <td><input value="${s.releaseTime||""}" data-i="${i}" data-k="releaseTime" placeholder="HH:MM" /></td>
-            <td><select data-i="${i}" data-k="aircraft"><option value="">-</option><option ${s.aircraft==="NG"?"selected":""}>NG</option><option ${s.aircraft==="MAX"?"selected":""}>MAX</option></select></td>
-            <td><select data-i="${i}" data-k="captainGrade">${GRADE_OPTIONS.map(g => `<option value="${g}" ${(s.captainGrade||"")===g?"selected":""}>${g||"-"}</option>`).join("")}</select></td>
-            <td><select data-i="${i}" data-k="foGrade">${GRADE_OPTIONS.map(g => `<option value="${g}" ${(s.foGrade||"")===g?"selected":""}>${g||"-"}</option>`).join("")}</select></td>
-            <td><input type="checkbox" ${s.requiresEdto?"checked":""} data-i="${i}" data-k="requiresEdto" /></td>
-            <td><input type="checkbox" ${s.requiresCat3?"checked":""} data-i="${i}" data-k="requiresCat3" /></td>
-            <td><input value="${s.patternId||""}" data-i="${i}" data-k="patternId" placeholder="P1" style="width:50px;" /></td>
-            <td><button type="button" class="row-del" data-del="${i}" title="삭제">×</button></td>
-          </tr>`;
-        }).join("")}
-      </tbody>
-    </table>`;
-  $("#previewTable").innerHTML = html;
-  $$("#previewTable [data-del]").forEach(b => b.onclick = () => {
-    previewSchedules.splice(parseInt(b.dataset.del,10), 1);
-    renderPreviewTable();
-  });
+// 불러온 스케줄을 그대로 적용한다. 예전에는 편집 가능한 표를 한 단계 거쳤는데,
+// 원본이 회사 시스템이라 손댈 이유가 없고 확인 버튼만 한 번 더 누르는 셈이었다.
+function applyImportedSchedules(schedules) {
+  const finalSchedules = schedules
+    .map(reclassifyGroundDuty)
+    .map(fillCrewComposition)
+    .filter(s => s.day >= 1 && s.day <= 31)
+    .sort((a, b) => {
+      const ma = a.month || "", mb = b.month || "";
+      if (ma !== mb) return ma < mb ? -1 : 1;
+      return a.day - b.day;
+    });
+  if (!finalSchedules.length) { showToast("불러올 근무가 없습니다."); return; }
+  window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(finalSchedules);
+  state.schedules = finalSchedules;
+  state.selectedDays.clear();
+  const monthsAvail = [...new Set(finalSchedules.map(s => s.month).filter(Boolean))].sort();
+  if (monthsAvail.length > 0 && !monthsAvail.includes(state.currentMonth)) {
+    state.currentMonth = monthsAvail[0];
+  }
+  saveState();
+  syncSchedulesToServer();
+  closeGenericModal("crewDialog", "crewOverlay");
+  renderAll();
+  if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
+  const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
+  const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
+  showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
 }
-
-function collectPreviewEdits() {
-  $$("#previewTable [data-i]").forEach(el => {
-    const i = parseInt(el.dataset.i, 10);
-    const k = el.dataset.k;
-    const s = previewSchedules[i];
-    if (!s) return;
-    if (el.type === "checkbox") {
-      s[k] = el.checked;
-    } else if (k === "day") {
-      s.day = parseInt(el.value, 10) || s.day;
-    } else if (k === "route") {
-      const v = el.value.trim().toUpperCase();
-      // 다구간 (A-B-C-D, A→B→C→D, A>B>C>D) / 2구간 (A-B) / LAYOV (A) 자동 분기
-      const segs = v.split(/\s*[-→>]\s*/).filter(x => /^[A-Z]{3}$/.test(x));
-      if (segs.length >= 3) {
-        s.routeSummary = segs.join("→");
-        s.dep = segs[0]; s.arr = segs[segs.length - 1];
-        s.legs = segs.length - 1;
-        delete s.layoverAirport;
-      } else if (segs.length === 2) {
-        s.dep = segs[0]; s.arr = segs[1];
-        delete s.routeSummary; delete s.legs; delete s.layoverAirport;
-      } else if (segs.length === 1) {
-        s.layoverAirport = segs[0];
-        delete s.dep; delete s.arr; delete s.routeSummary; delete s.legs;
-      } else {
-        delete s.dep; delete s.arr; delete s.layoverAirport; delete s.routeSummary; delete s.legs;
-      }
-    } else if (k === "reportTime" || k === "arrivalTime" || k === "releaseTime") {
-      s[k] = normalizeTime(el.value) || null;
-    } else {
-      s[k] = el.value || null;
-    }
-    // crewComposition 자동 보강
-    if (s.captainGrade && s.foGrade && s.type !== "OFF") {
-      s.crewComposition = `PIC ${s.captainGrade} · FO ${s.foGrade}`;
-      if (s.requiresEdto) s.crewComposition += " · EDTO";
-      if (s.requiresCat3) s.crewComposition += " · CAT III";
-    }
-  });
-  return previewSchedules.filter(s => s.day >= 1 && s.day <= 31);
-}
-
 
 // 분 → "HH:MM" (CrewConnex 형식)
 function formatHM(minutes) {
@@ -5560,7 +5507,8 @@ function bindEvents() {
       return;
     }
     status.style.color = "var(--muted)";
-    status.textContent = "⏳ CrewConnex 로그인 중... (10~20초)";
+    status.textContent = "";
+    setImportBusy(true);
     $("#ccLoginButton").disabled = true;
     try {
       const resp = await apiFetch(`${API_BASE}/api/crewconnex`, {
@@ -5595,7 +5543,7 @@ function bindEvents() {
       }
       // 비밀번호 즉시 폐기
       $("#ccPassword").value = "";
-      showPreview(schedules);
+      applyImportedSchedules(schedules);
     } catch (err) {
       status.style.color = "var(--c-fail)";
       if (!navigator.onLine || /load failed|network|fetch/i.test(err.message || "")) {
@@ -5604,49 +5552,12 @@ function bindEvents() {
         status.textContent = "❌ 연결 오류: " + err.message;
       }
     } finally {
+      setImportBusy(false);
       $("#ccLoginButton").disabled = false;
     }
   });
 
-  // (텍스트 붙여넣기 / JSON / 샘플 복원 핸들러 제거 — 자동 로그인만 지원)
 
-  // 행 추가
-  $("#addRowButton").addEventListener("click", () => {
-    const maxDay = previewSchedules.reduce((m, s) => Math.max(m, s.day), 0);
-    previewSchedules.push({ day: Math.min(30, maxDay + 1), patternId: null, type: "OFF", title: "OFF", crewComposition: "편조 없음" });
-    previewSchedules.sort((a,b) => a.day - b.day);
-    renderPreviewTable();
-  });
-
-  // 다시 입력
-  $("#reparseButton").addEventListener("click", () => {
-    $("#parsePreview").hidden = true;
-    $("#defaultDialogActions").hidden = false;
-    const active = $$(".import-tab").find(t => t.classList.contains("is-active"));
-    if (active) $$(".import-mode").forEach(el => el.hidden = el.id !== active.dataset.mode + "Mode");
-  });
-
-  // 메인 적용
-  $("#confirmImportButton").addEventListener("click", () => {
-    const finalSchedules = collectPreviewEdits();
-    if (finalSchedules.length === 0) { showToast("저장할 항목이 없습니다."); return; }
-    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(finalSchedules);
-    state.schedules = finalSchedules;
-    state.selectedDays.clear();
-    // 현재 월에 데이터가 있는지 확인, 없으면 데이터가 있는 첫 월로 자동 전환
-    const monthsAvail = [...new Set(finalSchedules.map(s => s.month).filter(Boolean))].sort();
-    if (monthsAvail.length > 0 && !monthsAvail.includes(state.currentMonth)) {
-      state.currentMonth = monthsAvail[0];
-    }
-    saveState();
-    syncSchedulesToServer();
-    closeGenericModal("crewDialog", "crewOverlay");
-    renderAll();
-    if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
-    const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
-    const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
-    showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
-  });
 
   // 회사 상신 반려 사유 입력
   document.getElementById("submitRejectCancel")?.addEventListener("click", closeSubmitRejectDialog);

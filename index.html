@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.21" />
+    <link rel="stylesheet" href="styles.css?v=1.1.22" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -808,7 +808,7 @@
       <div class="dialog-body import-dialog">
         <h2>📥 CrewConnex 불러오기</h2>
 
-        <div id="autoMode" class="import-mode">
+        <div id="autoMode">
           <label>CrewConnex ID
             <input type="text" id="ccUsername" autocomplete="username" placeholder="사번 또는 ID" />
           </label>
@@ -819,17 +819,14 @@
           <div id="ccLoginStatus" class="hint" style="text-align:center;"></div>
         </div>
 
-
-        <div id="parsePreview" hidden>
-          <div id="previewTable" class="preview-wrap"></div>
-          <div class="dialog-actions">
-            <button type="button" class="secondary-button" id="addRowButton">+ 행 추가</button>
-            <button type="button" class="secondary-button" id="reparseButton">← 다시 입력</button>
-            <button type="button" class="primary-button" id="confirmImportButton">이 스케줄로 저장 → 메인 적용</button>
-          </div>
+        <!-- 불러오는 동안 덮는 안내. 10~20초 걸려 안내가 없으면 멈춘 줄 안다. -->
+        <div id="ccImportBusy" class="import-busy" hidden>
+          <div class="import-spinner" aria-hidden="true"></div>
+          <strong>스케줄 데이터를 가져오는 중입니다</strong>
+          <small>잠시만 기다려주세요</small>
         </div>
 
-        <div class="dialog-actions" id="defaultDialogActions">
+        <div class="dialog-actions">
           <button type="button" class="secondary-button" id="crewCloseButton">닫기</button>
         </div>
       </div>
@@ -1008,7 +1005,7 @@
     <script src="airport-aliases.js?v=1.0.0"></script>
     <script src="grade-policy.js?v=1.0.0"></script>
     <script src="duty-window.js?v=1.0.1"></script>
-    <script src="app.js?v=1.1.47"></script>
+    <script src="app.js?v=1.1.48"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

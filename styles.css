@@ -943,17 +943,13 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .import-mode { display: grid; gap: 10px; padding-top: 8px; }
 .import-mode textarea { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size: 12px; }
 
-.preview-wrap { overflow-x: auto; max-height: 380px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; min-width: 0; max-width: 100%; -webkit-overflow-scrolling: touch; }
-.generic-modal .dialog-body { min-width: 0; }
-.generic-modal .dialog-body > * { min-width: 0; }
-.preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.preview-table th { position: sticky; top: 0; background: #eef2f6; padding: 8px 6px; text-align: left; font-weight: 700; border-bottom: 1px solid var(--line); white-space: nowrap; font-size: 11px; z-index: 1; }
-.preview-table td { padding: 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.preview-table input, .preview-table select { min-height: 28px; padding: 3px 6px; font-size: 12px; min-width: 0; }
-.preview-table input[type="number"] { width: 52px; }
-.preview-table input[type="checkbox"] { width: auto; min-height: auto; }
-.preview-table .row-del { background: transparent; border: 0; color: var(--c-fail); font-size: 16px; cursor: pointer; }
-.preview-table tr.has-warning td { background: #fff7ea; }
+.import-dialog { position: relative; }
+#autoMode.is-busy { opacity: .35; pointer-events: none; }
+.import-busy { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: rgba(255,255,255,.92); border-radius: 12px; z-index: 2; text-align: center; }
+.import-busy strong { font-size: 15px; }
+.import-busy small { color: var(--muted); }
+.import-spinner { width: 34px; height: 34px; margin-bottom: 6px; border: 3px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: import-spin .8s linear infinite; }
+@keyframes import-spin { to { transform: rotate(360deg); } }
 
 /* ===== 토스트 ===== */
 .toast { position: fixed; right: 22px; bottom: 92px; transform: translateY(20px); max-width: min(420px, calc(100vw - 44px)); padding: 12px 16px; border-radius: 8px; background: #18202d; color: #fff; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 200; font-size: 13px; }
