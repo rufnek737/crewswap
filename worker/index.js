@@ -1748,6 +1748,15 @@ const STBY_CODES = /^S[AB]\d*$/i;
 //   + 한글 키워드 fallback
 const VAC_CODES = /^(OV|UV|VA|VO)([_A-Z0-9]|$)|연차|휴가|경조|병가|공가|공상|휴직|보건|출산|환갑|고희|주거이전|돌봄|난임|육아|가족/i;
 
+// 임시 근무코드(운항승무원 GUIDE '미확정 스케줄에 대한 임시 근무코드').
+// 원문 그대로는 뜻을 알 수 없어 정의된 이름을 붙인다. 확정된 근태가 아니라
+// 자리만 잡아둔 상태이므로 최종 스케줄로 바뀐다는 점도 함께 알린다.
+const HOLD_CODES = /\b(SCHLD|SICKHD)\b/i;
+const HOLD_CODE_LABELS = {
+  SCHLD: '미확정 (SCHLD)',
+  SICKHD: '비행불가 (SICKHD)',
+};
+
 // 근태성 근무코드는 로스터에 '풀근무형(00:01~24:00)'으로 실린다(운항승무원 GUIDE
 // '미확정 스케줄에 대한 임시 근무코드'). 출발·도착 공항이 같아 GMP-GMP 한 구간짜리
 // 국내선처럼 보이지만, 출두(C/I)도 승무시간(BLH)도 없다. 그 조합이면 비행이 아니다.
@@ -1807,7 +1816,7 @@ function parseRosterToSchedules(html, userNameHint) {
     else if (isFullDayDutyCode(allRowsG, cols)) {
       // 코드 종류까지는 알 수 없으므로 원본 코드를 그대로 제목에 남긴다.
       // 비행이 아니라는 것만 확실하므로 스왑 대상에서 빠지는 것이 중요하다.
-      type = 'VAC'; title = renameF(pairing) || activity || '휴가';
+      type = 'VAC'; title = HOLD_CODE_LABELS[actPair.match(HOLD_CODES)?.[0]?.toUpperCase()] || renameF(pairing) || activity || '휴가';
     }
     else if (/RSV/i.test(activity + ' ' + pairing)) { type = 'RSV'; title = 'RSV'; }
     else if (/LAYOV/i.test(activity + ' ' + pairing)) {
@@ -1873,6 +1882,10 @@ function parseRosterToSchedules(html, userNameHint) {
       if (CAPT_CODES.test(userPos) || /Capt|PIC/i.test(userPos)) e.captainGrade = 'B';
       if (FO_CODES.test(userPos) || /^FO\b/i.test(userPos)) e.foGrade = 'B';
       if (/^3/i.test(userPos)) e.crewSet = 3; else if (/^2|^[PN]C$/i.test(userPos)) e.crewSet = 2;
+    }
+    if (type === 'VAC' && HOLD_CODES.test(actPair)) {
+      e.lockReason = '회사가 잡아둔 임시 코드 — 최종 스케줄로 바뀝니다. SWAP 불가';
+      e.crewComposition = '비행 아님 · 임시 근무코드';
     }
     if (activity) e.activityCode = activity;
     if (pairing) e.pairingCode = pairing;

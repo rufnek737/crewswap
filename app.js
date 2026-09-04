@@ -1183,9 +1183,12 @@ function reclassifyGroundDuty(s) {
   // 근태성 근무코드(휴가·돌봄 등)는 풀근무형 00:01~23:59로 실려 GMP-GMP 한 구간처럼
   // 보인다. 출두 시각도 승무시간도 없으면 지상근무가 아니라 근태다.
   if (!s.reportTime && !s.blockMinutes && /^00:0[01]$/.test(s.departureTime || "") && /^(23:59|24:00)$/.test(s.arrivalTime || "")) {
+    const hold = `${s.activityCode || ""} ${s.pairingCode || ""} ${s.title || ""}`.match(/\b(SCHLD|SICKHD)\b/i)?.[0]?.toUpperCase();
     s.type = "VAC";
-    s.title = s.activityCode || s.pairingCode || s.title || "휴가";
-    s.crewComposition = "비행 아님 · 근태";
+    s.title = hold ? (hold === "SCHLD" ? "미확정 (SCHLD)" : "비행불가 (SICKHD)")
+      : (s.activityCode || s.pairingCode || s.title || "휴가");
+    s.crewComposition = hold ? "비행 아님 · 임시 근무코드" : "비행 아님 · 근태";
+    if (hold) s.lockReason = "회사가 잡아둔 임시 코드 — 최종 스케줄로 바뀝니다. SWAP 불가";
     delete s.dep; delete s.arr; delete s.routeSummary; delete s.legs; delete s.aircraft;
     return s;
   }
