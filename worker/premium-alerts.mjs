@@ -74,6 +74,14 @@ export function matchingSearches(post, searches) {
   return sanitizeSavedSearches(searches).filter(search => postMatchesSavedSearch(post, search));
 }
 
+// 급구 알림은 저장한 조건과 무관하게, 그 근무를 실제로 받을 수 있는 사람에게 간다.
+// 직책·자격 판정은 기존 조건 알림과 같은 규칙을 쓰고, 등급 호환만 더한다.
+export function subscriberCanTakeUrgentPost(profile, post, gradePolicy) {
+  if (!subscriberCanUsePost(profile, post)) return false;
+  if ((profile?.crewType || post?.crewType) !== "PILOT") return true;
+  return gradePolicy.isCompatible(profile?.roleType, post?.ownerRole);
+}
+
 export function subscriberCanUsePost(profile, post) {
   if (!profile || !post) return false;
   if (profile.crewType && post.crewType && profile.crewType !== post.crewType) return false;

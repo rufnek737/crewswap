@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.22" />
+    <link rel="stylesheet" href="styles.css?v=1.1.23" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -587,6 +587,17 @@
           </div>
         </div>
 
+        <!-- 급구 -->
+        <div class="post-block urgent-block">
+          <label class="urgent-toggle">
+            <input type="checkbox" id="postUrgent" />
+            <span>
+              <strong>🚨 급구로 올리기</strong>
+              <small id="postUrgentNote">등급이 맞는 승무원 전원에게 즉시 알림이 갑니다 · 급구 쿠폰 1장</small>
+            </span>
+          </label>
+        </div>
+
         <!-- 등록 전 요약 -->
         <div class="post-footer">
           <div class="preview-stats" id="previewStats">
@@ -1005,7 +1016,7 @@
     <script src="airport-aliases.js?v=1.0.0"></script>
     <script src="grade-policy.js?v=1.0.0"></script>
     <script src="duty-window.js?v=1.0.1"></script>
-    <script src="app.js?v=1.1.50"></script>
+    <script src="app.js?v=1.1.51"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

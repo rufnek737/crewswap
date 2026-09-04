@@ -1,5 +1,9 @@
 export const BASE_MONTHLY_CREDITS = 3;
 
+// 급구 쿠폰은 유료로 산 소모품이라 매달 초기화되는 크레딧과 다르다.
+// 달이 바뀌어도 그대로 남고, 광고나 환급으로는 늘지 않는다.
+export const URGENT_COUPON_PACKS = { small: 5, large: 10 };
+
 export function creditMonthKey(now = Date.now()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit',
@@ -25,6 +29,7 @@ export function normalizeWallet(input, now = Date.now()) {
     wallet.credits = amount(wallet.credits);
     wallet.adCreditsThisMonth = Math.floor(amount(wallet.adCreditsThisMonth));
   }
+  wallet.urgentCoupons = Math.floor(amount(wallet.urgentCoupons));
   wallet.operations = wallet.operations && typeof wallet.operations === 'object' ? { ...wallet.operations } : {};
   return wallet;
 }
@@ -55,6 +60,37 @@ export function applyWalletCommand(input, command = {}, now = Date.now()) {
     return { ok: true, ...result, wallet };
   }
 
+  // 급구 쿠폰 사용 — 급구로 글을 올릴 때 1장 소모한다.
+  if (command.type === 'spend-coupon') {
+    const requested = Math.floor(amount(command.amount)) || 1;
+    if (wallet.urgentCoupons < requested) {
+      return { ok: false, code: 'URGENT_COUPON_REQUIRED', required: requested, wallet };
+    }
+    wallet.urgentCoupons -= requested;
+    const result = { couponsSpent: requested };
+    remember(wallet, operationId, result);
+    return { ok: true, ...result, wallet };
+  }
+
+  // 쿠폰 지급 — 구매, 그리고 급구에 응해 근무를 내준 사람에 대한 보상.
+  if (command.type === 'grant-coupon') {
+    const requested = Math.floor(amount(command.amount)) || 1;
+    wallet.urgentCoupons += requested;
+    const result = { couponsGranted: requested };
+    remember(wallet, operationId, result);
+    return { ok: true, ...result, wallet };
+  }
+
+  // 보상 지급 — 크레딧은 월 상한(3)에 묶이지 않는다. 상한은 매달 나눠주는
+  // 무료분에 대한 것이고, 이건 실제로 근무를 내준 대가이기 때문이다.
+  if (command.type === 'grant-credit') {
+    const requested = amount(command.amount);
+    wallet.credits = Math.round((wallet.credits + requested) * 10) / 10;
+    const result = { granted: requested };
+    remember(wallet, operationId, result);
+    return { ok: true, ...result, wallet };
+  }
+
   if (command.type === 'refund') {
     const requested = amount(command.amount);
     const granted = Math.min(requested, Math.max(0, BASE_MONTHLY_CREDITS - wallet.credits));
@@ -81,6 +117,7 @@ export function publicWallet(wallet, now = Date.now()) {
     credits: current.credits,
     creditMonth: current.creditMonth,
     adCreditsThisMonth: current.adCreditsThisMonth,
+    urgentCoupons: current.urgentCoupons,
     baseMonthlyCredits: BASE_MONTHLY_CREDITS,
   };
 }

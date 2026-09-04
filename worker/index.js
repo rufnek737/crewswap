@@ -3,7 +3,9 @@ import {
   matchingSearches,
   sanitizeSavedSearches,
   subscriberCanUsePost,
+  subscriberCanTakeUrgentPost,
 } from './premium-alerts.mjs';
+import gradePolicy from '../grade-policy.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import {
   createStore, listPosts, listRequests,
@@ -660,9 +662,14 @@ async function handlePremiumAlertSync(request, env, authEmail, allowSandbox = fa
   if (!email.endsWith('@jejuair.net')) return json({ error: '제주항공 계정이 필요합니다' }, 400);
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
-  if (!(await isPremiumAccount(env, email, allowSandbox))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  // 기기 등록 자체는 무료 사용자에게도 열어둔다 — 급구 알림은 등급이 맞는 사람
+  // 전원에게 가야 성사되기 때문이다. 저장 조건(searches)만 PRO 혜택으로 남긴다.
+  const isPro = await isPremiumAccount(env, email, allowSandbox);
+  if (!isPro && body?.searches !== undefined && sanitizeSavedSearches(body.searches).length) {
+    return json({ error: '조건 저장은 PRO 전용입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  }
 
-  const searches = sanitizeSavedSearches(body?.searches);
+  const searches = isPro ? sanitizeSavedSearches(body?.searches) : [];
   const subscription = sanitizePushSubscription(body?.subscription);
   const nativeDevice = sanitizeNativeDevice(body?.nativeDevice);
   const profile = pickProfile(user.profile || {});
@@ -748,6 +755,61 @@ async function handlePremiumAlertTest(env, authEmail, allowSandbox = false) {
   await savePremiumAlertIndex(env, records);
   if (!delivered) return json({ error: 'iPhone 테스트 알림 전송에 실패했습니다', failures }, 502);
   return json({ ok: true, delivered });
+}
+
+/* 급구 알림 — 등급이 맞는 가입자 전원에게 보낸다.
+   조건 알림(notifyPremiumSubscribers)과 다른 점이 둘 있다. 저장한 조건을 보지 않고,
+   PRO 여부도 보지 않는다. 급구는 닿는 사람이 많아야 성사되는 기능이기 때문이다. */
+async function notifyUrgentPost(env, post) {
+  const canWebPush = webPushConfigured(env);
+  const canNativePush = apnsConfigured(env);
+  if (!canWebPush && !canNativePush) return;
+  const records = await getPremiumAlertIndex(env);
+  if (!records.length) return;
+  if (canWebPush) webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+
+  const title = '🚨 급구 스왑';
+  const body = `${post.offered?.patternName || post.offered?.summary || '급하게 바꿀 근무'} · 지금 확인해주세요`;
+  const payload = JSON.stringify({ title, body, tag: `crewswap-urgent-${post.id}`, data: { url: './#find', postId: post.id } });
+  let changed = false;
+
+  for (const record of records) {
+    if (!record?.email || record.email === post.ownerEmail) continue;
+    if ((record.notifiedPostIds || []).includes(post.id)) continue;
+    if (!subscriberCanTakeUrgentPost(record.profile, post, gradePolicy)) continue;
+
+    const alive = [];
+    let delivered = false;
+    for (const subscription of canWebPush ? (record.subscriptions || []) : []) {
+      try {
+        await webpush.sendNotification(subscription, payload, { TTL: 3600, urgency: 'high', topic: String(post.id).slice(-32) });
+        alive.push(subscription); delivered = true;
+      } catch (error) {
+        const status = error?.statusCode || error?.status || 0;
+        if (status !== 404 && status !== 410) alive.push(subscription);
+      }
+    }
+    record.subscriptions = alive;
+
+    const aliveNative = [];
+    for (const device of canNativePush ? (record.nativeDevices || []) : []) {
+      try {
+        const result = await sendApnsNotification(env, device, { title, body, tag: `crewswap-urgent-${post.id}`, data: { url: './#find', postId: post.id } });
+        if (result?.ok !== false) delivered = true;
+        aliveNative.push(device);
+      } catch (error) {
+        const status = error?.status || 0;
+        if (status !== 410) aliveNative.push(device);
+      }
+    }
+    record.nativeDevices = aliveNative;
+
+    if (delivered) {
+      record.notifiedPostIds = [...(record.notifiedPostIds || []), post.id].slice(-300);
+      changed = true;
+    }
+  }
+  if (changed) await savePremiumAlertIndex(env, records);
 }
 
 async function notifyPremiumSubscribers(env, post) {
@@ -867,6 +929,7 @@ const POST_FIELDS = [
   'airline', 'crewType', 'ownerRole', 'ownerNick', 'ownerRating', 'ownerBase', 'ownerEmail',
   'offered', 'wanted', 'ownerValidationRoster',
   'deadlineDay', 'deadlineMonth', 'watchers', 'status', 'creditSpent',
+  'urgent',
 ];
 
 async function handlePostsCreate(request, env, ctx, authEmail, allowSandbox = false) {
@@ -892,16 +955,33 @@ async function handlePostsCreate(request, env, ctx, authEmail, allowSandbox = fa
       const current = await walletStatus(env, authEmail);
       return json({ id: existing.id, creditSpent: existing.creditSpent || 0, wallet: current.wallet, duplicate: true });
     }
+    // 급구는 유료 쿠폰 1장. PRO 무제한은 등록 크레딧에만 해당하고 쿠폰에는 적용되지 않는다
+    // — 쿠폰은 매달 나눠주는 무료분이 아니라 사서 쓰는 소모품이기 때문이다.
+    clean.urgent = !!clean.urgent;
+    if (clean.urgent) {
+      const coupon = await runWalletCommand(env, authEmail, {
+        type: 'spend-coupon', operationId: `post:urgent:${clean.id}`, amount: 1,
+      });
+      if (!coupon.ok) return json({ error: '급구 쿠폰이 없습니다', code: coupon.code, wallet: coupon.wallet }, 402);
+    }
     const debit = await runWalletCommand(env, authEmail, {
       type: 'spend', operationId: `post:create:${clean.id}`, amount: 1, unlimited,
     });
-    if (!debit.ok) return json({ error: '크레딧이 부족합니다', code: debit.code, wallet: debit.wallet }, 402);
+    if (!debit.ok) {
+      if (clean.urgent) await runWalletCommand(env, authEmail, {
+        type: 'grant-coupon', operationId: `post:urgent-reverse:${clean.id}`, amount: 1,
+      }).catch(() => {});
+      return json({ error: '크레딧이 부족합니다', code: debit.code, wallet: debit.wallet }, 402);
+    }
     debited = clean.creditSpent > 0;
     await env.POSTS.put(`post:${clean.id}`, JSON.stringify(clean));
     const idx = await getPostsIndex(env);
     idx.push(clean);
     await savePostsIndex(env, idx);
-    if (ctx?.waitUntil) ctx.waitUntil(notifyPremiumSubscribers(env, clean));
+    if (ctx?.waitUntil) {
+      ctx.waitUntil(notifyPremiumSubscribers(env, clean));
+      if (clean.urgent) ctx.waitUntil(notifyUrgentPost(env, clean));
+    }
     return json({ id: clean.id, creditSpent: clean.creditSpent, wallet: debit.wallet });
   } catch (e) {
     if (debited) await runWalletCommand(env, authEmail, {
@@ -1427,6 +1507,24 @@ async function lockPostAsSubmitting(env, postId) {
   if (i >= 0) { idx[i] = post; await savePostsIndex(env, idx); }
 }
 
+/* 급구 보상 — 쿠폰 1장 + 크레딧 1개.
+   쿠폰을 돌려주는 것이 핵심이다. 내가 급할 때 쓸 수단이 돌아오는 구조라야
+   응할 이유가 생기고, 회사 밖으로 현금이 나가지 않는다. operationId로 묶어
+   같은 요청에 두 번 지급되지 않게 한다. */
+const URGENT_REWARD = { coupons: 1, credits: 1 };
+
+async function grantUrgentReward(env, email, requestId) {
+  try {
+    await runWalletCommand(env, email, {
+      type: 'grant-coupon', operationId: `urgent:reward-coupon:${requestId}`, amount: URGENT_REWARD.coupons,
+    });
+    await runWalletCommand(env, email, {
+      type: 'grant-credit', operationId: `urgent:reward-credit:${requestId}`, amount: URGENT_REWARD.credits,
+    });
+    return { ok: true };
+  } catch { return { ok: false }; }
+}
+
 /* ── requests-submit-done (글작성자가 "회사 상신 완료" 표시) ───────── */
 
 async function handleRequestsSubmitDone(request, env, authEmail) {
@@ -1442,6 +1540,13 @@ async function handleRequestsSubmitDone(request, env, authEmail) {
     rec.submitted = true;
     rec.submittedAt = new Date().toISOString();
     rec.status = '✅ 회사 상신 완료';
+    // 급구에 응해 근무를 내준 사람에게 보상. 상호 수락이 아니라 상신 완료를 기준으로
+    // 삼는다 — 아는 사이끼리 급구를 올렸다 취소하며 보상만 빼가는 것을 막기 위해서다.
+    const rewardedPost = await env.POSTS.get(`post:${rec.postId}`, { type: 'json' });
+    if (rewardedPost?.urgent && rec.fromEmail) {
+      const reward = await grantUrgentReward(env, rec.fromEmail, rec.id);
+      rec.urgentRewarded = reward.ok;
+    }
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     // 상신까지 끝난 글은 역할을 다했으므로 목록에서 지운다.

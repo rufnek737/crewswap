@@ -1318,3 +1318,12 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 
 #myPostsManager .my-post-section { margin-top: 0; }
 #myPostsManager .my-post-heading { align-items: center; }
+
+/* 급구 등록 */
+.urgent-block { border: 1px solid #f3c2a0; background: #fff8f2; border-radius: 12px; padding: 12px 14px; }
+.urgent-toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; margin: 0; }
+.urgent-toggle input { width: 18px; height: 18px; min-height: 18px; margin-top: 2px; flex: none; }
+.urgent-toggle span { display: grid; gap: 3px; }
+.urgent-toggle small { color: var(--muted); }
+.urgent-toggle.is-locked { opacity: .6; cursor: not-allowed; }
+.urgent-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
