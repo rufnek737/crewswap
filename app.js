@@ -6373,11 +6373,18 @@ function closeGenericModal(dialogId, overlayId) {
   document.body.classList.remove("no-scroll");
 }
 
+/* 출시 기념 안내는 앱을 새로 켤 때마다 띄운다. 평소 업데이트 공지라면 한 번 보고
+   넘기는 게 맞지만, 지금은 "2027년 9월 30일까지 전부 무료"가 이 앱을 쓰는 이유
+   자체라 한 번 놓치면 모른 채로 쓰게 된다. 유료화 시작하면 false로 되돌린다. */
+const ALWAYS_SHOW_RELEASE_NOTICE = true;
+
 function showReleaseNoticeIfNeeded() {
   const api = window.CrewSwapReleaseNotice;
   // 서버 세션 여부는 보지 않는다. 공지는 알림·크레딧과 달리 권한이 필요 없고,
   // 세션이 만료된 사이에 새 안내가 묻히면 그 뒤로는 영영 못 본다.
-  if (!state.user.hasSignedUp || !api?.shouldShow(localStorage)) return;
+  if (!state.user.hasSignedUp) return;
+  if (!ALWAYS_SHOW_RELEASE_NOTICE && !api?.shouldShow(localStorage)) return;
+  if (!api?.current) return;
   const release = api.current;
   const version = document.getElementById("releaseNoticeVersion");
   const date = document.getElementById("releaseNoticeDate");

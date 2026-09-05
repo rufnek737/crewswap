@@ -207,8 +207,9 @@ python3 -m http.server 8889           # 정적 파일 → http://localhost:8889
 1. 인앱 상품 확인: `com.rufnekcrewswap.coupon.urgent5`(소모형 5장). 이전과 함께 넘어오지만 없으면 **같은 ID로** 다시 만든다. ID는 `worker/apple-iap.mjs`의 `CREWSWAP_COUPON_PRODUCTS`와 `ios/App/App/StoreKitBridgePlugin.swift`의 `couponProductIDs`에 박혀 있다. 묶음을 늘리려면 그 표에만 한 줄 더하면 서버·앱·StoreKit이 함께 따라온다
 2. `BETA_ALL_PREMIUM`을 `"false"`로 → PRO 전원 개방과 무료 쿠폰이 동시에 꺼지고 구매 진입점이 다시 나타난다
 3. `release-notice.js`의 `current`를 유료화 안내로 교체 — 무료가 끝났는데 무료라고 알리면 안 된다
-4. **Q&A에 PRO 30일 체험권 안내를 되살릴 것.** 무료 기간에는 체험권을 켤 수 없어(서버가 `FREE_ERA`로 막는다) 해당 문항을 뺐다. 유료화하면 체험권이 다시 유효해지므로 설명이 필요하다
-5. Sandbox 구매로 쿠폰 지급까지 실제로 도는지 확인
+4. `app.js`의 `ALWAYS_SHOW_RELEASE_NOTICE`를 `false`로 — 무료 안내를 매 실행마다 띄우던 것을 끈다
+5. **Q&A에 PRO 30일 체험권 안내를 되살릴 것.** 무료 기간에는 체험권을 켤 수 없어(서버가 `FREE_ERA`로 막는다) 해당 문항을 뺐다. 유료화하면 체험권이 다시 유효해지므로 설명이 필요하다
+6. Sandbox 구매로 쿠폰 지급까지 실제로 도는지 확인
 
 **유료화 방식은 새로 설계하지 말 것.** 2026-09-01에 구현한 그대로 쓴다(쿠폰 5장 소모형 + 회사 상신 완료 시 쿠폰 1장·크레딧 1개 보상, 등급 기반 급구 알림).
 
