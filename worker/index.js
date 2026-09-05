@@ -497,6 +497,15 @@ function webPushConfigured(env) {
   return !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT);
 }
 
+// 출시 기념 무료 기간. 전원에게 PRO를 여는 것과, 그 사실을 사용자 화면에 제대로
+// 알리는 것은 다른 문제다. 서버만 알고 있으면 사용자에게는 30일 체험권이 곧 끝나는
+// 것처럼 보인다.
+function freeEraUntil(env) {
+  if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() !== 'true') return null;
+  const raw = String(env.FREE_ERA_UNTIL || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : null;
+}
+
 async function isPremiumAccount(env, email, allowSandbox = false) {
   if (String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true') return true;
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
@@ -506,7 +515,16 @@ async function isPremiumAccount(env, email, allowSandbox = false) {
 async function handlePremiumStatus(env, authEmail, allowSandbox = false) {
   const user = await refreshStoredApplePurchase(env, authEmail);
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
-  return json({ ok: true, premium: getProStatus(user, Date.now(), { allowSandbox }) });
+  return json({ ok: true, premium: withFreeEra(env, getProStatus(user, Date.now(), { allowSandbox })) });
+}
+
+/* 무료 기간에는 영구 이용권을 산 사람 말고는 전부 '무료 기간' 상태로 알린다.
+   체험권 정보(trialAvailable)는 건드리지 않는다 — 무료 기간이 끝난 뒤에도
+   아직 안 쓴 체험권을 그대로 쓸 수 있어야 한다. */
+function withFreeEra(env, status) {
+  const until = freeEraUntil(env);
+  if (!until || status.entitlement === 'lifetime') return status;
+  return { ...status, active: true, entitlement: 'free', expiresAt: until, freeEraUntil: until };
 }
 
 const APPLE_PURCHASE_REFRESH_MS = 6 * 60 * 60 * 1000;
@@ -698,6 +716,11 @@ async function handleCouponPurchaseVerify(request, env, authEmail) {
 }
 
 async function handlePremiumTrialActivate(env, authEmail) {
+  // 무료 기간에는 이미 PRO가 열려 있다. 여기서 체험권을 켜면 아무 이득 없이
+  // 계정당 한 번뿐인 권리만 소진된다.
+  if (freeEraUntil(env)) {
+    return json({ error: '지금은 무료 이용 기간이라 PRO 기능을 모두 쓰실 수 있습니다. 체험권은 그대로 남겨둡니다.', code: 'FREE_ERA' }, 409);
+  }
   const key = `user:${authEmail}`;
   const user = await env.POSTS.get(key, { type: 'json' });
   if (!user) return json({ error: '가입된 계정을 찾을 수 없습니다' }, 404);
@@ -735,6 +758,7 @@ async function handlePremiumAlertConfig(env) {
     nativePushEnabled: apnsConfigured(env),
     vapidPublicKey: env.VAPID_PUBLIC_KEY || '',
     betaAllPremium: String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true',
+    freeEraUntil: freeEraUntil(env),
   });
 }
 

@@ -197,6 +197,7 @@ const state = {
   sessionExpiresAt: null,
   credits: 3,
   urgentCoupons: 0,
+  freeEraUntil: null,
   // 무료 출시 기간 여부(서버 BETA_ALL_PREMIUM). 결제를 걸 수 없는 기간이라
   // 구매 진입점을 감춘다 — 눌러도 살 수 없는 버튼은 심사에서 걸린다.
   freeEra: false,
@@ -2838,6 +2839,7 @@ const BETA_ALL_PREMIUM = false;
 function isPremiumUser() {
   if (BETA_ALL_PREMIUM) return true;
   if (state.user.proEntitlement === 'lifetime') return true;
+  if (state.user.proEntitlement === 'free') return true;   // 출시 기념 무료 기간
   if (state.user.proEntitlement === 'sandbox' || state.user.proEntitlement === 'trial' || state.user.proEntitlement === 'legacy') {
     const expiry = Date.parse(state.user.proExpiresAt || state.user.proTrialExpiresAt || '');
     return Number.isFinite(expiry) && expiry > Date.now();
@@ -2853,6 +2855,7 @@ function applyPremiumStatus(status, shouldRender = true) {
   state.user.proTrialStartedAt = premium.trialStartedAt || null;
   state.user.proTrialExpiresAt = premium.trialExpiresAt || null;
   state.user.proExpiresAt = premium.expiresAt || premium.trialExpiresAt || null;
+  if (premium.freeEraUntil) { state.freeEra = true; state.freeEraUntil = premium.freeEraUntil; }
   saveState();
   if (shouldRender) {
     renderProDiscovery();
@@ -2881,6 +2884,14 @@ function renderProDiscovery() {
     if (status) status.textContent = "PRO 영구 이용권 사용 중 · 맞춤 알림, 무제한 크레딧, 편조구성원 미리보기";
     if (button) button.textContent = "PRO 기능 관리";
     updateMainButton("👑 PRO 기능 관리", "맞춤 알림 · 무제한 크레딧");
+    return;
+  }
+  if (state.freeEra) {
+    // 무료 기간에는 체험권 만료일을 보여주면 안 된다. 곧 끝나는 것처럼 보인다.
+    const until = formatProDate(state.freeEraUntil) || "2027.9.30";
+    if (status) status.textContent = `출시 기념 무료 이용 중 · ${until}까지 맞춤 알림, 무제한 크레딧, 편조구성원 미리보기`;
+    if (button) button.textContent = "PRO 기능 관리";
+    updateMainButton("👑 PRO 기능 무료 이용 중", `${until}까지 전 기능 무료`);
     return;
   }
   if (isPremiumUser()) {
@@ -2940,7 +2951,11 @@ function loadServiceConfig() {
   if (!_serviceConfigPromise) {
     _serviceConfigPromise = apiFetch(`${API_BASE}/api/premium-alert-config`)
       .then(response => response.json())
-      .then(config => { state.freeEra = !!config.betaAllPremium; return config; })
+      .then(config => {
+        state.freeEra = !!config.betaAllPremium;
+        if (config.freeEraUntil) state.freeEraUntil = config.freeEraUntil;
+        return config;
+      })
       .catch(() => ({}));
   }
   return _serviceConfigPromise;
@@ -3169,7 +3184,8 @@ async function loadProProductDisplay() {
 
 function proPurchaseControlsHtml() {
   if (state.freeEra) {
-    return `<div class="premium-purchase-box"><small>지금은 무료 이용 기간이라 PRO 기능을 모두 무료로 쓰실 수 있습니다.</small></div>`;
+    const until = formatProDate(state.freeEraUntil) || "2027.9.30";
+    return `<div class="premium-purchase-box"><small>출시 기념 무료 이용 기간입니다. <strong>${until}까지</strong> PRO 기능을 모두 무료로 쓰실 수 있습니다.</small></div>`;
   }
   if (!isNativeIosCrewSwapApp()) {
     return `<div class="premium-purchase-box"><small>PRO 영구 이용권 구매와 복원은 iPhone 앱에서 제공됩니다.</small></div>`;
