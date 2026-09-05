@@ -25,10 +25,16 @@ export function apnsConfigured(env) {
 }
 
 export function sanitizeNativeDevice(value) {
-  const token = String(value?.token || '').trim().toLowerCase();
-  if (!/^[0-9a-f]{32,512}$/.test(token)) return null;
   const platform = String(value?.platform || '').toLowerCase();
-  if (platform !== 'ios') return null;
+  if (platform !== 'ios' && platform !== 'android') return null;
+  // APNs 토큰은 16진수지만 FCM 토큰은 그렇지 않다(콜론·하이픈·대소문자가 섞인다).
+  // 형식을 플랫폼별로 나눠 본다 — 하나로 묶으면 한쪽이 통째로 막힌다.
+  const raw = String(value?.token || '').trim();
+  const token = platform === 'ios' ? raw.toLowerCase() : raw;
+  const valid = platform === 'ios'
+    ? /^[0-9a-f]{32,512}$/.test(token)
+    : /^[A-Za-z0-9_:.-]{64,4096}$/.test(token);
+  if (!valid) return null;
   const environment = ['production', 'sandbox', 'auto'].includes(value?.environment)
     ? value.environment
     : 'auto';

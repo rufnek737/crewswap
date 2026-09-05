@@ -60,8 +60,13 @@ test("the PRO alert screen stays concise and verifies native delivery", () => {
 
   assert.doesNotMatch(html, /PRO 전용 편의 기능/);
   assert.match(app, /\/api\/premium-alert-test/);
-  assert.match(app, /iPhone 테스트 알림을 보냈습니다/);
+  assert.match(app, /테스트 알림을 보냈습니다/);
   assert.match(worker, /CrewSwap 알림 테스트/);
+
+  // 알림은 iOS·안드로이드 양쪽으로 나간다. 안내 문구를 iPhone으로 못박으면
+  // 안드로이드 사용자에게 자기 얘기가 아닌 것처럼 읽힌다.
+  assert.doesNotMatch(app, /iPhone 백그라운드 알림|iPhone 테스트 알림|APNs 기기 등록/);
+  assert.match(worker, /platform === 'android'/);
 });
 
 test("PRO benefits and purchase entry points are visible without opening Q&A", () => {

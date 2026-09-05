@@ -22,7 +22,7 @@ async function testEnv() {
   };
 }
 
-test('native device accepts only iOS hexadecimal APNs tokens', () => {
+test('iOS device tokens must be hexadecimal APNs tokens', () => {
   const token = 'a'.repeat(64);
   const device = sanitizeNativeDevice({ token: token.toUpperCase(), platform: 'ios' });
   assert.equal(device.token, token);
@@ -31,7 +31,8 @@ test('native device accepts only iOS hexadecimal APNs tokens', () => {
   assert.equal(device.bundleId, '');
   assert.ok(Number.isFinite(Date.parse(device.updatedAt)));
   assert.equal(sanitizeNativeDevice({ token: 'not-a-token', platform: 'ios' }), null);
-  assert.equal(sanitizeNativeDevice({ token, platform: 'android' }), null);
+  // 안드로이드(FCM)는 형식이 달라 별도로 받는다 — tests/fcm.test.mjs 참조
+  assert.equal(sanitizeNativeDevice({ token, platform: 'web' }), null);
 });
 
 test('APNs provider JWT contains ES256 key and team claims', async () => {

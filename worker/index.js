@@ -16,6 +16,7 @@ import {
 import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-entitlement.mjs';
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
+import { fcmConfigured, sendFcmNotification } from './fcm.mjs';
 import {
   CREWSWAP_BUNDLE_ID,
   CREWSWAP_PRO_PRODUCT_ID,
@@ -753,9 +754,9 @@ function sanitizePushSubscription(value) {
 
 async function handlePremiumAlertConfig(env) {
   return json({
-    enabled: webPushConfigured(env) || apnsConfigured(env),
+    enabled: webPushConfigured(env) || nativePushConfigured(env),
     webPushEnabled: webPushConfigured(env),
-    nativePushEnabled: apnsConfigured(env),
+    nativePushEnabled: nativePushConfigured(env),
     vapidPublicKey: env.VAPID_PUBLIC_KEY || '',
     betaAllPremium: String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true',
     freeEraUntil: freeEraUntil(env),
@@ -815,7 +816,7 @@ async function handlePremiumAlertSync(request, env, authEmail, allowSandbox = fa
     searches: searches.length,
     devices: next.subscriptions.length + next.nativeDevices.length,
     webPushEnabled: webPushConfigured(env),
-    nativePushEnabled: apnsConfigured(env),
+    nativePushEnabled: nativePushConfigured(env),
   });
 }
 
@@ -837,18 +838,19 @@ async function handlePremiumAlertTest(env, authEmail, allowSandbox = false) {
   let delivered = 0;
   for (const device of record.nativeDevices || []) {
     try {
-      const result = await sendApnsNotification(env, device, {
+      const result = await sendNativeNotification(env, device, {
         title: '🔔 CrewSwap 알림 테스트',
-        body: 'iPhone 백그라운드 알림이 정상 연결되었습니다.',
+        body: '백그라운드 알림이 정상 연결되었습니다.',
         route: 'find',
         postId: '',
+        data: { url: './#find' },
       });
       if (result.ok) {
-        alive.push({ ...device, environment: result.environment || device.environment });
+        alive.push(result.environment ? { ...device, environment: result.environment } : device);
         delivered += 1;
       } else {
-        failures.push(result.reason || 'APNS_DELIVERY_FAILED');
-        if (!result.permanent) alive.push(device);
+        failures.push(result.reason || 'PUSH_DELIVERY_FAILED');
+        if (!result.gone) alive.push(device);
       }
     } catch (error) {
       failures.push(error?.message || 'APNS_DELIVERY_FAILED');
@@ -869,7 +871,7 @@ async function handlePremiumAlertTest(env, authEmail, allowSandbox = false) {
    PRO 여부도 보지 않는다. 급구는 닿는 사람이 많아야 성사되는 기능이기 때문이다. */
 async function notifyUrgentPost(env, post) {
   const canWebPush = webPushConfigured(env);
-  const canNativePush = apnsConfigured(env);
+  const canNativePush = nativePushConfigured(env);
   if (!canWebPush && !canNativePush) return;
   const records = await getPremiumAlertIndex(env);
   if (!records.length) return;
@@ -900,14 +902,12 @@ async function notifyUrgentPost(env, post) {
 
     const aliveNative = [];
     for (const device of canNativePush ? (record.nativeDevices || []) : []) {
-      try {
-        const result = await sendApnsNotification(env, device, { title, body, tag: `crewswap-urgent-${post.id}`, data: { url: './#find', postId: post.id } });
-        if (result?.ok !== false) delivered = true;
-        aliveNative.push(device);
-      } catch (error) {
-        const status = error?.status || 0;
-        if (status !== 410) aliveNative.push(device);
-      }
+      const result = await sendNativeNotification(env, device, {
+        title, body, tag: `crewswap-urgent-${post.id}`,
+        route: 'find', postId: post.id, data: { url: './#find', postId: post.id },
+      });
+      if (result.ok) delivered = true;
+      if (!result.gone) aliveNative.push(device);
     }
     record.nativeDevices = aliveNative;
 
@@ -919,9 +919,35 @@ async function notifyUrgentPost(env, post) {
   if (changed) await savePremiumAlertIndex(env, records);
 }
 
+/* 기기 하나에 알림 한 건. iOS는 APNs, 안드로이드는 FCM으로 갈린다.
+   호출하는 쪽이 플랫폼을 신경 쓰지 않도록 여기서 나눈다.
+   돌려주는 값: { ok, gone } — gone이면 등록이 끊긴 토큰이라 목록에서 지운다. */
+function nativePushConfigured(env) {
+  return apnsConfigured(env) || fcmConfigured(env);
+}
+
+async function sendNativeNotification(env, device, payload) {
+  if (device?.platform === 'android') {
+    if (!fcmConfigured(env)) return { ok: false, gone: false };
+    try {
+      await sendFcmNotification(env, device, payload);
+      return { ok: true, gone: false };
+    } catch (error) {
+      return { ok: false, gone: !!error?.gone, reason: error?.message };
+    }
+  }
+  if (!apnsConfigured(env)) return { ok: false, gone: false };
+  try {
+    const result = await sendApnsNotification(env, device, payload);
+    return { ok: result?.ok !== false, gone: !!result?.permanent, environment: result?.environment };
+  } catch (error) {
+    return { ok: false, gone: error?.status === 410, reason: error?.message };
+  }
+}
+
 async function notifyPremiumSubscribers(env, post) {
   const canWebPush = webPushConfigured(env);
-  const canNativePush = apnsConfigured(env);
+  const canNativePush = nativePushConfigured(env);
   if (!canWebPush && !canNativePush) return;
   const records = await getPremiumAlertIndex(env);
   if (!records.length) return;
@@ -964,20 +990,17 @@ async function notifyPremiumSubscribers(env, post) {
     record.subscriptions = alive;
     const aliveNative = [];
     for (const device of canNativePush ? (record.nativeDevices || []) : []) {
-      try {
-        const result = await sendApnsNotification(env, device, {
-          title: '🔔 조건에 맞는 새 스왑',
-          body,
-          route: 'find',
-          postId: post.id,
-        });
-        if (result.ok) {
-          aliveNative.push({ ...device, environment: result.environment || device.environment });
-          delivered = true;
-        } else if (!result.permanent) {
-          aliveNative.push(device);
-        }
-      } catch {
+      const result = await sendNativeNotification(env, device, {
+        title: '🔔 조건에 맞는 새 스왑',
+        body,
+        route: 'find',
+        postId: post.id,
+        data: { url: './#find', postId: post.id },
+      });
+      if (result.ok) {
+        aliveNative.push(result.environment ? { ...device, environment: result.environment } : device);
+        delivered = true;
+      } else if (!result.gone) {
         aliveNative.push(device);
       }
     }

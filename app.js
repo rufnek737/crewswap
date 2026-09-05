@@ -3305,7 +3305,8 @@ async function handleNativePushRoute(data = {}) {
 }
 
 async function initNativePushNotifications() {
-  if (!isNativeIosCrewSwapApp()) return false;
+  // iOS는 APNs, 안드로이드는 FCM으로 서버가 나눠 보낸다. 여기서는 플랫폼만 실어준다.
+  if (!isNativeCrewSwapApp()) return false;
   const PushNotifications = nativePushPlugin();
   if (!PushNotifications) return false;
 
@@ -3314,7 +3315,7 @@ async function initNativePushNotifications() {
     await PushNotifications.addListener('registration', async token => {
       _nativePushDevice = {
         token: token.value,
-        platform: 'ios',
+        platform: window.Capacitor?.getPlatform?.() === 'android' ? 'android' : 'ios',
         environment: 'auto',
         bundleId: 'com.rufnekcrewswap.app',
       };
@@ -3324,7 +3325,7 @@ async function initNativePushNotifications() {
       renderSavedSearches();
     });
     await PushNotifications.addListener('registrationError', error => {
-      const registrationError = new Error(error?.error || 'APNs 기기 등록 실패');
+      const registrationError = new Error(error?.error || '기기 알림 등록 실패');
       settleNativePushWaiters(registrationError);
       console.warn('native push registration failed:', registrationError);
     });
@@ -3355,16 +3356,16 @@ async function initNativePushNotifications() {
 async function registerNativePushNotifications() {
   const PushNotifications = nativePushPlugin();
   if (!PushNotifications || !(await initNativePushNotifications())) {
-    throw new Error('이 앱 빌드에서 iPhone 알림 기능을 찾을 수 없습니다.');
+    throw new Error('이 앱 빌드에서 알림 기능을 찾을 수 없습니다.');
   }
   let permission = await PushNotifications.checkPermissions();
   if (permission.receive === 'prompt' || permission.receive === 'prompt-with-rationale') {
     permission = await PushNotifications.requestPermissions();
   }
-  if (permission.receive !== 'granted') throw new Error('iPhone 설정에서 CrewSwap 알림을 허용해주세요.');
+  if (permission.receive !== 'granted') throw new Error('설정에서 CrewSwap 알림을 허용해주세요.');
 
   const registration = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('APNs 기기 등록 시간이 초과되었습니다.')), 15000);
+    const timer = setTimeout(() => reject(new Error('기기 알림 등록 시간이 초과되었습니다.')), 15000);
     _nativePushWaiters.push({
       resolve: value => { clearTimeout(timer); resolve(value); },
       reject: error => { clearTimeout(timer); reject(error); },
@@ -3400,15 +3401,11 @@ async function syncPremiumAlertSettings(subscription = null, nativeDevice = unde
 async function enablePremiumBackgroundAlerts() {
   if (!isPremiumUser()) { showToast('PRO 전용 기능입니다. 무료 이용권을 먼저 시작해주세요.'); return; }
   if (isNativeCrewSwapApp()) {
-    if (!isNativeIosCrewSwapApp()) {
-      showToast('Android 백그라운드 알림은 다음 배포 단계에서 연결됩니다.');
-      return;
-    }
     try {
       const configResponse = await apiFetch(`${API_BASE}/api/premium-alert-config`);
       const config = await configResponse.json().catch(() => ({}));
       if (!configResponse.ok || !config.nativePushEnabled) {
-        throw new Error('APNs 서버 키가 아직 연결되지 않았습니다.');
+        throw new Error('알림 서버 키가 아직 연결되지 않았습니다.');
       }
       const nativeDevice = await registerNativePushNotifications();
       const synced = await syncPremiumAlertSettings(null, nativeDevice);
@@ -3420,10 +3417,10 @@ async function enablePremiumBackgroundAlerts() {
       }
       localStorage.setItem('crewswap_premium_push_enabled', '1');
       renderSavedSearches();
-      showToast('iPhone 테스트 알림을 보냈습니다.');
+      showToast('테스트 알림을 보냈습니다.');
     } catch (error) {
       console.warn('native premium push enable failed:', error);
-      showToast(`iPhone 알림 설정 실패 — ${error.message}`);
+      showToast(`알림 설정 실패 — ${error.message}`);
     }
     return;
   }
@@ -4132,7 +4129,7 @@ function renderSavedSearches() {
       addEl.innerHTML = `
         <div class="premium-push-state ${pushEnabled ? 'is-on' : ''}">
           <strong>${pushEnabled ? '✓ 백그라운드 알림 켜짐' : '앱을 열지 않아도 새 글 알림'}</strong>
-          <span>${nativeApp ? 'iPhone에서 앱을 닫아도 조건에 맞는 새 스왑 알림을 받을 수 있습니다.' : '홈 화면에 설치한 웹앱/PWA에서 받을 수 있습니다.'}</span>
+          <span>${nativeApp ? '앱을 닫아도 조건에 맞는 새 스왑 알림을 받을 수 있습니다.' : '홈 화면에 설치한 웹앱/PWA에서 받을 수 있습니다.'}</span>
           <button type="button" id="premiumPushEnableBtn" class="secondary-button">${pushEnabled ? '알림 다시 확인' : '백그라운드 알림 켜기'}</button>
         </div>
         <input id="savedKeyword" placeholder="공항명·IATA·ICAO (예: 다낭, DAD, VVDN)" />
