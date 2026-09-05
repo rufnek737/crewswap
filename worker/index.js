@@ -1853,16 +1853,28 @@ async function handlePostsDelete(request, env, authEmail) {
       operationId: `post:${expired ? 'expire' : 'cancel'}:${id}`,
       amount: refundRequested,
     });
+    // 급구 쿠폰은 마감까지 매칭되지 않았을 때만 되돌린다. 직접 취소는 되돌리지
+    // 않는다 — 등록하는 순간 등급이 맞는 전원에게 알림이 나가므로 쿠폰의 값어치는
+    // 이미 쓰인 것이고, 돌려주면 알림만 뿌리고 취소하는 짓을 반복할 수 있다.
+    let couponRefunded = 0;
+    if (post.urgent && expired) {
+      const back = await runWalletCommand(env, authEmail, {
+        type: 'grant-coupon', operationId: `post:urgent-refund:${id}`, amount: 1,
+      });
+      couponRefunded = back.couponsGranted || 0;
+      if (back.ok) refund.wallet = back.wallet;
+    }
     post.status = expired ? 'expired' : 'cancelled';
     post.refunded = true;
     post.refundGranted = refund.refunded || 0;
+    post.urgentCouponRefunded = couponRefunded;
     post.closedAt = new Date().toISOString();
     await env.POSTS.put(`post:${id}`, JSON.stringify(post));
     const idx = await getPostsIndex(env);
     const index = idx.findIndex(item => item.id === id);
     if (index >= 0) idx[index] = post;
     await savePostsIndex(env, idx);
-    return json({ ok: true, status: post.status, refunded: refund.refunded || 0, wallet: refund.wallet });
+    return json({ ok: true, status: post.status, refunded: refund.refunded || 0, couponRefunded, wallet: refund.wallet });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
