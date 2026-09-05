@@ -6385,7 +6385,9 @@ function closeGenericModal(dialogId, overlayId) {
 
 function showReleaseNoticeIfNeeded() {
   const api = window.CrewSwapReleaseNotice;
-  if (!state.user.hasSignedUp || !state.user.serverAuthed || !api?.shouldShow(localStorage)) return;
+  // 서버 세션 여부는 보지 않는다. 공지는 알림·크레딧과 달리 권한이 필요 없고,
+  // 세션이 만료된 사이에 새 안내가 묻히면 그 뒤로는 영영 못 본다.
+  if (!state.user.hasSignedUp || !api?.shouldShow(localStorage)) return;
   const release = api.current;
   const version = document.getElementById("releaseNoticeVersion");
   const date = document.getElementById("releaseNoticeDate");
@@ -6601,7 +6603,7 @@ function maybeAutoShowSignup() {
 // 스플래시 화면이 있으면 스플래시 종료 후 표시, 없으면 바로 표시
 if (!document.getElementById("splashScreen")) {
   setTimeout(maybeAutoShowSignup, 150);
-  if (state.user.hasSignedUp && state.user.serverAuthed) { queueReleaseNotice(); queueBetaNotice(); }
+  if (state.user.hasSignedUp) { queueReleaseNotice(); queueBetaNotice(); }
 }
 
 /* ====== 스플래시 화면 (영상 + 로그인/회원가입) ====== */
