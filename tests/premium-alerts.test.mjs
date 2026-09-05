@@ -63,3 +63,33 @@ test('push matching keeps pilot position and qualification rules', () => {
   assert.equal(subscriberCanUsePost({ crewType: 'PILOT', roleType: 'FO_B', aircraft: 'NG', edto: false }, post), false);
   assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'PUR' }, post), false);
 });
+
+/* ── 객실 STBY·RSV 직급 제한 (Swap Guide 5-가·5-아) ──────────── */
+
+test('객실 STBY 글은 동일·상위 직급에게만 알린다', () => {
+  const stbyPost = { crewType: 'CABIN', ownerRole: 'SP', offered: { type: 'STBY' } };
+  const cabin = (roleType, extra = {}) => ({ crewType: 'CABIN', roleType, hasBroadcastRating: true, ...extra });
+
+  assert.equal(subscriberCanUsePost(cabin('SP'), stbyPost), true);   // 동일
+  assert.equal(subscriberCanUsePost(cabin('CP'), stbyPost), true);   // 상위
+  assert.equal(subscriberCanUsePost(cabin('PS'), stbyPost), false);  // 하위
+  assert.equal(subscriberCanUsePost(cabin('CC'), stbyPost), false);
+});
+
+test('방송등급이 없으면 RSV 글 알림을 받지 않는다', () => {
+  const rsvPost = { crewType: 'CABIN', ownerRole: 'CC', offered: { type: 'RSV' } };
+  assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'CC', hasBroadcastRating: false }, rsvPost), false);
+  assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'CC', hasBroadcastRating: true }, rsvPost), true);
+});
+
+test('일반 비행은 객실 직급을 제한하지 않는다', () => {
+  // Swap Guide에 일반 비행의 직급 제한 조항은 없다. STBY·RSV에만 걸린다.
+  const flightPost = { crewType: 'CABIN', ownerRole: 'CP', offered: { type: '국제선' } };
+  assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'CC', hasBroadcastRating: false }, flightPost), true);
+});
+
+test('여러 날 중 하루라도 STBY면 제한이 걸린다', () => {
+  const post = { crewType: 'CABIN', ownerRole: 'SP',
+    offered: { type: '국내선', daySchedules: [{ type: '국내선' }, { type: 'STBY' }] } };
+  assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'CC', hasBroadcastRating: true }, post), false);
+});
