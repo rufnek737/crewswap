@@ -413,7 +413,7 @@ function createMockRequests() {
 function createMockAlerts() {
   const alerts = [
     { id:"confirm", kind:"announce", title:"⚠️ 스왑은 회사 승인으로 확정됩니다", date:"2026.09.05",
-      body:"이 앱은 조건이 맞는 상대를 찾고 서로 확인하는 단계까지를 돕습니다. 앱에서 상호 수락했다고 근무가 바뀌지는 않습니다.\n\n· 실제 스케줄 변경은 회사 시스템(J-CREW) 신청과 승인으로만 확정됩니다.\n· 앱의 상호 수락은 두 사람의 의사 확인일 뿐, 회사 승인이 아닙니다.\n· 규정 자동 확인은 보조 기능입니다. 원본 일정과 최신 회사 규정을 함께 확인해주세요.\n\n이 안내는 첫 실행 시 팝업으로도 표시되며, 언제든 이 공지에서 다시 확인할 수 있습니다.",
+      body:"이 앱은 조건이 맞는 상대를 찾고 서로 확인하는 단계까지를 돕습니다. 앱에서 상호 수락했다고 근무가 바뀌지는 않습니다.\n\n· 실제 스케줄 변경은 회사 시스템(J-CREW) 신청과 승인으로만 확정됩니다.\n· 앱의 상호 수락은 두 사람의 의사 확인일 뿐, 회사 승인이 아닙니다.\n· 규정 자동 확인은 보조 기능입니다. 원본 일정과 최신 회사 규정을 함께 확인해주세요.",
       time:"공지" },
     { id:"guide", kind:"announce", title:"📢 CrewSwap 사용 안내", date:"2026.08.03",
       body:"1. 내 근무 확인\nCrewConnex에 로그인해 스케줄을 불러오면 달력에서 근무와 세부 일정을 확인할 수 있습니다.\n\n2. 원하는 스왑 찾기\n모든 스왑을 보거나 날짜·근무 종류 등 원하는 조건을 선택해 찾을 수 있습니다. 글을 누르면 쇼업 시간과 비행 일정을 자세히 확인할 수 있습니다.\n\n3. 내 스왑 올리기\n내가 바꾸고 싶은 근무와 원하는 조건을 선택해 등록합니다. 등록한 글은 ‘내가 올린 스왑 관리’에서 수정·취소·삭제할 수 있습니다.\n\n4. 요청과 의향 묻기\n정식 요청은 내 근무를 제안해 교환을 요청하는 기능입니다. 의향 묻기는 크레딧 없이 상대방의 교환 의사부터 확인하는 기능입니다.\n\n5. 요청 확인\n‘요청’ 메뉴에서 받은 요청과 보낸 요청을 확인합니다. 필요한 경우 서로의 달력을 비교해 교환할 일정을 선택할 수 있습니다.\n\n6. 규정 및 개인정보\n앱이 휴식시간과 스왑 규정을 확인하며, 교환할 수 없는 일정은 사유와 함께 알려줍니다. 실명·사번·연락처는 상호 수락 후에만 공개됩니다.\n\n7. 최종 변경\n상호 수락 후 실제 스케줄 변경은 회사 시스템을 통해 최종 신청해야 합니다.\n\n8. PRO 알림\n원하는 스왑 조건을 저장하면 앱을 열지 않아도 조건에 맞는 새 글 알림을 받을 수 있습니다.",
@@ -6373,18 +6373,16 @@ function closeGenericModal(dialogId, overlayId) {
   document.body.classList.remove("no-scroll");
 }
 
-/* 출시 기념 안내는 앱을 새로 켤 때마다 띄운다. 평소 업데이트 공지라면 한 번 보고
-   넘기는 게 맞지만, 지금은 "2027년 9월 30일까지 전부 무료"가 이 앱을 쓰는 이유
-   자체라 한 번 놓치면 모른 채로 쓰게 된다. 유료화 시작하면 false로 되돌린다. */
-const ALWAYS_SHOW_RELEASE_NOTICE = true;
-
+/* 공지는 사용자가 '다시 보지 않기'를 고를 때까지 앱을 켤 때마다 띄운다.
+   한 번 보고 넘기게 두면 놓친 사람은 영영 모른 채로 쓰게 된다. */
 function showReleaseNoticeIfNeeded() {
   const api = window.CrewSwapReleaseNotice;
   // 서버 세션 여부는 보지 않는다. 공지는 알림·크레딧과 달리 권한이 필요 없고,
   // 세션이 만료된 사이에 새 안내가 묻히면 그 뒤로는 영영 못 본다.
-  if (!state.user.hasSignedUp) return;
-  if (!ALWAYS_SHOW_RELEASE_NOTICE && !api?.shouldShow(localStorage)) return;
-  if (!api?.current) return;
+  if (!state.user.hasSignedUp || !api?.current) return;
+  if (!api.shouldShow(localStorage)) return;
+  const hideAgain = document.getElementById("releaseNoticeHideAgain");
+  if (hideAgain) hideAgain.checked = false;
   const release = api.current;
   const version = document.getElementById("releaseNoticeVersion");
   const date = document.getElementById("releaseNoticeDate");
@@ -6404,7 +6402,10 @@ function showReleaseNoticeIfNeeded() {
 }
 
 function acknowledgeReleaseNotice() {
-  window.CrewSwapReleaseNotice?.markSeen(localStorage);
+  // 체크하지 않으면 다음에 또 뜬다. 공지란에는 어느 쪽이든 그대로 남는다.
+  if (document.getElementById("releaseNoticeHideAgain")?.checked) {
+    window.CrewSwapReleaseNotice?.markSeen(localStorage);
+  }
   closeGenericModal("releaseNoticeDialog", "releaseNoticeOverlay");
 }
 
@@ -6426,9 +6427,9 @@ function showBetaNoticeIfNeeded() {
   if (!state.user.hasSignedUp) return;
   // 업데이트 공지가 떠 있으면 겹치지 않게 그 뒤로 미룬다.
   if (!document.getElementById("releaseNoticeDialog")?.hidden) { setTimeout(showBetaNoticeIfNeeded, 800); return; }
-  let hiddenUntil = "";
-  try { hiddenUntil = localStorage.getItem(BETA_NOTICE_KEY) || ""; } catch { /* 저장 불가 환경은 매번 표시 */ }
-  if (hiddenUntil === todayKeyLocal()) return;
+  let hidden = "";
+  try { hidden = localStorage.getItem(BETA_NOTICE_KEY) || ""; } catch { /* 저장 불가 환경은 매번 표시 */ }
+  if (hidden === "never") return;
   const check = document.getElementById("betaNoticeHideToday");
   if (check) check.checked = false;
   openGenericModal("betaNoticeDialog", "betaNoticeOverlay");
@@ -6442,7 +6443,7 @@ function todayKeyLocal() {
 function acknowledgeBetaNotice() {
   const check = document.getElementById("betaNoticeHideToday");
   if (check?.checked) {
-    try { localStorage.setItem(BETA_NOTICE_KEY, todayKeyLocal()); } catch { /* 무시 */ }
+    try { localStorage.setItem(BETA_NOTICE_KEY, "never"); } catch { /* 무시 */ }
   }
   closeGenericModal("betaNoticeDialog", "betaNoticeOverlay");
 }

@@ -50,7 +50,7 @@
       kind: "announce",
       title: `🆕 ${release.title}`,
       date: release.date,
-      body: `${release.summary}\n\n${details}\n\n이 안내는 새 버전 최초 실행 시 한 번 표시되며, 이후에도 공지에서 다시 확인할 수 있습니다.`,
+      body: `${release.summary}\n\n${details}`,
       time: "공지",
       releaseVersion: release.version,
     };
