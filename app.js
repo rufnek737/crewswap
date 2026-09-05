@@ -3004,13 +3004,20 @@ const COUPON_PRODUCTS = [
   { id: 'com.rufnekcrewswap.coupon.urgent5', coupons: 5 },
 ];
 
+// 결과를 성공/실패로 구분해 돌려준다. 빈 배열만 돌려주면 "아직 못 불러온 것"과
+// "App Store에 상품이 없는 것"이 화면에서 똑같이 보여 원인을 알 수 없다.
 async function loadCouponProducts() {
   const StoreKit = storeKitBridge();
-  if (!StoreKit?.getProducts) return [];
+  if (!StoreKit?.getProducts) return { ok: false, reason: '앱 업데이트가 필요합니다', products: [] };
   try {
     const result = await StoreKit.getProducts({ productIds: COUPON_PRODUCTS.map(p => p.id) });
-    return Array.isArray(result?.products) ? result.products : [];
-  } catch { return []; }
+    const products = Array.isArray(result?.products) ? result.products : [];
+    if (!products.length) return { ok: false, reason: 'App Store에서 상품을 찾지 못했습니다', products };
+    return { ok: true, products };
+  } catch (error) {
+    console.warn('coupon product load failed:', error);
+    return { ok: false, reason: error?.message || 'App Store 연결에 실패했습니다', products: [] };
+  }
 }
 
 async function purchaseUrgentCoupons(productId) {
@@ -3060,17 +3067,18 @@ async function renderCouponShop() {
   if (!box) return;
   const have = state.urgentCoupons || 0;
   const native = !!storeKitBridge();
-  const priced = native ? await loadCouponProducts() : [];
-  const priceOf = id => priced.find(p => p.productId === id)?.displayPrice || null;
+  const loaded = native ? await loadCouponProducts() : { ok: false, reason: null, products: [] };
+  const priceOf = id => loaded.products.find(p => p.productId === id)?.displayPrice || null;
 
   box.innerHTML = `
     <h4>🚨 급구 쿠폰 <span class="coupon-balance">보유 ${have}장</span></h4>
     <p class="hint">급구로 올리면 등급이 맞는 승무원 전원에게 즉시 알림이 갑니다. 글 하나당 1장.</p>
     ${COUPON_PRODUCTS.map(product => {
       const price = priceOf(product.id);
-      return `<button type="button" class="secondary-button coupon-buy" data-coupon-product="${product.id}" ${native ? '' : 'disabled'}>
+      const label = !native ? 'iPhone 앱에서 구매' : (price || loaded.reason || '가격 불러오는 중…');
+      return `<button type="button" class="secondary-button coupon-buy" data-coupon-product="${product.id}" ${price ? '' : 'disabled'}>
         <strong>${product.coupons}장</strong>
-        <span>${native ? (price || '가격 불러오는 중…') : 'iPhone 앱에서 구매'}</span>
+        <span>${escapeHtml(label)}</span>
       </button>`;
     }).join('')}
     <p class="hint">급구에 응해 근무를 내주면 회사 상신이 완료될 때 쿠폰 1장과 크레딧 1개를 받습니다.</p>`;
