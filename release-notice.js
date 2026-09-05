@@ -7,8 +7,11 @@
 
   // 출시 기념 무료 기간 안내. 유료화를 시작할 때(BETA_ALL_PREMIUM="false") 이 항목을
   // 다음 릴리스 노트로 교체한다 — 무료가 끝났는데 무료라고 알리고 있으면 안 된다.
+  //
+  // 내용을 고치면 id도 반드시 바꿀 것. 표시 여부는 id로만 판단해서(shouldShow),
+  // id가 같으면 이미 본 사람에게는 고친 내용이 영영 안 뜬다.
   const current = Object.freeze({
-    id: "launch-free-20260905",
+    id: "launch-free-20270930",
     version: "1.1.9",
     date: "2026.09.05",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
