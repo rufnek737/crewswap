@@ -412,6 +412,9 @@ function createMockRequests() {
 
 function createMockAlerts() {
   const alerts = [
+    { id:"confirm", kind:"announce", title:"⚠️ 스왑은 회사 승인으로 확정됩니다", date:"2026.09.05",
+      body:"이 앱은 조건이 맞는 상대를 찾고 서로 확인하는 단계까지를 돕습니다. 앱에서 상호 수락했다고 근무가 바뀌지는 않습니다.\n\n· 실제 스케줄 변경은 회사 시스템(J-CREW) 신청과 승인으로만 확정됩니다.\n· 앱의 상호 수락은 두 사람의 의사 확인일 뿐, 회사 승인이 아닙니다.\n· 규정 자동 확인은 보조 기능입니다. 원본 일정과 최신 회사 규정을 함께 확인해주세요.\n\n이 안내는 첫 실행 시 팝업으로도 표시되며, 언제든 이 공지에서 다시 확인할 수 있습니다.",
+      time:"공지" },
     { id:"guide", kind:"announce", title:"📢 CrewSwap 사용 안내", date:"2026.08.03",
       body:"1. 내 근무 확인\nCrewConnex에 로그인해 스케줄을 불러오면 달력에서 근무와 세부 일정을 확인할 수 있습니다.\n\n2. 원하는 스왑 찾기\n모든 스왑을 보거나 날짜·근무 종류 등 원하는 조건을 선택해 찾을 수 있습니다. 글을 누르면 쇼업 시간과 비행 일정을 자세히 확인할 수 있습니다.\n\n3. 내 스왑 올리기\n내가 바꾸고 싶은 근무와 원하는 조건을 선택해 등록합니다. 등록한 글은 ‘내가 올린 스왑 관리’에서 수정·취소·삭제할 수 있습니다.\n\n4. 요청과 의향 묻기\n정식 요청은 내 근무를 제안해 교환을 요청하는 기능입니다. 의향 묻기는 크레딧 없이 상대방의 교환 의사부터 확인하는 기능입니다.\n\n5. 요청 확인\n‘요청’ 메뉴에서 받은 요청과 보낸 요청을 확인합니다. 필요한 경우 서로의 달력을 비교해 교환할 일정을 선택할 수 있습니다.\n\n6. 규정 및 개인정보\n앱이 휴식시간과 스왑 규정을 확인하며, 교환할 수 없는 일정은 사유와 함께 알려줍니다. 실명·사번·연락처는 상호 수락 후에만 공개됩니다.\n\n7. 최종 변경\n상호 수락 후 실제 스케줄 변경은 회사 시스템을 통해 최종 신청해야 합니다.\n\n8. PRO 알림\n원하는 스왑 조건을 저장하면 앱을 열지 않아도 조건에 맞는 새 글 알림을 받을 수 있습니다.",
       time:"공지" },
@@ -6411,7 +6414,9 @@ const BETA_NOTICE_KEY = "crewswap_beta_notice_hidden_until";
 
 function showBetaNoticeIfNeeded() {
   if (!BETA_NOTICE_ACTIVE) return;
-  if (!state.user.hasSignedUp || !state.user.serverAuthed) return;
+  // 공지는 권한이 필요 없는 안내다. 서버 세션까지 보면 세션이 끊긴 사이에
+  // 경고가 통째로 사라진다 — 이건 놓치면 안 되는 안내다.
+  if (!state.user.hasSignedUp) return;
   // 업데이트 공지가 떠 있으면 겹치지 않게 그 뒤로 미룬다.
   if (!document.getElementById("releaseNoticeDialog")?.hidden) { setTimeout(showBetaNoticeIfNeeded, 800); return; }
   let hiddenUntil = "";
