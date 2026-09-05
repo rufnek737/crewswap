@@ -107,7 +107,8 @@ const couponTx = (productId, transactionId = '300000000000001') => ({
 test('지급 수량은 상품 ID에서만 나온다', () => {
   // 클라이언트가 "10장 샀다"고 주장해도 서버는 상품 ID만 본다.
   assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent5'), 5);
-  assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent10'), 10);
+  // 표에 없는 상품은 0장 — 나중에 묶음을 늘려도 표에만 더하면 된다.
+  assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent10'), 0);
   assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent999'), 0);
   assert.equal(couponsForProduct(undefined), 0);
 });
@@ -126,7 +127,7 @@ test('PRO 거래와 쿠폰 거래는 서로의 경로로 들어갈 수 없다', 
 });
 
 test('환불된 쿠폰 구매는 지급하지 않는다', () => {
-  const refunded = { ...couponTx('com.rufnekcrewswap.coupon.urgent10'), revocationDate: Date.now() };
+  const refunded = { ...couponTx('com.rufnekcrewswap.coupon.urgent5'), revocationDate: Date.now() };
   const result = validateCrewSwapTransaction(refunded, refunded.transactionId, CREWSWAP_COUPON_PRODUCT_IDS);
   assert.equal(result.code, 'PURCHASE_REVOKED');
 });

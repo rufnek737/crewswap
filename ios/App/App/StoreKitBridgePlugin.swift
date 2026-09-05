@@ -20,8 +20,7 @@ public class StoreKitBridgePlugin: CAPPlugin, CAPBridgedPlugin {
 
     // 급구 쿠폰(소모형)도 같은 다리를 쓴다. 상품을 지정하지 않으면 종전처럼 PRO다.
     private let couponProductIDs = [
-        "com.rufnekcrewswap.coupon.urgent5",
-        "com.rufnekcrewswap.coupon.urgent10"
+        "com.rufnekcrewswap.coupon.urgent5"
     ]
 
     private func requestedProductID(_ call: CAPPluginCall) -> String? {

@@ -3002,7 +3002,6 @@ async function purchaseLifetimePro() {
    지급 수량은 서버가 상품 ID로 정하므로 여기서는 어느 상품을 샀는지만 넘긴다. */
 const COUPON_PRODUCTS = [
   { id: 'com.rufnekcrewswap.coupon.urgent5', coupons: 5 },
-  { id: 'com.rufnekcrewswap.coupon.urgent10', coupons: 10 },
 ];
 
 async function loadCouponProducts() {
@@ -3130,7 +3129,9 @@ async function loadProProductDisplay() {
     button.textContent = `PRO 영구 이용권 구매 · ${product.displayPrice}`;
     button.disabled = false;
   } catch {
-    button.textContent = '가격 설정 후 구매 가능';
+    // 상품 조회 실패는 사용자가 손쓸 수 없는 일이라, 개발자 사정이 아니라
+    // 지금 상태와 다음 행동만 알린다.
+    button.textContent = '지금은 구매할 수 없습니다 · 잠시 후 다시 시도해주세요';
     button.disabled = true;
   }
 }

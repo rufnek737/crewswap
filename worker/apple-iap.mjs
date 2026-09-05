@@ -5,7 +5,6 @@ export const CREWSWAP_BUNDLE_ID = 'com.rufnekcrewswap.app';
 // 수량 주장을 믿지 않는다. 상품을 늘릴 때는 이 표에만 한 줄 더하면 된다.
 export const CREWSWAP_COUPON_PRODUCTS = Object.freeze({
   'com.rufnekcrewswap.coupon.urgent5': 5,
-  'com.rufnekcrewswap.coupon.urgent10': 10,
 });
 
 export const CREWSWAP_COUPON_PRODUCT_IDS = Object.freeze(Object.keys(CREWSWAP_COUPON_PRODUCTS));
