@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # 정식 권한은 서버의 영구 이용권 또는 사용자가 직접 시작한 30일 무료 이용권으로 판정한다.
-BETA_ALL_PREMIUM = "false"
+BETA_ALL_PREMIUM = "true"   # 무료 출시 기간 — 유료화 시작 시 "false"
 
 # 사용자·스왑 글·요청·크레딧은 D1에 저장한다. KV 무료 플랜의 일일 쓰기 한도(1,000회)가
 # 회원가입·인증에서 먼저 소진돼 서비스가 멈추던 문제 때문이며, D1 무료 한도는 하루 10만 행이다.

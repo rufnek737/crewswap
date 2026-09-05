@@ -209,12 +209,22 @@ function pickProfile(src) {
   return p;
 }
 
+// 무료 기간에는 매달 급구 쿠폰 1장을 그냥 준다. 쿠폰을 살 수 없는 동안 급구가
+// 교착에 빠지지 않게 하기 위한 것이라, 유료화가 시작되면 이 값이 0이 된다.
+function freeCouponsPerMonth(env) {
+  return String(env.BETA_ALL_PREMIUM || '').toLowerCase() === 'true' ? 1 : 0;
+}
+
 async function runWalletCommand(env, email, command = {}) {
   const key = `wallet:${String(email || '').trim().toLowerCase()}`;
   const stored = await env.POSTS.get(key, { type: 'json' });
-  const result = applyWalletCommand(stored, command);
-  if (result.ok) await env.POSTS.put(key, JSON.stringify(result.wallet));
-  return { ...result, wallet: publicWallet(result.wallet) };
+  const options = { freeCouponsPerMonth: freeCouponsPerMonth(env) };
+  const result = applyWalletCommand(stored, command, Date.now(), options);
+  // 명령이 실패해도(예: 쿠폰 부족) 그달의 무료 지급은 저장한다. 안 그러면 화면에는
+  // 지급된 것으로 보이는데 서버에는 남지 않아 다음에 또 지급된다.
+  const granted = result.wallet.freeCouponMonth !== stored?.freeCouponMonth;
+  if (result.ok || granted) await env.POSTS.put(key, JSON.stringify(result.wallet));
+  return { ...result, wallet: publicWallet(result.wallet, Date.now(), options) };
 }
 
 async function walletStatus(env, email) {

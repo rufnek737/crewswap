@@ -5,15 +5,18 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createReleaseNoticeApi() {
   const SEEN_RELEASE_KEY = "crewswap_seen_release";
 
+  // 출시 기념 무료 기간 안내. 유료화를 시작할 때(BETA_ALL_PREMIUM="false") 이 항목을
+  // 다음 릴리스 노트로 교체한다 — 무료가 끝났는데 무료라고 알리고 있으면 안 된다.
   const current = Object.freeze({
-    id: "1.1.8-20260821",
-    version: "1.1.8",
-    date: "2026.08.21",
-    title: "CrewSwap v1.1.8 업데이트",
-    summary: "크레딧 처리 오류를 수정했습니다.",
+    id: "launch-free-20260905",
+    version: "1.1.9",
+    date: "2026.09.05",
+    title: "출시 기념 · 1년간 모든 기능 무료",
+    summary: "정식 출시를 기념해 1년 동안 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
     changes: Object.freeze([
-      "기기 간 크레딧 동기화",
-      "중복 차감·환급 오류 방지",
+      "PRO 기능 전원 무료 — 조건 알림, 무제한 크레딧, 편조구성원 미리보기",
+      "급구 쿠폰 매달 1장 자동 지급",
+      "급구에 응해 근무를 내주면 쿠폰 1장 추가 지급",
     ]),
   });
 

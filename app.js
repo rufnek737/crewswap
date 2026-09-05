@@ -197,6 +197,9 @@ const state = {
   sessionExpiresAt: null,
   credits: 3,
   urgentCoupons: 0,
+  // 무료 출시 기간 여부(서버 BETA_ALL_PREMIUM). 결제를 걸 수 없는 기간이라
+  // 구매 진입점을 감춘다 — 눌러도 살 수 없는 버튼은 심사에서 걸린다.
+  freeEra: false,
   creditMonth: null,
   adCreditsThisMonth: 0,
   currentMonth: (() => {
@@ -2931,6 +2934,18 @@ async function activateProTrialPass() {
 
 const PRO_PRODUCT_ID = 'com.rufnekcrewswap.pro.lifetime';
 
+// 서비스 설정은 한 번만 받아 캐시한다. 화면마다 다시 물으면 렌더가 늦어진다.
+let _serviceConfigPromise = null;
+function loadServiceConfig() {
+  if (!_serviceConfigPromise) {
+    _serviceConfigPromise = apiFetch(`${API_BASE}/api/premium-alert-config`)
+      .then(response => response.json())
+      .then(config => { state.freeEra = !!config.betaAllPremium; return config; })
+      .catch(() => ({}));
+  }
+  return _serviceConfigPromise;
+}
+
 function storeKitBridge() {
   if (!isNativeIosCrewSwapApp()) return null;
   return window.Capacitor?.Plugins?.StoreKitBridge || null;
@@ -3066,6 +3081,14 @@ async function renderCouponShop() {
   const box = document.getElementById('couponShop');
   if (!box) return;
   const have = state.urgentCoupons || 0;
+  await loadServiceConfig();
+  if (state.freeEra) {
+    box.innerHTML = `
+      <h4>🚨 급구 쿠폰 <span class="coupon-balance">보유 ${have}장</span></h4>
+      <p class="hint">급구로 올리면 등급이 맞는 승무원 전원에게 즉시 알림이 갑니다. 글 하나당 1장.</p>
+      <p class="hint">무료 이용 기간에는 <strong>매달 1장</strong>이 자동으로 지급됩니다. 급구에 응해 근무를 내주면 회사 상신이 완료될 때 <strong>1장</strong>을 더 받습니다.</p>`;
+    return;
+  }
   const native = !!storeKitBridge();
   const loaded = native ? await loadCouponProducts() : { ok: false, reason: null, products: [] };
   const priceOf = id => loaded.products.find(p => p.productId === id)?.displayPrice || null;
@@ -3145,6 +3168,9 @@ async function loadProProductDisplay() {
 }
 
 function proPurchaseControlsHtml() {
+  if (state.freeEra) {
+    return `<div class="premium-purchase-box"><small>지금은 무료 이용 기간이라 PRO 기능을 모두 무료로 쓰실 수 있습니다.</small></div>`;
+  }
   if (!isNativeIosCrewSwapApp()) {
     return `<div class="premium-purchase-box"><small>PRO 영구 이용권 구매와 복원은 iPhone 앱에서 제공됩니다.</small></div>`;
   }
@@ -6708,6 +6734,7 @@ applyLang();
 })();
 fetchPosts(); // 스왑 찾기 탭 진입 전 포스트 미리 로드
 fetchRequests(); // 받은 요청 배지 표시용 미리 로드
+loadServiceConfig().then(() => renderCredits()); // 무료 기간 여부를 먼저 확인해 구매 진입점을 정한다
 refreshPremiumStatus().then(async () => {
   await refreshNativeStoreEntitlement();
   await syncPremiumAlertSettings();

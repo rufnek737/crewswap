@@ -18,7 +18,11 @@ function amount(value) {
   return Number.isFinite(number) ? Math.max(0, Math.round(number * 10) / 10) : 0;
 }
 
-export function normalizeWallet(input, now = Date.now()) {
+/* freeCouponsPerMonth: 무료 기간 동안 매달 그냥 주는 급구 쿠폰 수.
+   쿠폰을 살 수 없는 기간에 0을 주면 아무도 급구를 못 올리고, 그러면 아무도 보상을
+   못 받아 쿠폰이 영원히 0장이 된다. 기능 전체가 죽은 채로 출시되는 것을 막는다.
+   유료화가 시작되면 서버에서 0으로 되돌리면 된다. */
+export function normalizeWallet(input, now = Date.now(), { freeCouponsPerMonth = 0 } = {}) {
   const month = creditMonthKey(now);
   const wallet = input && typeof input === 'object' ? { ...input } : {};
   if (wallet.creditMonth !== month) {
@@ -30,6 +34,11 @@ export function normalizeWallet(input, now = Date.now()) {
     wallet.adCreditsThisMonth = Math.floor(amount(wallet.adCreditsThisMonth));
   }
   wallet.urgentCoupons = Math.floor(amount(wallet.urgentCoupons));
+  // 산 쿠폰은 그대로 두고 무료분만 더한다 — 초기화가 아니라 지급이다.
+  if (freeCouponsPerMonth > 0 && wallet.freeCouponMonth !== month) {
+    wallet.urgentCoupons += Math.floor(freeCouponsPerMonth);
+    wallet.freeCouponMonth = month;
+  }
   wallet.operations = wallet.operations && typeof wallet.operations === 'object' ? { ...wallet.operations } : {};
   return wallet;
 }
@@ -44,8 +53,8 @@ function remember(wallet, operationId, result) {
   }
 }
 
-export function applyWalletCommand(input, command = {}, now = Date.now()) {
-  const wallet = normalizeWallet(input, now);
+export function applyWalletCommand(input, command = {}, now = Date.now(), options = {}) {
+  const wallet = normalizeWallet(input, now, options);
   const operationId = String(command.operationId || '').slice(0, 160);
   const previous = operationId ? wallet.operations[operationId] : null;
   if (previous) return { ok: true, duplicate: true, ...previous, wallet };
@@ -111,8 +120,8 @@ export function applyWalletCommand(input, command = {}, now = Date.now()) {
   return { ok: true, wallet };
 }
 
-export function publicWallet(wallet, now = Date.now()) {
-  const current = normalizeWallet(wallet, now);
+export function publicWallet(wallet, now = Date.now(), options = {}) {
+  const current = normalizeWallet(wallet, now, options);
   return {
     credits: current.credits,
     creditMonth: current.creditMonth,

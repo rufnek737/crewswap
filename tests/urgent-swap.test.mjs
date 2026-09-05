@@ -148,3 +148,33 @@ test('소모형이므로 두 번째 구매는 막히지 않는다', () => {
   const two = applyWalletCommand(one.wallet, { type: 'grant-coupon', operationId: 'iap:coupon:production:2', amount: 5 }, SEP);
   assert.equal(two.wallet.urgentCoupons, 10);
 });
+
+/* ── 무료 출시 기간: 매달 쿠폰 1장 지급 ──────────────────────── */
+
+const FREE = { freeCouponsPerMonth: 1 };
+
+test('무료 기간에는 달이 바뀔 때마다 쿠폰 1장을 받는다', () => {
+  const sep = normalizeWallet(null, SEP, FREE);
+  assert.equal(sep.urgentCoupons, 1);
+
+  const oct = normalizeWallet(sep, OCT, FREE);
+  assert.equal(oct.urgentCoupons, 2);   // 안 쓰면 쌓인다
+});
+
+test('같은 달에 여러 번 조회해도 한 번만 지급한다', () => {
+  const first = normalizeWallet(null, SEP, FREE);
+  const again = normalizeWallet(first, SEP + 1000, FREE);
+  assert.equal(again.urgentCoupons, 1);
+});
+
+test('무료 지급은 산 쿠폰을 건드리지 않는다', () => {
+  const bought = applyWalletCommand(null, { type: 'grant-coupon', operationId: 'buy', amount: 5 }, SEP).wallet;
+  const withFree = normalizeWallet(bought, OCT, FREE);
+  assert.equal(withFree.urgentCoupons, 6);   // 산 5장 + 무료 1장
+});
+
+test('유료화가 시작되면(0장) 더 이상 지급하지 않는다', () => {
+  const free = normalizeWallet(null, SEP, FREE);
+  const paidEra = normalizeWallet(free, OCT);   // 옵션 없음 = 0장
+  assert.equal(paidEra.urgentCoupons, 1);
+});
