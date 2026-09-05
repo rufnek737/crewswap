@@ -22,3 +22,7 @@ worker/migrate-data.sql
 # App Store Connect API 키 — 실수로 커밋되지 않도록 차단 (실제 키는 ~/.appstoreconnect에 보관)
 *.p8
 build/
+
+# Android 업로드 서명 — 비밀번호가 들어 있어 저장소에 넣지 않는다.
+# 원본은 ~/crewswap-upload.jks 와 ~/crewswap-upload-keystore.txt
+android/keystore.properties
