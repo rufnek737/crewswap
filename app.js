@@ -6761,6 +6761,15 @@ refreshPremiumStatus().then(async () => {
   await refreshNativeStoreEntitlement();
   await syncPremiumAlertSettings();
 }); // 서버 권한·App Store 구매 확인 후 저장조건 동기화
+// 공지는 스플래시가 끝나는 시점에 뜬다. 그런데 그 경로는 인트로 영상·타이머·클릭에
+// 얽혀 있어 하나라도 어긋나면 안내가 통째로 사라진다. 스플래시가 이미 걷힌 뒤라면
+// 여기서 한 번 더 확인한다. openGenericModal은 멱등이라 이미 떠 있으면 무해하다.
+setTimeout(() => {
+  if (document.getElementById("splashScreen")) return;   // 아직 스플래시면 그쪽에 맡긴다
+  showReleaseNoticeIfNeeded();
+  queueBetaNotice();
+}, 3500);
+
 initNativePushNotifications().catch(error => console.warn('native push init failed:', error));
 if (state.user.serverAuthed) pullSchedulesFromServer(); // 이 기기에 스케줄이 없으면 서버(다른 기기에서 불러온 것)에서 채움
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
