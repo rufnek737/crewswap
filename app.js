@@ -2003,6 +2003,7 @@ function updateBadges() {
 }
 
 function renderCredits() {
+  renderCouponShop();
   const unlimited = isPremiumUser();
   const display = unlimited ? "∞" : (Number.isInteger(state.credits) ? String(state.credits) : state.credits.toFixed(1));
   $("#creditCount").textContent = display;
@@ -2995,6 +2996,89 @@ async function purchaseLifetimePro() {
   } finally {
     if (button) button.disabled = false;
   }
+}
+
+/* 급구 쿠폰 구매 — PRO와 같은 StoreKit 다리를 쓰되 소모형이라 다르게 다룬다.
+   지급 수량은 서버가 상품 ID로 정하므로 여기서는 어느 상품을 샀는지만 넘긴다. */
+const COUPON_PRODUCTS = [
+  { id: 'com.rufnekcrewswap.coupon.urgent5', coupons: 5 },
+  { id: 'com.rufnekcrewswap.coupon.urgent10', coupons: 10 },
+];
+
+async function loadCouponProducts() {
+  const StoreKit = storeKitBridge();
+  if (!StoreKit?.getProducts) return [];
+  try {
+    const result = await StoreKit.getProducts({ productIds: COUPON_PRODUCTS.map(p => p.id) });
+    return Array.isArray(result?.products) ? result.products : [];
+  } catch { return []; }
+}
+
+async function purchaseUrgentCoupons(productId) {
+  const StoreKit = storeKitBridge();
+  if (!StoreKit) {
+    showToast('급구 쿠폰 구매는 iPhone 앱에서 이용할 수 있습니다.');
+    return;
+  }
+  const buttons = [...document.querySelectorAll('[data-coupon-product]')];
+  buttons.forEach(b => { b.disabled = true; });
+  try {
+    const transaction = await StoreKit.purchase({ productId });
+    if (transaction?.status === 'cancelled') return;
+    if (transaction?.status === 'pending') {
+      showToast('구매 승인을 기다리고 있습니다. 승인 후 자동으로 반영됩니다.');
+      return;
+    }
+    if (transaction?.status !== 'verified') throw new Error('App Store 거래를 확인하지 못했습니다.');
+
+    const response = await apiFetch(`${API_BASE}/api/coupon-purchase-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transactionId: transaction.transactionId,
+        signedTransaction: transaction.signedTransaction,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || '쿠폰 구매 확인에 실패했습니다.');
+    if (data.wallet) applyCreditWallet(data.wallet);
+    // 소모형은 서버가 지급을 끝낸 뒤에 finish 해야 한다. 먼저 끝내면 검증 실패 시
+    // 되살릴 거래가 남지 않는다.
+    await StoreKit.finish({ transactionId: transaction.transactionId }).catch(() => {});
+    showToast(data.duplicate
+      ? `이미 처리된 구매입니다 · 보유 ${state.urgentCoupons}장`
+      : `급구 쿠폰 ${data.granted}장이 지급되었습니다 · 보유 ${state.urgentCoupons}장`);
+    renderCouponShop();
+  } catch (error) {
+    showToast(error?.message || '쿠폰 구매를 완료하지 못했습니다.');
+  } finally {
+    buttons.forEach(b => { b.disabled = false; });
+  }
+}
+
+async function renderCouponShop() {
+  const box = document.getElementById('couponShop');
+  if (!box) return;
+  const have = state.urgentCoupons || 0;
+  const native = !!storeKitBridge();
+  const priced = native ? await loadCouponProducts() : [];
+  const priceOf = id => priced.find(p => p.productId === id)?.displayPrice || null;
+
+  box.innerHTML = `
+    <h4>🚨 급구 쿠폰 <span class="coupon-balance">보유 ${have}장</span></h4>
+    <p class="hint">급구로 올리면 등급이 맞는 승무원 전원에게 즉시 알림이 갑니다. 글 하나당 1장.</p>
+    ${COUPON_PRODUCTS.map(product => {
+      const price = priceOf(product.id);
+      return `<button type="button" class="secondary-button coupon-buy" data-coupon-product="${product.id}" ${native ? '' : 'disabled'}>
+        <strong>${product.coupons}장</strong>
+        <span>${native ? (price || '가격 불러오는 중…') : 'iPhone 앱에서 구매'}</span>
+      </button>`;
+    }).join('')}
+    <p class="hint">급구에 응해 근무를 내주면 회사 상신이 완료될 때 쿠폰 1장과 크레딧 1개를 받습니다.</p>`;
+
+  box.querySelectorAll('[data-coupon-product]').forEach(button => {
+    button.onclick = () => purchaseUrgentCoupons(button.dataset.couponProduct);
+  });
 }
 
 async function restoreLifetimePro() {

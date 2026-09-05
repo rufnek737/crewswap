@@ -1327,3 +1327,9 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .urgent-toggle small { color: var(--muted); }
 .urgent-toggle.is-locked { opacity: .6; cursor: not-allowed; }
 .urgent-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+
+/* 급구 쿠폰 구매 */
+#couponShop .coupon-balance { float: right; font-size: 13px; font-weight: 700; color: var(--primary); }
+.coupon-buy { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; margin-top: 8px; }
+.coupon-buy strong { font-size: 15px; }
+.coupon-buy span { color: var(--muted); font-size: 13px; }

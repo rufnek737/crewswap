@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CrewSwap" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=1.1.23" />
+    <link rel="stylesheet" href="styles.css?v=1.1.24" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -770,6 +770,8 @@
               <p class="hint" style="margin-top:8px;">💡 매월 첫 실행 시 <strong>기본 3개</strong>로 재설정됩니다. 광고 보상은 1회당 1개이며 다음 달로 이월되지 않습니다. 취소·마감 환급은 기본 상한 3개까지만 복원됩니다.</p>
               <button id="watchAdButtonProfile" class="secondary-button rewarded-ad-button" type="button" hidden>📺 광고 보고 +1 크레딧</button>
             </div>
+
+            <div class="profile-card" id="couponShop"></div>
           </div>
         </div>
 
@@ -1016,7 +1018,7 @@
     <script src="airport-aliases.js?v=1.0.0"></script>
     <script src="grade-policy.js?v=1.0.0"></script>
     <script src="duty-window.js?v=1.0.1"></script>
-    <script src="app.js?v=1.1.51"></script>
+    <script src="app.js?v=1.1.52"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

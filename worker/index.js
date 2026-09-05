@@ -19,6 +19,8 @@ import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './ap
 import {
   CREWSWAP_BUNDLE_ID,
   CREWSWAP_PRO_PRODUCT_ID,
+  CREWSWAP_COUPON_PRODUCT_IDS,
+  couponsForProduct,
   decodeAppleTransaction,
   fetchAppleTransaction,
   validateCrewSwapTransaction,
@@ -611,6 +613,77 @@ async function handleProPurchaseVerify(request, env, authEmail) {
     premium: getProStatus(next, Date.now(), { allowSandbox: sandboxPurchase }),
     transactionId: next.proPurchase.transactionId,
     environment: verified.environment,
+  });
+}
+
+/* ── coupon-purchase-verify (급구 쿠폰 구매 검증·지급) ──────────
+   PRO(비소모형)와 다른 점이 셋이다.
+   1. 소모형이라 같은 사람이 몇 번이든 산다 — 거래를 originalTransactionId가 아니라
+      transactionId로 묶어야 두 번째 구매가 막히지 않는다.
+   2. 지급 수량은 상품 ID에서만 나온다. 클라이언트가 보낸 수량은 쓰지 않는다.
+   3. 지갑의 operationId가 그대로 멱등키라, 같은 거래로 두 번 요청해도 한 번만 쌓인다. */
+async function handleCouponPurchaseVerify(request, env, authEmail) {
+  if (!appleIapConfigured(env)) return json({ error: 'App Store 결제 검증 서버 설정이 필요합니다', code: 'APPLE_IAP_NOT_CONFIGURED' }, 503);
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청입니다' }, 400); }
+  const transactionId = String(body?.transactionId || '').trim();
+  const signedTransaction = String(body?.signedTransaction || '').trim();
+  if (!transactionId || !signedTransaction) return json({ error: 'App Store 거래 정보가 필요합니다' }, 400);
+
+  try {
+    const clientPayload = decodeAppleTransaction(signedTransaction);
+    const clientValidation = validateCrewSwapTransaction(clientPayload, transactionId, CREWSWAP_COUPON_PRODUCT_IDS);
+    if (!clientValidation.ok) {
+      return json({ error: '급구 쿠폰 거래 정보가 일치하지 않습니다', code: clientValidation.code }, 400);
+    }
+  } catch {
+    return json({ error: 'App Store 거래 정보 형식이 올바르지 않습니다' }, 400);
+  }
+
+  let verified;
+  try {
+    verified = await fetchAppleTransaction(env, transactionId, fetch, CREWSWAP_COUPON_PRODUCT_IDS);
+  } catch {
+    return json({ error: 'Apple에서 구매 내역을 확인하지 못했습니다', code: 'APPLE_VERIFY_FAILED' }, 502);
+  }
+  if (!verified.ok) {
+    return json({ error: '환불되거나 취소된 구매입니다', code: verified.code }, 409);
+  }
+
+  const payload = verified.payload || {};
+  const productId = String(payload.productId || '');
+  const coupons = couponsForProduct(productId);
+  if (!coupons) return json({ error: '급구 쿠폰 상품이 아닙니다', code: 'PRODUCT_MISMATCH' }, 400);
+
+  // 소모형은 거래 하나가 곧 구매 하나다. 다른 계정이 같은 영수증을 들고 와도 막는다.
+  const bindingKey = `iap:coupon:${verified.environment}:${payload.transactionId || transactionId}`;
+  const existingOwner = await env.POSTS.get(bindingKey, { type: 'json' });
+  if (existingOwner?.email && existingOwner.email !== authEmail) {
+    return json({ error: '이 App Store 구매는 다른 CrewSwap 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
+  }
+
+  const grant = await runWalletCommand(env, authEmail, {
+    type: 'grant-coupon',
+    operationId: `iap:coupon:${verified.environment}:${payload.transactionId || transactionId}`,
+    amount: coupons,
+  });
+  if (!grant.ok) return json({ error: '쿠폰 지급에 실패했습니다', code: grant.code }, 500);
+
+  await env.POSTS.put(bindingKey, JSON.stringify({
+    email: authEmail,
+    productId,
+    coupons,
+    environment: verified.environment,
+    linkedAt: existingOwner?.linkedAt || new Date().toISOString(),
+  }));
+
+  return json({
+    ok: true,
+    productId,
+    granted: grant.duplicate ? 0 : coupons,
+    duplicate: !!grant.duplicate,
+    environment: verified.environment,
+    wallet: grant.wallet,   // runWalletCommand가 이미 공개용으로 정리해 돌려준다
   });
 }
 
@@ -2285,6 +2358,7 @@ export default {
       else if (path === '/api/premium-trial-activate') response = await handlePremiumTrialActivate(env, auth.email);
       else if (path === '/api/pro-purchase-config') response = await handleProPurchaseConfig(env);
       else if (path === '/api/pro-purchase-verify') response = await handleProPurchaseVerify(request, env, auth.email);
+      else if (path === '/api/coupon-purchase-verify') response = await handleCouponPurchaseVerify(request, env, auth.email);
       else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email, allowSandboxPro);
       else if (path === '/api/premium-alert-test') response = await handlePremiumAlertTest(env, auth.email, allowSandboxPro);
       else if (path === '/api/crewconnex') response = await handleCrewConnex(request, env);

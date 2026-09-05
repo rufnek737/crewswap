@@ -88,3 +88,62 @@ test('객실승무원은 등급 판정 대상이 아니다', () => {
   const post = { crewType: 'CABIN', ownerRole: 'PUR', urgent: true, offered: {} };
   assert.equal(subscriberCanTakeUrgentPost({ crewType: 'CABIN', roleType: 'FA' }, post, gradePolicy), true);
 });
+
+/* ── 쿠폰 구매 (App Store 소모형) ─────────────────────────────── */
+
+import {
+  CREWSWAP_BUNDLE_ID,
+  CREWSWAP_PRO_PRODUCT_ID,
+  CREWSWAP_COUPON_PRODUCT_IDS,
+  couponsForProduct,
+  validateCrewSwapTransaction,
+} from '../worker/apple-iap.mjs';
+
+const couponTx = (productId, transactionId = '300000000000001') => ({
+  bundleId: CREWSWAP_BUNDLE_ID, productId,
+  transactionId, originalTransactionId: transactionId,
+});
+
+test('지급 수량은 상품 ID에서만 나온다', () => {
+  // 클라이언트가 "10장 샀다"고 주장해도 서버는 상품 ID만 본다.
+  assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent5'), 5);
+  assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent10'), 10);
+  assert.equal(couponsForProduct('com.rufnekcrewswap.coupon.urgent999'), 0);
+  assert.equal(couponsForProduct(undefined), 0);
+});
+
+test('PRO 거래와 쿠폰 거래는 서로의 경로로 들어갈 수 없다', () => {
+  const pro = couponTx(CREWSWAP_PRO_PRODUCT_ID);
+  const coupon = couponTx('com.rufnekcrewswap.coupon.urgent5');
+
+  // 쿠폰 경로에 PRO 영수증
+  assert.equal(validateCrewSwapTransaction(pro, pro.transactionId, CREWSWAP_COUPON_PRODUCT_IDS).code, 'PRODUCT_MISMATCH');
+  // PRO 경로에 쿠폰 영수증 (기본 인자 = PRO)
+  assert.equal(validateCrewSwapTransaction(coupon, coupon.transactionId).code, 'PRODUCT_MISMATCH');
+  // 각자 제 경로에서는 통과
+  assert.equal(validateCrewSwapTransaction(coupon, coupon.transactionId, CREWSWAP_COUPON_PRODUCT_IDS).ok, true);
+  assert.equal(validateCrewSwapTransaction(pro, pro.transactionId).ok, true);
+});
+
+test('환불된 쿠폰 구매는 지급하지 않는다', () => {
+  const refunded = { ...couponTx('com.rufnekcrewswap.coupon.urgent10'), revocationDate: Date.now() };
+  const result = validateCrewSwapTransaction(refunded, refunded.transactionId, CREWSWAP_COUPON_PRODUCT_IDS);
+  assert.equal(result.code, 'PURCHASE_REVOKED');
+});
+
+test('같은 거래로 두 번 요청해도 쿠폰은 한 번만 쌓인다', () => {
+  // 소모형이라 거래 하나가 구매 하나다. 지갑의 operationId가 그대로 멱등키다.
+  const op = 'iap:coupon:production:300000000000001';
+  const first = applyWalletCommand(null, { type: 'grant-coupon', operationId: op, amount: 10 }, SEP);
+  const again = applyWalletCommand(first.wallet, { type: 'grant-coupon', operationId: op, amount: 10 }, SEP);
+  assert.equal(first.wallet.urgentCoupons, 10);
+  assert.equal(again.duplicate, true);
+  assert.equal(again.wallet.urgentCoupons, 10);
+});
+
+test('소모형이므로 두 번째 구매는 막히지 않는다', () => {
+  // PRO(비소모형)는 originalTransactionId로 묶어 재구매를 막지만, 쿠폰은 거래마다 새로 쌓여야 한다.
+  const one = applyWalletCommand(null, { type: 'grant-coupon', operationId: 'iap:coupon:production:1', amount: 5 }, SEP);
+  const two = applyWalletCommand(one.wallet, { type: 'grant-coupon', operationId: 'iap:coupon:production:2', amount: 5 }, SEP);
+  assert.equal(two.wallet.urgentCoupons, 10);
+});
