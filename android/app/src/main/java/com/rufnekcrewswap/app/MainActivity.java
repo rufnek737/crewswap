@@ -1,4 +1,4 @@
-package com.crewswap.app;
+package com.rufnekcrewswap.app;
 
 import com.getcapacitor.BridgeActivity;
 
