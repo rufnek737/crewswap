@@ -33,7 +33,9 @@ export function normalizeWallet(input, now = Date.now(), { freeCouponsPerMonth =
     wallet.credits = amount(wallet.credits);
     wallet.adCreditsThisMonth = Math.floor(amount(wallet.adCreditsThisMonth));
   }
-  wallet.urgentCoupons = Math.floor(amount(wallet.urgentCoupons));
+  // 보상은 반 장씩 나가므로 소수를 그대로 둔다(0.1 단위). 다만 쓸 때는 1장이
+  // 필요하므로, 반 장만 있는 사람은 한 번 더 도와야 급구를 올릴 수 있다.
+  wallet.urgentCoupons = amount(wallet.urgentCoupons);
   // 산 쿠폰은 그대로 두고 무료분만 더한다 — 초기화가 아니라 지급이다.
   if (freeCouponsPerMonth > 0 && wallet.freeCouponMonth !== month) {
     wallet.urgentCoupons += Math.floor(freeCouponsPerMonth);
@@ -75,7 +77,7 @@ export function applyWalletCommand(input, command = {}, now = Date.now(), option
     if (wallet.urgentCoupons < requested) {
       return { ok: false, code: 'URGENT_COUPON_REQUIRED', required: requested, wallet };
     }
-    wallet.urgentCoupons -= requested;
+    wallet.urgentCoupons = Math.round((wallet.urgentCoupons - requested) * 10) / 10;
     const result = { couponsSpent: requested };
     remember(wallet, operationId, result);
     return { ok: true, ...result, wallet };
@@ -83,8 +85,8 @@ export function applyWalletCommand(input, command = {}, now = Date.now(), option
 
   // 쿠폰 지급 — 구매, 그리고 급구에 응해 근무를 내준 사람에 대한 보상.
   if (command.type === 'grant-coupon') {
-    const requested = Math.floor(amount(command.amount)) || 1;
-    wallet.urgentCoupons += requested;
+    const requested = amount(command.amount) || 1;   // 보상은 0.5장이라 내림하지 않는다
+    wallet.urgentCoupons = Math.round((wallet.urgentCoupons + requested) * 10) / 10;
     const result = { couponsGranted: requested };
     remember(wallet, operationId, result);
     return { ok: true, ...result, wallet };

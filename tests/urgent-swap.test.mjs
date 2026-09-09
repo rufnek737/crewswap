@@ -42,16 +42,29 @@ test('같은 글로 쿠폰이 두 번 걷히지 않는다', () => {
   assert.equal(again.wallet.urgentCoupons, 1);
 });
 
-test('보상은 쿠폰 1장 + 크레딧 1개이고 같은 요청에 한 번만 나간다', () => {
+test('보상은 급구 쿠폰 0.5장뿐이고 같은 요청에 한 번만 나간다', () => {
   const start = normalizeWallet(null, SEP);
-  const one = applyWalletCommand(start, { type: 'grant-coupon', operationId: 'urgent:reward-coupon:R1', amount: 1 }, SEP);
-  const two = applyWalletCommand(one.wallet, { type: 'grant-credit', operationId: 'urgent:reward-credit:R1', amount: 1 }, SEP);
-  assert.equal(two.wallet.urgentCoupons, 1);
-  assert.equal(two.wallet.credits, 4);
+  const one = applyWalletCommand(start, { type: 'grant-coupon', operationId: 'urgent:reward-coupon:R1', amount: 0.5 }, SEP);
+  assert.equal(one.wallet.urgentCoupons, 0.5);   // 반 장이 잘려 0이나 1이 되면 안 된다
+  assert.equal(one.wallet.credits, 3);           // 크레딧은 건드리지 않는다
 
-  const repeat = applyWalletCommand(two.wallet, { type: 'grant-credit', operationId: 'urgent:reward-credit:R1', amount: 1 }, SEP);
+  const repeat = applyWalletCommand(one.wallet, { type: 'grant-coupon', operationId: 'urgent:reward-coupon:R1', amount: 0.5 }, SEP);
   assert.equal(repeat.duplicate, true);
-  assert.equal(repeat.wallet.credits, 4);
+  assert.equal(repeat.wallet.urgentCoupons, 0.5);
+});
+
+test('반 장으로는 급구를 올릴 수 없고, 두 번 도우면 올릴 수 있다', () => {
+  // 보상이 반 장인 이유가 여기 있다. 한 번 돕고 바로 올릴 수 있으면 쿠폰이 무한히 돈다.
+  const half = applyWalletCommand(normalizeWallet(null, SEP), { type: 'grant-coupon', operationId: 'r1', amount: 0.5 }, SEP).wallet;
+  const tooEarly = applyWalletCommand(half, { type: 'spend-coupon', operationId: 'post:urgent:P9' }, SEP);
+  assert.equal(tooEarly.ok, false);
+  assert.equal(tooEarly.code, 'URGENT_COUPON_REQUIRED');
+
+  const full = applyWalletCommand(half, { type: 'grant-coupon', operationId: 'r2', amount: 0.5 }, SEP).wallet;
+  assert.equal(full.urgentCoupons, 1);
+  const spent = applyWalletCommand(full, { type: 'spend-coupon', operationId: 'post:urgent:P9' }, SEP);
+  assert.equal(spent.ok, true);
+  assert.equal(spent.wallet.urgentCoupons, 0);
 });
 
 test('보상 크레딧은 월 상한 3에 묶이지 않는다', () => {

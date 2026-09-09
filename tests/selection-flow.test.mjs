@@ -173,20 +173,22 @@ test("the usage guide describes the current guided swap flow", () => {
 test("the final Q&A matches the current privacy, credit, and PRO policies", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(app, /같은 날짜끼리 바로 교환할 수 있는 1:1 스왑은 제안한 근무만 보입니다/);
+  assert.match(app, /1:1 스왑의 경우, 내가 제안한 근무만 보입니다/);
   assert.match(app, /상호 수락한 뒤에만 공개됩니다/);
-  assert.match(app, /매월 첫 실행 시 기본 3크레딧으로 재설정/);
+  assert.match(app, /매월 첫 실행 시 기본 3크레딧이 제공되며/);
   assert.match(app, /매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급/);
-  assert.match(app, /PRO 영구 이용권은 한 번만 구매하는 상품/);
-  assert.match(app, /PRO 이용자는 스왑 목록을 둘러볼 때부터 바로 확인/);
-  assert.match(app, /월 2회·연 12회 한도/);
-  assert.match(app, /PRO 정보와 크레딧은 서버 계정에 연결/);
+  assert.match(app, /PRO 영구 이용권은 최초 1회만 구매하는 상품/);
+  assert.match(app, /PRO 이용자는 스왑 목록을 볼 때부터 편조구성원을 확인/);
+  assert.match(app, /월 2회, 연 12회 한도/);
+  assert.match(app, /PRO 정보, 크레딧은 서버 계정에 연결/);
 
   // 무료 기간에는 30일 체험권을 켤 수 없으므로 그 안내를 두지 않는다.
   // 유료화를 시작할 때 되살려야 한다(README 전환 절차 참조).
   assert.doesNotMatch(app, /Q\d+\. PRO 30일 무료 이용권은 언제 시작되나요/);
-  assert.match(app, /2027년 9월 30일까지 모든 기능이 무료/);
+  assert.match(app, /2027년 9월 30일까지 모든 기능을 무료로 사용/);
   assert.match(app, /마감일까지 매칭되지 않으면 사용한 급구 쿠폰 1장이 그대로 복구/);
+  // 보상은 급구 쿠폰 반 장뿐이다. 크레딧을 준다고 안내하면 지갑과 어긋난다.
+  assert.match(app, /회사 상신이 완료되면 급구 쿠폰 0\.5장을 받습니다/);
 });
 
 test("Q&A 번호가 빠짐없이 이어진다", () => {

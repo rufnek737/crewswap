@@ -1637,19 +1637,18 @@ async function lockPostAsSubmitting(env, postId) {
   if (i >= 0) { idx[i] = post; await savePostsIndex(env, idx); }
 }
 
-/* 급구 보상 — 쿠폰 1장 + 크레딧 1개.
-   쿠폰을 돌려주는 것이 핵심이다. 내가 급할 때 쓸 수단이 돌아오는 구조라야
-   응할 이유가 생기고, 회사 밖으로 현금이 나가지 않는다. operationId로 묶어
-   같은 요청에 두 번 지급되지 않게 한다. */
-const URGENT_REWARD = { coupons: 1, credits: 1 };
+/* 급구 보상 — 급구 쿠폰 0.5장. 크레딧은 주지 않는다.
+   급구로 생긴 값은 급구 안에서만 돌게 둔다. 내가 급할 때 쓸 수단이 돌아오는
+   구조라야 응할 이유가 생기고, 회사 밖으로 현금이 나가지 않는다.
+   반 장씩 주는 이유는 급구를 올리는 데 1장이 들기 때문이다. 두 번 도와야 한 번
+   올릴 수 있어야 쿠폰이 무한히 순환하지 않는다.
+   operationId로 묶어 같은 요청에 두 번 지급되지 않게 한다. */
+const URGENT_REWARD = { coupons: 0.5 };
 
 async function grantUrgentReward(env, email, requestId) {
   try {
     await runWalletCommand(env, email, {
       type: 'grant-coupon', operationId: `urgent:reward-coupon:${requestId}`, amount: URGENT_REWARD.coupons,
-    });
-    await runWalletCommand(env, email, {
-      type: 'grant-credit', operationId: `urgent:reward-credit:${requestId}`, amount: URGENT_REWARD.credits,
     });
     return { ok: true };
   } catch { return { ok: false }; }
