@@ -257,35 +257,52 @@ const state = {
 
 /* ====== 3. MOCK 데이터 ====== */
 function createMockSchedules() {
-  // mock 데이터는 항상 2026-06에 고정 — 실제 파싱 데이터를 대체하지 않도록 month 명시
+  // mock 데이터는 항상 2026-06에 고정 — 실제 파싱 데이터를 대체하지 않도록 month 명시.
+  // 배치 규칙: OFF 9일 · 연속 근무 4일 이하 · RSV 다음날 OFF 금지 ·
+  // 레이오버 트립 복귀 다음날은 모기지 휴식(17~19일 → 20일, 25~28일 → 29일).
+  // 발리편(3인 편조 12시간 한도 예시)은 달 후반에 둔다 — 심사·촬영 시점에 지난 근무가 되면
+  // 스왑 버튼이 잠겨 이 기능을 보여줄 수 없다.
   const M = "2026-06";
+  const CREW2 = "김제주(Capt), 이운항(FO), 김애경(PUR), 최크루(JC1), 이객실(FA), 박승무(FA)";
+  const CREW3 = "김제주(Capt), 최항공(Capt), 이운항(FO), 김애경(PUR), 최크루(JC1), 이객실(FA), 박승무(FA)";
+  const off = day => ({ month:M, day, patternId:null, type:"OFF", title:"OFF", crewComposition:"편조 없음" });
+  // RSV는 체크인 시각이 없다 — 종일 대기다.
+  const rsv = (day, patternId) => ({ month:M, day, patternId, type:"RSV", title:"RSV", crewComposition:"대기 · 편조 미정" });
+  const turn = (day, patternId, type, title, route, report, arrive, release, aircraft, block) =>
+    ({ month:M, day, patternId, type, title, dep:route[0], arr:route[0], routeSummary:route[1], legs:2,
+       reportTime:report, arrivalTime:arrive, releaseTime:release, aircraft, blockMinutes:block,
+       captainGrade:"B", foGrade:"A", crewComposition:CREW2 });
   return [
-    { month:M, day:1,  patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:2,  patternId:"P1", type:"국내선", title:"7C1101", dep:"ICN", arr:"CJU", reportTime:"07:20", arrivalTime:"09:35", releaseTime:"10:10", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:3,  patternId:"P2", type:"국내선", title:"7C1102", dep:"CJU", arr:"ICN", reportTime:"13:00", arrivalTime:"15:15", releaseTime:"16:40", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:4,  patternId:"P3", type:"RSV",    title:"RSV", reportTime:"09:00", releaseTime:"17:00", crewComposition:"대기 · 편조 미정" },
-    { month:M, day:5,  patternId:"P4", type:"국내선", title:"7C1203", dep:"GMP", arr:"CJU", reportTime:"08:30", arrivalTime:"10:00", releaseTime:"10:35", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:6,  patternId:null, type:"OFF",    title:"OFF (현충일)", crewComposition:"공휴일", holiday:true },
-    { month:M, day:7,  patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:8,  patternId:"P5", type:"STBY",   title:"STBY", reportTime:"20:00", releaseTime:"02:00", crewComposition:"야간 대기 · 편조 미정" },
-    { month:M, day:10, patternId:"P6", type:"국제선", title:"7C2501", dep:"ICN", arr:"BKI", reportTime:"19:10", arrivalTime:"00:55+1", releaseTime:"01:35+1", aircraft:"NG", requiresEdto:true, captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 6 · EDTO" },
-    { month:M, day:11, patternId:"P6", type:"LAYOV",  title:"LAYOV BKI", layoverAirport:"BKI", aircraft:"NG", crewComposition:"BKI 체류" },
-    { month:M, day:12, patternId:"P6", type:"국제선", title:"7C2502", dep:"BKI", arr:"ICN", reportTime:"01:10", arrivalTime:"08:35", releaseTime:"09:20", aircraft:"NG", requiresEdto:true, captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 6 · EDTO" },
-    { month:M, day:13, patternId:"P7", type:"국내선", title:"7C1551", dep:"GMP", arr:"CJU", reportTime:"15:30", arrivalTime:"16:30", releaseTime:"17:05", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:14, patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:15, patternId:"P8", type:"국내선", title:"7C1301", dep:"GMP", arr:"PUS", reportTime:"06:40", arrivalTime:"07:45", releaseTime:"08:20", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:16, patternId:"P9", type:"PICK UP", title:"PICK UP", reportTime:"회사 배정", crewComposition:"배정 시 확정" },
-    { month:M, day:17, patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:18, patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:19, patternId:"P10",type:"국내선", title:"7C1407", dep:"GMP", arr:"CJU", reportTime:"10:10", arrivalTime:"11:15", releaseTime:"11:50", aircraft:"MAX", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 4" },
-    { month:M, day:21, patternId:"P11",type:"RSV",    title:"RSV", reportTime:"12:00", releaseTime:"20:00", crewComposition:"대기 · 편조 미정" },
-    { month:M, day:24, patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
-    { month:M, day:25, patternId:"P12",type:"국제선", title:"7C3401", dep:"ICN", arr:"CXR", reportTime:"19:15", arrivalTime:"00:55+1", releaseTime:"01:35+1", aircraft:"NG", requiresEdto:true, captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 6 · EDTO" },
-    { month:M, day:26, patternId:"P12",type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"NG", crewComposition:"CXR 체류" },
-    { month:M, day:27, patternId:"P12",type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"NG", crewComposition:"CXR 체류" },
-    { month:M, day:28, patternId:"P12",type:"국제선", title:"7C3402", dep:"CXR", arr:"ICN", reportTime:"00:25", arrivalTime:"09:45", releaseTime:"10:20", aircraft:"NG", requiresEdto:true, captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 6 · EDTO" },
-    { month:M, day:29, patternId:"P13",type:"국제선", title:"7C4101 (TAG 자격 갱신)", dep:"ICN", arr:"TAG", reportTime:"06:40", arrivalTime:"11:20", releaseTime:"12:00", aircraft:"NG", captainGrade:"B", foGrade:"B", crewComposition:"PIC B · FO B · 객실 6", lockReason:"특수공항 자격 갱신 비행 — SWAP 불가" },
-    { month:M, day:30, patternId:null, type:"OFF",    title:"OFF", crewComposition:"편조 없음" },
+    off(1),
+    turn(2,  "P1", "국내선", "7C101",  ["GMP","GMP→CJU→GMP"], "07:20", "11:30", "12:05", "MAX", 130),
+    turn(3,  "P2", "국제선", "7C1301", ["ICN","ICN→KIX→ICN"], "07:40", "14:05", "14:45", "MAX", 210),
+    rsv(4,  "P3"),
+    turn(5,  "P4", "국내선", "7C103",  ["GMP","GMP→CJU→GMP"], "08:30", "12:40", "13:20", "NG", 130),
+    off(6),
+    { month:M, day:7, patternId:"P5", type:"STBY", title:"STBY SA2", reportTime:"12:01", releaseTime:"20:01", crewComposition:"대기 · 편조 미정" },
+    off(8),
+    turn(9,  "P6", "국제선", "7C1401", ["ICN","ICN→FUK→ICN"], "07:15", "13:40", "14:20", "NG", 160),
+    turn(10, "P7", "국제선", "7C1325", ["GMP","GMP→KIX→GMP"], "06:40", "13:05", "13:45", "NG", 210),
+    turn(11, "P8", "국내선", "7C105",  ["GMP","GMP→CJU→GMP"], "15:30", "19:40", "20:15", "NG", 130),
+    off(12),
+    rsv(13, "P9"),
+    turn(14, "P10", "국제선", "7C1101", ["ICN","ICN→NRT→ICN"], "08:15", "15:30", "16:10", "MAX", 280),
+    turn(15, "P11", "국내선", "7C107",  ["GMP","GMP→CJU→GMP"], "10:10", "14:20", "14:55", "MAX", 130),
+    off(16),
+    { month:M, day:17, patternId:"P12", type:"국제선", title:"7C5303", dep:"ICN", arr:"DPS", reportTime:"19:10", arrivalTime:"01:20+1", releaseTime:"02:00+1", aircraft:"MAX", blockMinutes:420, requiresEdto:true, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · EDTO · 3인 편조` },
+    { month:M, day:18, patternId:"P12", type:"LAYOV",  title:"LAYOV DPS", layoverAirport:"DPS", aircraft:"MAX", crewComposition:"DPS 체류" },
+    { month:M, day:19, patternId:"P12", type:"국제선", title:"7C5304", dep:"DPS", arr:"ICN", reportTime:"02:20", arrivalTime:"10:45", releaseTime:"11:25", aircraft:"MAX", blockMinutes:400, requiresEdto:true, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · EDTO · 3인 편조` },
+    off(20),
+    rsv(21, "P13"),
+    turn(22, "P14", "국내선", "7C907", ["GMP","GMP→PUS→GMP"], "06:40", "10:30", "11:05", "NG", 120),
+    off(23),
+    off(24),
+    { month:M, day:25, patternId:"P15", type:"국제선", title:"7C2107", dep:"ICN", arr:"CXR", reportTime:"19:15", arrivalTime:"00:55+1", releaseTime:"01:35+1", aircraft:"MAX", blockMinutes:320, requiresEdto:true, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2} · EDTO` },
+    { month:M, day:26, patternId:"P15", type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"MAX", crewComposition:"CXR 체류" },
+    { month:M, day:27, patternId:"P15", type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"MAX", crewComposition:"CXR 체류" },
+    { month:M, day:28, patternId:"P15", type:"국제선", title:"7C2108", dep:"CXR", arr:"ICN", reportTime:"00:25", arrivalTime:"09:45", releaseTime:"10:20", aircraft:"MAX", blockMinutes:330, requiresEdto:true, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2} · EDTO` },
+    off(29),
+    { month:M, day:30, patternId:"P16", type:"국제선", title:"7C2125", dep:"ICN", arr:"TAG", reportTime:"06:40", arrivalTime:"11:20", releaseTime:"12:00", aircraft:"NG", blockMinutes:280, captainGrade:"B", foGrade:"A", crewComposition:CREW2 },
   ];
 }
 
@@ -903,14 +920,8 @@ function selectPattern(day) {
     s = { month: state.currentMonth, day, patternId: null, type: "UNKNOWN", title: "미정 (데이터 없음)" };
     state.schedules.push(s);
   }
-  const isAdding = !state.selectedDays.has(dayKey(day));
-  if (isAdding) {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (dayToDate(day, s.month) < today) {
-      showToast("이미 지난 근무는 SWAP/의향 표시를 할 수 없습니다.");
-      return;
-    }
-  }
+  // 지난 근무도 선택해 상세와 규정 결과를 볼 수 있게 둔다. 교환만 불가하므로
+  // 선택 자체를 막는 대신 아래 renderSelection()에서 진행 버튼을 잠근다.
 
   // 패턴 자동 묶음 선택 비활성화 — CrewConnex 파싱이 묶음을 잘못 잡는 경우가 있어
   // 클릭한 날짜만 개별 토글 (여러 날을 묶고 싶으면 각각 클릭)
@@ -2240,9 +2251,19 @@ function renderCalendar() {
   }
 }
 
+// 선택한 근무 중 오늘보다 이전 날짜가 있는지 — 지난 근무는 교환할 수 없다.
+function selectionHasPastDuty(schedules) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return schedules.some(s => {
+    const d = dayToDate(s.day, s.month);
+    return d && d < today;
+  });
+}
+
 function renderSelection() {
   const ss = selectedSchedules();
   const has = ss.length > 0;
+  const hasPast = has && selectionHasPastDuty(ss);
   const checks = has ? checkRulesForSelection() : [];
   const failItems = checks.filter(c => c.status === "FAIL");
   const hasFail = failItems.length > 0;
@@ -2251,12 +2272,13 @@ function renderSelection() {
   if (pending) {
     // 의향묻기/요청하기로 진입한 상태 — 버튼이 '스왑 올리기'가 아니라 진행 버튼으로 바뀜
     regBtn.textContent = state.pendingRequestType === "ask" ? "의향묻기로 진행 →" : "요청하기로 진행 →";
-    regBtn.disabled = !has;
-    regBtn.title = "";
+    regBtn.disabled = !has || hasPast;
+    regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다" : "";
   } else {
     regBtn.textContent = state.guideFlow === "post" ? "다음: 희망 조건 입력 →" : "이 근무로 스왑 올리기";
-    regBtn.disabled = !has || hasFail;
-    regBtn.title = hasFail ? `등록 불가: ${failItems.map(c => c.label).join(", ")}` : "";
+    regBtn.disabled = !has || hasFail || hasPast;
+    regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다"
+      : hasFail ? `등록 불가: ${failItems.map(c => c.label).join(", ")}` : "";
   }
   $("#clearSelectionButton").disabled = !has;
   if (!has) {
