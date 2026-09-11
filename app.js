@@ -1035,8 +1035,8 @@ function parseDayBlock(block) {
     const ap = lay[1].toUpperCase();
     return { ...base, type:"LAYOV", title:`LAYOV ${ap}`, layoverAirport:ap, aircraft:"NG", crewComposition:`${ap} 체류` };
   }
-  // RSV
-  if (/\bRSV\b|Reserve/i.test(full)) {
+  // RSV — 운항승무원은 2025-07-01부 RSV_F를 쓴다. \bRSV\b 는 밑줄 뒤가 단어문자라 RSV_F를 놓친다.
+  if (/\bRSV(_[A-Z]+)?\b|Reserve/i.test(full)) {
     const timeRange = /(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/.exec(full);
     return { ...base, type:"RSV", title:"RSV",
       reportTime: normalizeTime(timeRange?.[1]) || "09:00",
@@ -1044,7 +1044,7 @@ function parseDayBlock(block) {
       crewComposition:"대기 · 편조 미정" };
   }
   // STBY
-  if (/\bSTBY\b|Standby/i.test(full)) {
+  if (/\bSTBY\b|Standby|\bSA\d\b/i.test(full)) {
     const timeRange = /(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/.exec(full);
     return { ...base, type:"STBY", title:"STBY",
       reportTime: normalizeTime(timeRange?.[1]) || "20:00",
@@ -1070,7 +1070,7 @@ function parseDayBlock(block) {
       .filter(a => !NON_AIRPORT.has(a));
     const uniqAir = [...new Set(airports)];
     if (uniqAir.length === 1) {
-      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT)\b/i.test(full);
+      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\b|S_L\+U/i.test(full);
       return { ...base, type:"GND", ground: isSim ? "SIM" : "지상",
         title: isSim ? "SIM 훈련" : "지상근무",
         station: uniqAir[0],
