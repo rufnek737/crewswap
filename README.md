@@ -148,6 +148,26 @@ python3 -m http.server 8889           # 정적 파일 → http://localhost:8889
 
 ---
 
+## API 커스텀 도메인 전환 (심사 통과 후)
+
+2026-09-13에 `api.rufnekcrew.com` 을 Worker 커스텀 도메인으로 붙여 두었다. **아직 앱은 쓰지 않는다** — 심사 중에 서버 구성을 흔들 이유가 없어 통과 후로 미뤘다.
+
+| 주소 | 상태 |
+|---|---|
+| `https://crewswap-api.tae26001.workers.dev` | 살아 있음 · **설치된 앱 전부가 이 주소를 본다** |
+| `https://api.rufnekcrew.com` | 살아 있음 · 아직 아무도 안 쓴다 |
+
+**⚠️ `workers_dev = true` 를 절대 지우지 말 것.** 커스텀 도메인을 추가하면 wrangler가 workers.dev 라우트를 **기본으로 끈다.** 2026-09-13에 이걸 모르고 배포해서 설치된 앱 전원이 약 2분간 서버를 잃었다. 옛 빌드를 쓰는 사용자가 남아 있는 한 이 줄은 계속 필요하다.
+
+**전환 순서** (심사 통과·출시 후)
+
+1. `app.js` 의 `API_BASE` 를 `https://api.rufnekcrew.com` 으로 바꾼다
+2. `sw.js` 의 `CACHE` 와 `app.js?v=` 를 올린다 (안 올리면 웹은 옛 주소를 계속 쓴다)
+3. 새 빌드를 만들어 TestFlight·Play에 올린다
+4. **workers.dev 는 그대로 둔다.** 옛 빌드 사용자가 모두 업데이트할 때까지 — 사실상 영구
+
+apex(`rufnekcrew.com`)는 랜딩 페이지(Rufnek Crew | Flight Crew Tools)가 쓰고 있으므로 건드리지 않는다. 앱 웹 버전은 지금처럼 GitHub Pages(`rufnek737.github.io/crewswap`)에 둔다 — 지원 URL·개인정보처리방침 주소가 App Store 심사에 제출돼 있어 함부로 바꾸면 그 링크가 깨진다.
+
 ## 계정 전환 · 유료화 재개 절차
 
 **이 문서는 1년 뒤에 이것만 읽고 진행할 수 있어야 한다.** 상황이 바뀌면(사업자등록 완료, 출시 완료 등) 아래 **진행 상태 표를 그때그때 갱신할 것.** 갱신하지 않으면 1년 뒤에 어디까지 됐는지 알 수 없다.

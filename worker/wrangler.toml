@@ -3,6 +3,17 @@ main = "index.js"
 compatibility_date = "2025-06-17"
 compatibility_flags = ["nodejs_compat"]
 
+# API 커스텀 도메인. workers.dev 주소는 그대로 살아 있어 이미 배포된 앱(빌드 42 등)이
+# 계속 동작한다 — 전환은 새 빌드부터다. apex(rufnekcrew.com)는 별도 랜딩 페이지가
+# 쓰고 있으므로 건드리지 않는다.
+# 커스텀 도메인을 추가하면 workers.dev 주소가 기본으로 꺼진다. 이미 배포된 앱은
+# 전부 workers.dev 를 보고 있으므로 반드시 켜 둔다 — 끄면 즉시 전원이 서버를 잃는다.
+workers_dev = true
+
+[[routes]]
+pattern = "api.rufnekcrew.com"
+custom_domain = true
+
 [vars]
 # 정식 권한은 서버의 영구 이용권 또는 사용자가 직접 시작한 30일 무료 이용권으로 판정한다.
 BETA_ALL_PREMIUM = "true"   # 무료 출시 기간 — 유료화 시작 시 "false"
