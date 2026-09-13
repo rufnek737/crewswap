@@ -241,3 +241,22 @@ test("request cards disclose the counterpart's crew, and PRO sees it early", () 
   // 공개 로스터에 편조 원문이 실려 나가면 무료 사용자에게도 동료 실명이 새어 나간다.
   assert.match(worker, /const \{ crewComposition, \.\.\.rest \} = entry \|\| \{\}/);
 });
+
+test("앱이 확인하지 못한 항목을 '모두 통과'에 섞지 않는다", () => {
+  // 누적 한도(28일·365일)는 근무표가 그 기간을 덮지 못하면 판정할 수 없다.
+  // 그걸 통과로 표시하면 사용자가 앱을 믿고 스왑을 진행한다 — 고치려던 문제 자체다.
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(app, /const unknownCount = checks\.filter\(c => c\.status === "UNKNOWN"\)\.length/);
+  assert.match(app, /확인 불가 \$\{unknownCount\}건/);
+  assert.match(app, /const hasUnknown = checks\.some\(c => c\.status === "UNKNOWN"\)/);
+  assert.match(app, /앱이 확인하지 못한 항목 있음/);
+  // 행 뱃지도 "-" 가 아니라 뜻이 있는 말로 나와야 한다
+  assert.match(app, /c\.status === "UNKNOWN" \? "미확인"/);
+
+  // 네 한도가 실제로 규정 목록에 붙어 있는지
+  assert.match(app, /\.\.\.cumulativeLimitChecks\(rules\)/);
+  for (const key of ["consecutive28dLimit", "yearlyHoursLimit", "duty7dLimit", "duty28dLimit"]) {
+    assert.match(app, new RegExp(`key: "${key}"`), `${key} 가 검사에 연결되지 않았습니다`);
+  }
+});

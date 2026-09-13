@@ -1267,6 +1267,36 @@ function formatHM(minutes) {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+/* 누적 한도(연속 28일·365일 승무시간, 연속 7일·28일 근무시간).
+   값은 RULES에 있었지만 읽는 코드가 없어 "통과"로 표시되고 있었다.
+   근무표가 창을 못 덮으면 PASS가 아니라 "확인 불가"로 답한다 — 확인하지 않은 것을
+   확인했다고 말하면 사용자가 그 말을 믿고 스왑을 진행한다. */
+function cumulativeLimitChecks(rules) {
+  const api = window.CrewSwapDutyLimits;
+  if (!api) return [];
+  const entries = state.schedules || [];
+  const rows = [
+    { key: "consecutive28dLimit", windowDays: 28,  minutes: flightMinutesOf, label: "연속 28일 승무시간",
+      ref: "FOM 5.5.2.2 — 연속 28일 최대 승무시간 100시간. 달력상의 한 달이 아니라 어느 28일 구간을 잡아도 넘으면 안 됩니다." },
+    { key: "yearlyHoursLimit",    windowDays: 365, minutes: flightMinutesOf, label: "연속 365일 승무시간",
+      ref: "FOM 5.5.2.2 — 연속 365일 최대 승무시간 1000시간." },
+    { key: "duty7dLimit",         windowDays: 7,   minutes: dutyMinutesOf,   label: "연속 7일 근무시간",
+      ref: "FOM 5.5.2.2 — 연속 7일 최대 근무시간 60시간. 승무시간이 아니라 출두부터 해제까지의 근무시간입니다." },
+    { key: "duty28dLimit",        windowDays: 28,  minutes: dutyMinutesOf,   label: "연속 28일 근무시간",
+      ref: "FOM 5.5.2.2 — 연속 28일 최대 근무시간 190시간." },
+  ];
+  return rows.filter(r => rules[r.key]).map(r => {
+    const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key] });
+    const unknownNote = " 이 항목은 불러온 근무표가 해당 기간을 덮지 못해 앱이 확인하지 못했습니다. 회사 시스템에서 직접 확인해주세요.";
+    return {
+      label: r.label + " (" + rules[r.key] + "h 미만)",
+      status: res.status,
+      detail: api.detailText(res),
+      ref: r.ref + (res.status === "UNKNOWN" ? unknownNote : ""),
+    };
+  });
+}
+
 function calcCumulative() {
   const monthScheds = currentMonthSchedules();
   const totalMin = monthScheds.reduce((sum, s) => sum + flightMinutesOf(s), 0);
@@ -1606,6 +1636,7 @@ function checkRulesForSelection() {
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
       ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
     consecutive24hCheck(ss, rules),
+    ...cumulativeLimitChecks(rules),
     { label:"연속 근무일 (5일 미만)", status: cum.maxConsec >= 6 ? "FAIL" : cum.maxConsec >= 5 ? "WARN" : "PASS",
       detail:`최대 ${cum.maxConsec}일`,
       ref: "항공법 승무기준 — 조종사 연속 근무 한도 5일(OFF 제외). 5일째 WARN, 6일 이상 FAIL. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },
@@ -2338,10 +2369,14 @@ function renderRuleCheck() {
   const ruleLabel = rule.label || `${AIRLINE_LABELS[state.user.airline] || state.user.airline} ${CREWTYPE_LABELS[state.user.crewType] || state.user.crewType}`;
   const failCount = checks.filter(c => c.status === "FAIL").length;
   const warnCount = checks.filter(c => c.status === "WARN").length;
+  // 앱이 확인하지 못한 항목은 "모두 통과"에 섞지 않는다 — 사용자가 다 봤다고 믿게 된다.
+  const unknownCount = checks.filter(c => c.status === "UNKNOWN").length;
   const statusSummary = failCount > 0
     ? `<span class="rule-summary-badge fail">불가 ${failCount}건</span>`
     : warnCount > 0
     ? `<span class="rule-summary-badge warn">확인 ${warnCount}건</span>`
+    : unknownCount > 0
+    ? `<span class="rule-summary-badge warn">확인 불가 ${unknownCount}건</span>`
     : `<span class="rule-summary-badge pass">모두 통과</span>`;
   $("#ruleCheck").innerHTML = `
     <div class="rule-check-header">
@@ -2358,7 +2393,7 @@ function renderRuleCheck() {
           <span style="font-size:11px;color:var(--muted);">${c.detail}</span>
           ${c.ref ? `<div class="rule-ref-text" id="ruleRef${i}" style="display:none;margin-top:6px;padding:6px 8px;background:var(--bg-card);border-left:3px solid var(--border);font-size:11px;line-height:1.5;border-radius:4px;">${c.ref}</div>` : ""}
         </div>
-        <span class="verdict">${c.status === "PASS" ? "통과" : c.status === "WARN" ? "확인" : c.status === "FAIL" ? "불가" : "-"}</span>
+        <span class="verdict">${c.status === "PASS" ? "통과" : c.status === "WARN" ? "확인" : c.status === "FAIL" ? "불가" : c.status === "UNKNOWN" ? "미확인" : "-"}</span>
       </div>
     `).join("")}
     <p class="disclaimer">⚠️ 본 결과는 회사 최종 승인 전 사전 검토용입니다. 실제 가능 여부는 회사 시스템 및 규정에 따라 달라질 수 있습니다.</p>
@@ -2720,10 +2755,13 @@ function renderPostFooter() {
   submitBtn.disabled = !canSubmit || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
   $("#saveDraftButton").disabled = !hasOffered;
 
+  const hasUnknown = checks.some(c => c.status === "UNKNOWN");
   const headerNote = hasFail
     ? `<span class="rule-header-note fail">불가 항목 있음 — 등록 차단됨</span>`
     : hasWarn
     ? `<span class="rule-header-note warn">확인 항목 있음 — 등록 후 회사 문의 필요</span>`
+    : hasUnknown
+    ? `<span class="rule-header-note warn">앱이 확인하지 못한 항목 있음 — 회사 시스템에서 확인 필요</span>`
     : `<span class="rule-header-note pass">모두 통과</span>`;
 
   $("#postRuleCheck").innerHTML = `
