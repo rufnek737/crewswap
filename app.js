@@ -165,7 +165,8 @@ const RULES = {
     deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
     positions: ["CC","AP","PS","SP","CP"], // CrewConnex AABB 코드 앞 2자리
     monthlyHoursLimit: 100,        // 객실 승무시간 월 100h (FOM 2.1.5)
-    swapLimitMonthly: 2,           // 한달 2회
+    swapLimitMonthly: 2,           // 한달 2회 (내가 진행하는 스왑)
+    consentLimitMonthly: 1,        // Swap 동의권 한달 1회 (남의 요청을 수락하는 횟수)
     swapLimitYearly: 12,           // 연 12회
     dutyConsecLimit: 7,            // 7일 연속 근무 불가 (STBY 포함)
     restHoursMin: 10,              // 항공안전법 객실승무원 휴식시간
@@ -240,6 +241,9 @@ const state = {
     base:"GMP",
     rating:4.8,
     monthlySwapUsed: 0,
+    monthlyConsentUsed: 0, // Swap 동의권 사용 횟수 (객실: 월 1회)
+    swapCountMonth: null,  // 카운터가 속한 달 — 달이 바뀌면 0부터 다시 센다
+    swapCountYear: null,
     monthlySwapLimit: 3,
     yearlySwapUsed: 0,    // 연간 누적 (객실: 12회 한도)
     // 객실 전용
@@ -1457,6 +1461,9 @@ function checkRulesCabin(ss, rules) {
   const yearlyLimit  = rules.swapLimitYearly  || 12;
   const monthlyUsed  = state.user.monthlySwapUsed || 0;
   const yearlyUsed   = state.user.yearlySwapUsed  || 0;
+  const consentLimit = rules.consentLimitMonthly || 1;
+  const consentUsed  = state.user.monthlyConsentUsed || 0;
+  const consentFail  = !isPilotUser && consentUsed >= consentLimit;
   const monthlyFail  = !isPilotUser && monthlyUsed >= monthlyLimit;
   const yearlyFail   = !isPilotUser && yearlyUsed  >= yearlyLimit;
 
@@ -1504,6 +1511,10 @@ function checkRulesCabin(ss, rules) {
       status: monthlyFail ? "FAIL" : (!isPilotUser && monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
       detail: isPilotUser ? "운항승무원 — 제한 없음" : `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용`,
       ref: isPilotUser ? null : "Swap Guide p.47 — 스왑은 월 2회, 연 12회를 초과할 수 없습니다. 카운트는 스왑이 실제 성사(상호 수락)된 경우에만 증가합니다." },
+    { label: isPilotUser ? "Swap 동의권 (해당 없음)" : `Swap 동의권 (월 ${consentLimit}회)`,
+      status: consentFail ? "FAIL" : "PASS",
+      detail: isPilotUser ? "운항승무원 — 제한 없음" : `이번 달 ${consentUsed}/${consentLimit}회 사용`,
+      ref: isPilotUser ? null : "Swap Guide — 남의 요청을 수락하는 동의권은 한 달 1회입니다. 내가 진행하는 스왑 횟수(월 2회)와 따로 셉니다." },
     { label: isPilotUser ? "연 스왑 횟수 (무제한)" : `연 스왑 횟수 (연 ${yearlyLimit}회)`,
       status: yearlyFail ? "FAIL" : (!isPilotUser && yearlyUsed >= yearlyLimit - 2 ? "WARN" : "PASS"),
       detail: isPilotUser ? "운항승무원 — 제한 없음" : `올해 ${yearlyUsed}/${yearlyLimit}회 사용`,
@@ -3540,8 +3551,25 @@ async function fetchPosts() {
   }
 }
 
+/* 카운터를 이번 달 기준으로 맞춘다. 예전에는 초기화가 아예 없어서 객실승무원이
+   월 2회를 쓰면 다음 달에도 계속 막혀 있었다. */
+function syncSwapCounters() {
+  const api = window.CrewSwapUsage;
+  if (!api) return;
+  if (api.rollOver(state.user)) { saveState(); }
+}
+
+// 남의 요청을 수락(동의)했을 때 — 객실 Swap 동의권 월 1회
+function recordSwapConsent() {
+  syncSwapCounters();
+  state.user.monthlyConsentUsed = (state.user.monthlyConsentUsed || 0) + 1;
+  saveState();
+  renderMetrics();
+}
+
 // 매칭 성사(상호 수락) 시 호출 — 월/연 스왑 횟수 카운팅
 function recordSwapMatch() {
+  syncSwapCounters();
   state.user.monthlySwapUsed = (state.user.monthlySwapUsed || 0) + 1;
   if (state.user.crewType === "CABIN") {
     state.user.yearlySwapUsed = (state.user.yearlySwapUsed || 0) + 1;
@@ -4954,6 +4982,10 @@ function requestCard(r) {
 
 async function acceptRequest(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  // 객실 Swap 동의권은 월 1회다. 서버 요청 전에 막아야 상대에게 수락 알림이 가지 않는다.
+  syncSwapCounters();
+  const consent = window.CrewSwapUsage?.canConsent(state.user.crewType, state.user, currentRules());
+  if (consent && !consent.ok) { showToast(consent.reason); return; }
   try {
     const res = await apiFetch(`${API_BASE}/api/requests-accept`, {
       method: "POST",
@@ -4964,6 +4996,7 @@ async function acceptRequest(reqId) {
     if (!res.ok) { showToast(data.error || "수락 실패 — 다시 시도해주세요."); return; }
   } catch (e) { showToast("수락 실패 — 네트워크 오류"); return; }
   recordSwapMatch();
+  recordSwapConsent();   // 남의 요청을 수락한 것 — Swap권과 별도로 센다
   showToast("상호 수락 완료 — 회사 상신 단계로 진행하세요.");
   fetchRequests();
 }
@@ -6837,6 +6870,7 @@ initNativePushNotifications().catch(error => console.warn('native push init fail
 if (state.user.serverAuthed) pullSchedulesFromServer(); // 이 기기에 스케줄이 없으면 서버(다른 기기에서 불러온 것)에서 채움
 startRequestPolling(); // 앱 켜진 동안 새 요청 자동 감지
 regenCredits();          // 월 변경·구버전 크레딧 정책 마이그레이션
+syncSwapCounters();      // 스왑·동의 횟수도 달이 바뀌면 0부터 다시 센다
 processExpiredRefunds(); // 마감된 미매칭 글 크레딧 50% 환급 체크
 initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
