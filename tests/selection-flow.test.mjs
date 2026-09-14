@@ -260,3 +260,23 @@ test("앱이 확인하지 못한 항목을 '모두 통과'에 섞지 않는다",
     assert.match(app, new RegExp(`key: "${key}"`), `${key} 가 검사에 연결되지 않았습니다`);
   }
 });
+
+test("항공사 목록이 2026년 합병 이후 상태를 따른다", () => {
+  // 아시아나는 대한항공에, 에어부산·에어서울은 진에어에 합병됐고
+  // 티웨이는 트리니티항공으로 사명이 바뀌었다.
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  for (const v of ["JEJU", "KOREAN", "JINAIR", "TRINITY", "PREMIA", "ESTAR"]) {
+    assert.match(html, new RegExp(`option value="${v}"`), `${v} 선택지가 없습니다`);
+  }
+  // 없어진 항공사는 고를 수 없어야 한다
+  for (const v of ["ASIANA", "TWAY", "AIRBUSAN"]) {
+    assert.doesNotMatch(html, new RegExp(`option value="${v}"`), `${v} 선택지가 남아 있습니다`);
+  }
+  // 다만 그 값으로 가입한 기존 사용자의 화면에 코드가 그대로 노출되면 안 되므로
+  // 라벨은 남겨 둔다.
+  assert.match(app, /TWAY: "트리니티항공"/);
+  assert.match(app, /ASIANA: "대한항공"/);
+  assert.match(app, /AIRBUSAN: "진에어"/);
+});

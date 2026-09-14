@@ -106,9 +106,15 @@ const NON_DUTY_TYPES = new Set(["OFF","VAC","VAC_A","VAC_P","UV_ML","OFFMED"]);
    사용자는 가입 시 airline + crewType 1회 선택 → 본인 룰 자동 적용.
    현재 베타: JEJU_PILOT만 활성. 객실/타사는 추후 추가.
 ================================================== */
+/* 2026-09 기준 국적 항공사. 아시아나는 대한항공에, 에어부산·에어서울은 진에어에
+   합병됐고 티웨이는 트리니티항공으로 사명이 바뀌었다.
+   TWAY·ASIANA·AIRBUSAN 키는 지우지 않는다 — 그 값으로 가입한 기존 사용자의 화면에
+   코드가 그대로 노출되는 것을 막기 위한 표시용이다. 선택지에서는 뺀다. */
 const AIRLINE_LABELS = {
-  JEJU: "제주항공", KOREAN: "대한항공", ASIANA: "아시아나",
-  TWAY: "티웨이항공", AIRBUSAN: "에어부산", JINAIR: "진에어"
+  JEJU: "제주항공", KOREAN: "대한항공", JINAIR: "진에어",
+  TRINITY: "트리니티항공", PREMIA: "에어프레미아", ESTAR: "이스타항공",
+  // 아래는 예전 값 표시용
+  TWAY: "트리니티항공", ASIANA: "대한항공", AIRBUSAN: "진에어"
 };
 const CREWTYPE_LABELS = { PILOT: "조종사", CABIN: "객실 승무원" };
 
@@ -177,12 +183,12 @@ const RULES = {
   },
   KOREAN_PILOT: { label: "대한항공 조종사", active: false /* 룰·파싱 미확보 */ },
   KOREAN_CABIN: { label: "대한항공 객실", active: false },
-  ASIANA_PILOT: { label: "아시아나 조종사", active: false },
-  ASIANA_CABIN: { label: "아시아나 객실", active: false },
-  TWAY_PILOT: { label: "티웨이 조종사", active: false },
-  TWAY_CABIN: { label: "티웨이 객실", active: false },
-  AIRBUSAN_PILOT: { label: "에어부산 조종사", active: false },
-  AIRBUSAN_CABIN: { label: "에어부산 객실", active: false },
+  TRINITY_PILOT: { label: "트리니티항공 조종사", active: false },
+  TRINITY_CABIN: { label: "트리니티항공 객실", active: false },
+  PREMIA_PILOT: { label: "에어프레미아 조종사", active: false },
+  PREMIA_CABIN: { label: "에어프레미아 객실", active: false },
+  ESTAR_PILOT: { label: "이스타항공 조종사", active: false },
+  ESTAR_CABIN: { label: "이스타항공 객실", active: false },
   JINAIR_PILOT: { label: "진에어 조종사", active: false },
   JINAIR_CABIN: { label: "진에어 객실", active: false },
 };
