@@ -3,7 +3,8 @@
   "version": "1.1.8",
   "private": true,
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "build:web": "sh scripts/build-web.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
