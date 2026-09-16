@@ -1086,7 +1086,7 @@ function parseDayBlock(block) {
     if (uniqAir.length === 1) {
       // reclassifyGroundDuty() 와 같은 규칙을 쓴다 — 두 파싱 경로가 다르게 판정하면
       // 불러온 방법에 따라 같은 근무가 다르게 보인다.
-      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\b|\bS_/i.test(full);
+      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(full);
       return { ...base, type:"GND", ground: isSim ? "SIM" : "지상",
         title: isSim ? "SIM 훈련" : "지상근무",
         station: uniqAir[0],
@@ -1230,7 +1230,7 @@ function reclassifyGroundDuty(s) {
   const simText = `${s.activityCode || ""} ${s.pairingCode || ""} ${title} ${s.routeSummary || ""}`;
   // S_ 로 시작하는 활동코드는 시뮬레이터 훈련 계열이다(S_L+U = LOFT+UPRT).
   // 정기 심 코드가 더 있으므로 개별 나열 대신 접두사로 잡는다.
-  const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\b|\bS_/i.test(simText);
+  const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(simText);
   s.type = "GND";
   s.ground = isSim ? "SIM" : "지상";
   s.title = isSim ? "SIM 훈련" : "지상근무";

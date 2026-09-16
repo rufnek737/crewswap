@@ -73,3 +73,20 @@ test('월·요일 약어를 공항으로 오인하지 않는다', () => {
   }
   assert.equal((app.match(/"JAN","FEB"/g) || []).length, 2, '두 파싱 경로 모두에 넣어야 한다');
 });
+
+test('실제 코드표(2026-09 기준)대로 훈련과 지상근무가 갈린다', () => {
+  // CrewConnex 근무표 하단 Activity Code Descriptions 를 그대로 옮겼다.
+  // SIM1 이 \bSIM\b 에 안 걸려 지상근무로 떨어지던 것을 여기서 잡았다.
+  const re = regexIn('const isSim = /');
+  const 훈련 = [['SIM1', 'Simulator'], ['S_L+U', 'LOFT+UPRT']];
+  const 훈련아님 = [['TR_GRD', 'Ground Training'], ['JCRM', 'Joint CRM'],
+                  ['RSV_F', '운항승무원 RSV'], ['SA1', 'Early standby'],
+                  ['LAYOV', 'Layover'], ['OFF', 'Day off']];
+
+  for (const [code, desc] of 훈련) {
+    assert.ok(re.test(code), `${code} (${desc}) 는 SIM 훈련으로 잡혀야 한다`);
+  }
+  for (const [code, desc] of 훈련아님) {
+    assert.ok(!re.test(code), `${code} (${desc}) 를 SIM 훈련으로 잡으면 안 된다`);
+  }
+});
