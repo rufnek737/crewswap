@@ -148,7 +148,7 @@ const RULES = {
     pairingRule: { A: ["A","B","C"], B: ["A","B"], C: ["A"] },
     specialAirports: ["CXR","TAG","BKI"],
     monthlyHoursLimit: 90,
-    // 아래 한도는 FOM 5.5.2.2 표(REV.70, 2023.08.30) 기준.
+    // 아래 한도는 FOM 비행근무시간 제한 표 기준(확인 시점 REV.70, 2023.08.30 — 개정되면 값을 다시 볼 것).
     // 기본은 기장 1명 + 기장 외 조종사 1명(2인 편조) 행이고, 근무코드가 3으로 시작하는
     // 3인 편조(기장2+부기장1, 예: 발리 3PC/3NC)는 승무시간 12h 행이 적용된다.
     consecutive24hLimit: 8,   // 2인 편조 연속 24시간 최대 승무시간 8h
@@ -1287,13 +1287,11 @@ function cumulativeLimitChecks(rules) {
   const entries = state.schedules || [];
   const rows = [
     { key: "consecutive28dLimit", windowDays: 28,  minutes: flightMinutesOf, label: "연속 28일 승무시간",
-      ref: "FOM 5.5.2.2 — 연속 28일 최대 승무시간 100시간. 달력상의 한 달이 아니라 어느 28일 구간을 잡아도 넘으면 안 됩니다." },
-    { key: "yearlyHoursLimit",    windowDays: 365, minutes: flightMinutesOf, label: "연속 365일 승무시간",
-      ref: "FOM 5.5.2.2 — 연속 365일 최대 승무시간 1000시간." },
+      ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 승무시간 100시간. 달력상의 한 달이 아니라 어느 28일 구간을 잡아도 넘으면 안 됩니다." },
     { key: "duty7dLimit",         windowDays: 7,   minutes: dutyMinutesOf,   label: "연속 7일 근무시간",
-      ref: "FOM 5.5.2.2 — 연속 7일 최대 근무시간 60시간. 승무시간이 아니라 출두부터 해제까지의 근무시간입니다." },
+      ref: "FOM 비행근무시간 제한에 의거 — 연속 7일 최대 근무시간 60시간. 승무시간이 아니라 출두부터 해제까지의 근무시간입니다." },
     { key: "duty28dLimit",        windowDays: 28,  minutes: dutyMinutesOf,   label: "연속 28일 근무시간",
-      ref: "FOM 5.5.2.2 — 연속 28일 최대 근무시간 190시간." },
+      ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 근무시간 190시간." },
   ];
   return rows.filter(r => rules[r.key]).map(r => {
     const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key] });
@@ -1584,7 +1582,7 @@ function consecutive24hCheck(ss, rules) {
     label: result.label,
     status: result.status,
     detail: result.detail,
-    ref: `연속 24시간 이내 승무시간 한도는 편조 구성에 따라 2인 편조 ${limitHours}시간, 3인 편조(기장2+부기장1) ${rules?.consecutive24hAugmentedLimit || limitHours}시간입니다(FOM 5.5.2.2). 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
+    ref: `연속 24시간 이내 승무시간 한도는 편조 구성에 따라 2인 편조 ${limitHours}시간, 3인 편조(기장2+부기장1) ${rules?.consecutive24hAugmentedLimit || limitHours}시간입니다(FOM 비행근무시간 제한). 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
   };
 }
 

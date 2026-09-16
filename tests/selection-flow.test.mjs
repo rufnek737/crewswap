@@ -256,7 +256,12 @@ test("앱이 확인하지 못한 항목을 '모두 통과'에 섞지 않는다",
 
   // 네 한도가 실제로 규정 목록에 붙어 있는지
   assert.match(app, /\.\.\.cumulativeLimitChecks\(rules\)/);
-  for (const key of ["consecutive28dLimit", "yearlyHoursLimit", "duty7dLimit", "duty28dLimit"]) {
+  assert.doesNotMatch(app, /key: "yearlyHoursLimit"/, "365일 항목은 화면에 두지 않는다");
+  // 조항 번호는 개정되면 틀린 인용이 된다 — 조문 이름으로만 쓴다
+  assert.doesNotMatch(app, /FOM 5\.5\.2\.2 —/);
+  // 연속 365일(yearlyHoursLimit)은 뺐다 — 근무표가 한두 달치뿐이라 사실상 언제나
+  // "확인 불가"로만 떠서 화면만 어지럽혔다. 한도 값 자체는 RULES에 남아 있다.
+  for (const key of ["consecutive28dLimit", "duty7dLimit", "duty28dLimit"]) {
     assert.match(app, new RegExp(`key: "${key}"`), `${key} 가 검사에 연결되지 않았습니다`);
   }
 });
