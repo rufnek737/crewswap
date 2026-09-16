@@ -45,3 +45,31 @@ test('SIM 훈련 — S_L+U(LOFT+UPRT)도 비행 아님으로 본다', () => {
   assert.ok(!re.test('RSV_F'));
   assert.ok(!re.test('LAYOV'));
 });
+
+test('SIM 훈련 판정은 활동코드를 본다 — title만 보면 전부 지상근무가 된다', () => {
+  // CrewConnex는 서버 파싱본을 내려주고 reclassifyGroundDuty() 가 재분류한다.
+  // 훈련 코드(S_L+U 등)는 activityCode 에 있는데 예전에는 title·routeSummary 만
+  // 봐서 실제 SIM 훈련이 "지상근무"로 표시됐다.
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const fn = app.slice(app.indexOf('function reclassifyGroundDuty'));
+
+  assert.match(fn, /s\.activityCode/, 'activityCode 를 보지 않으면 훈련 코드를 놓친다');
+  const re = regexIn('const isSim = /');
+  assert.ok(re.test('S_L+U'), 'S_L+U = LOFT+UPRT');
+  assert.ok(re.test('S_LPC'), '정기 심 코드는 S_ 로 시작한다');
+  assert.ok(re.test('SIM'));
+  assert.ok(re.test('OPC'));
+  assert.ok(!re.test('JCRM'), '지상수업은 SIM 훈련이 아니다');
+  assert.ok(!re.test('GND'));
+  assert.ok(!re.test('RSV'));
+});
+
+test('월·요일 약어를 공항으로 오인하지 않는다', () => {
+  // 세 글자 대문자를 공항으로 보는데 SEP(9월)·THU(목)이 걸려, 9월 지상근무의
+  // 장소가 "SEP"으로 저장되고 있었다.
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  for (const token of ['"SEP"', '"THU"', '"JAN"', '"DEC"']) {
+    assert.ok(app.includes(token), `NON_AIRPORT 에 ${token} 이 없습니다`);
+  }
+  assert.equal((app.match(/"JAN","FEB"/g) || []).length, 2, '두 파싱 경로 모두에 넣어야 한다');
+});
