@@ -53,13 +53,22 @@
   ];
 
   /* 코드표에 없는 코드를 접두사로 넘겨짚는다. 근무표가 알려주지 않을 때만 쓴다.
-     객실은 SAC/SBC/SDC(공항대기)·HSC(자택대기)·TR_(훈련) 계열을 쓴다. */
+   *
+   * 객실 대기 코드는 「객실 생활 백과사전」 2-2. 스케줄 코드에 정리돼 있다.
+   *   공항 근무 — 서울 SAC·SBS·SCC·SDC / 부산 SA(P)·SB(P)
+   *   자택 대기 — 오전 RF(A)·오후 RF(b), 결항 시 RF_CNL
+   *
+   * 다만 안내 문서와 실제 근무표 표기가 어긋난다. 근무표에는 자택대기가 HSC(Home
+   * Standby)로, 공항근무가 SBC4 로 찍힌다. 어느 쪽이 최신인지 확인되기 전까지 둘 다 잡는다.
+   */
   const BY_CODE = [
     [/^OFF$/i,               "DAY OFF"],
-    [/^VAC/i,                "Regular Vacation"],
+    [/^VAC(_[AP])?$/i,       "Regular Vacation"],
     [/^LAYOV/i,              "Layover"],
     [/^HSC\d*$/i,            "Home Standby"],
-    [/^(SAC|SBC|SDC|SA|SB|SD)\d+$/i, "Airport Standby"],
+    [/^RF(\(.\)|_[A-Z]+)?$/i, "Home Standby"],
+    [/^(SAC|SBC|SBS|SCC|SDC)\d*$/i,  "Airport Standby"],
+    [/^S[ABCD](\(P\))?\d*$/i,        "Airport Standby"],
     [/^STBY$/i,              "Standby"],
     [/^RSV(_[A-Z]+)?$/i,     "Reserve"],
     [/^(TR_|GRD|TRN)/i,      "Ground Training"],

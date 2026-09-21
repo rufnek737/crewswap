@@ -288,7 +288,7 @@ test("항공사 목록이 2026년 합병 이후 상태를 따른다", () => {
 
 test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 바꿨다", () => {
   // 항공안전법 시행규칙 별표18·JPU 단체협약·FOM 어디에도 연속 근무일수 제한은 없다.
-  // 실제 조항은 FOM 5.5.3 가. 주2) — 연속 7일마다 30시간 연속 휴식.
+  // 실제 규정은 연속 7일마다 30시간 연속 휴식이다.
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
@@ -299,6 +299,11 @@ test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 �
   // 조항 번호는 FOM 이 개정되면 틀린 인용이 된다 — 조문 이름만 쓴다.
   assert.match(app, /FOM 비행근무시간 제한/);
   assert.doesNotMatch(app, /FOM \d+\.\d+/, "FOM 조항 번호를 넣지 않는다");
+
+  // 객실 생활 백과사전도 개정된다(파일명이 Update_260609). 쪽 번호를 근거로 박으면
+  // 틀린 인용이 된다 — 실제로 p.47 규정 여럿이 p.48 로 적혀 있었다.
+  assert.doesNotMatch(app, /Swap Guide p\.\d+/, "가이드 쪽 번호를 넣지 않는다");
+  assert.match(app, /객실 Swap Guide에 의거/);
   assert.match(html, /rest-window\.js/);
 
   // 3인 편조 승무시간은 FOM이 법(13h)보다 엄격한 12h다 — 제주항공은 기내 휴식시설

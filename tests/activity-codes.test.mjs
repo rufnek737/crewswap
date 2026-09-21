@@ -110,6 +110,26 @@ SCHLD     Schedule Hold 비행불가 인원에 대한 임시 스케줄
   assert.equal(A.classify('SCHLD', d).type, 'VAC');
 });
 
+test('객실 생활 백과사전의 대기 코드를 모두 잡는다', () => {
+  // 2-2. 스케줄 코드 — 공항 근무: 서울 SAC·SBS·SCC·SDC / 부산 SA(P)·SB(P)
+  //                   자택 대기: 오전 RF(A)·오후 RF(b), 결항 시 RF_CNL
+  const empty = new Map();
+  for (const code of ['SAC', 'SBS', 'SCC', 'SDC', 'SAC16', 'SBC4', 'SDC1', 'SA(P)', 'SB(P)']) {
+    const hit = A.classify(code, empty);
+    assert.equal(hit?.standby, '공항', `${code} 는 공항 대기다`);
+  }
+  for (const code of ['RF(A)', 'RF(b)', 'RF_CNL', 'HSC', 'HSC1']) {
+    const hit = A.classify(code, empty);
+    assert.equal(hit?.standby, '자택', `${code} 는 자택 대기다`);
+  }
+});
+
+test('추가 연차 코드도 휴가다', () => {
+  // VAC_A 전일 배정 추가 연차 / VAC_P 단기 추가 연차
+  assert.equal(A.classify('VAC_A', new Map()).type, 'VAC');
+  assert.equal(A.classify('VAC_P', new Map()).type, 'VAC');
+});
+
 test('모르는 코드는 null — 기존 판정으로 넘어간다', () => {
   assert.equal(A.classify('ZZQ9', new Map()), null);
   assert.equal(A.classify('', new Map()), null);
