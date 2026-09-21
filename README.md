@@ -449,6 +449,29 @@ lockReason: arr === "TAG" && /자격|갱신|qualif/i.test(full) ? "특수공항 
 
 고칠 방향 — FOM Supplement 의 실제 목록을 `specialAirports` 에 넣고, 도착지가 그 목록에 있으면서 근무표에 자격·갱신 표시가 있는 경우를 잡는다. 근무표에 그 표시가 어떻게 오는지는 Kay 확인 필요.
 
+#### 다음 과제 — 근무코드를 근무표가 들고 오는 표로 판정한다
+
+지금은 근무 유형을 **하드코딩한 문자열·정규식**으로 가린다(`SIM|OPC|LPC|LOFT|SPT|UPRT`, `\bS_`, 도착지 `TAG` 등). 그래서 회사가 코드를 추가하거나 바꾸면 조용히 틀린다 — 실제로 `RSV_F`(2025-07-01 시행)·`SIM1`·`S_L+U` 를 차례로 놓쳤고, 매번 Kay가 화면을 보고 알려줘야 고쳤다.
+
+**CrewConnex 근무표 맨 아래에는 `Activity Code Descriptions` 표가 있다.** 그 근무표에 실제로 쓰인 코드와 뜻이 함께 실려 온다.
+
+```
+Code      Description
+JCRM      Joint CRM
+LAYOV     Layover
+OFF       DAY OFF
+RSV_F     운항승무원RSV코드(25.07.01부 시행)
+SA1       Early standby (FLT)
+SIM1      Simulator
+S_L+U     LOFT+UPRT
+SCHLD     Schedule Hold 비행불가 인원에 대한 임시 스케줄
+TR_GRD    Ground Training
+```
+
+**이 표를 파싱해서 분류의 근거로 쓴다.** 코드가 아니라 설명을 보면 `SIM1 = Simulator`, `TR_GRD = Ground Training`, `SA1 = Early standby` 처럼 유형이 드러난다. 하드코딩 목록은 표가 없을 때의 폴백으로만 남긴다.
+
+특수공항 자격 갱신 비행도 도착지(`TAG`)로 가리지 말고 이 표에서 해당 코드를 찾는 방향으로 간다 — 근무표에 그 코드가 어떻게 실려 오는지는 Kay 확인 필요.
+
 **다음 세션은 여기서 이어간다.** 남은 확인 대상: 편조 등급 조합표 출처, 특수공항 자격 갱신 비행이 실제 제도인지, 공휴일·연휴 SWAP 제한 근거, 회사 신청 마감 2영업일 17시가 맞는지, 가족 동편조 안내 추가 여부.
 
 #### 3인 편조 12h 는 그대로 둔다 — 내가 틀렸다
