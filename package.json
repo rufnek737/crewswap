@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "build:web": "sh scripts/build-web.sh"
+    "build:web": "sh scripts/build-web.sh",
+    "review": "node scripts/review-status.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
