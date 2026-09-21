@@ -1005,7 +1005,11 @@ function normalizeTime(t) {
 }
 
 function parseCrewConnexPaste(text) {
-  const lines = text.split(/\r?\n/).map(l => l.trim().replace(/\([LZ]\)/gi,"").trim()).filter(Boolean);
+  // 근무표 맨 아래 코드표를 먼저 떼어낸다. 그 달에 실제로 쓰인 코드의 뜻이 거기 있어서,
+  // 근무 유형을 앱이 추측하지 않고 근무표에 물어볼 수 있다.
+  const codeDescriptions = window.CrewSwapActivityCodes.parseDescriptions(text);
+  const body = text.split(/Activity\s+Code\s+Descriptions/i)[0];
+  const lines = body.split(/\r?\n/).map(l => l.trim().replace(/\([LZ]\)/gi,"").trim()).filter(Boolean);
   const blocks = [];
   let cur = null;
   for (const line of lines) {
@@ -1023,17 +1027,32 @@ function parseCrewConnexPaste(text) {
     }
     if (cur) cur.lines.push(line);
   }
-  const parsed = blocks.map(parseDayBlock);
+  const parsed = blocks.map(b => parseDayBlock(b, codeDescriptions));
   return fillLayoverGaps(assignPatternIds(parsed));
 }
 
-function parseDayBlock(block) {
+function parseDayBlock(block, codeDescriptions) {
   // 첫 토큰이 요일이면 제거
   const rawTokens = block.lines.join(" ").split(/\s+/).filter(Boolean);
   const tokens = rawTokens.filter(t => !WEEKDAY_RE.test(t));
   const full = tokens.join(" ");
   const day = block.day;
   const base = { day, patternId: null };
+
+  // 비행이 섞이지 않은 날은 근무표의 코드표에 물어본다. 코드 문자열을 앱에 박아두고
+  // 맞히려던 예전 방식은 회사가 코드를 추가할 때마다 조용히 틀렸다.
+  const hasFlight = /\b7C\s?\d{3,4}\b/i.test(full) || tokens.some(t => /^\d{3,4}$/.test(t))
+    || /([A-Z]{3})\s*[-–]\s*([A-Z]{3})/.test(full);
+  if (!hasFlight) {
+    const hit = window.CrewSwapActivityCodes.classifyTokens(tokens, codeDescriptions);
+    if (hit) {
+      const range = /(\d{1,2}:\d{2})\s*[~-]\s*(\d{1,2}:\d{2})/.exec(full);
+      const { activityCode, description, source, ...shape } = hit;
+      return { ...base, ...shape, activityCode, title: shape.title || activityCode,
+        reportTime: normalizeTime(range?.[1]) || null,
+        releaseTime: normalizeTime(range?.[2]) || null };
+    }
+  }
 
   // OFF
   if (/^(OFF|REST)\b/i.test(full) && !/(LAYOV|7C\d|[A-Z]{3}-[A-Z]{3})/i.test(full)) {
