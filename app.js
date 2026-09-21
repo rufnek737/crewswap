@@ -1560,6 +1560,7 @@ function checkRulesCabin(ss, rules) {
       status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
       ref: "객실 Swap Guide에 의거 — 연속된 RSV·STBY는 전체를 함께 변경해야 합니다." },
+    vacationCheck(ss),
     { label:"방송등급 미보유 RSV/STBY 불가",
       status: broadcastFail ? "FAIL" : "PASS",
       detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가" : "해당 없음",
@@ -1639,6 +1640,27 @@ function consecutive24hCheck(ss, rules) {
   };
 }
 
+/* 휴가는 남에게 넘길 수 없다 — 직종과 무관하다.
+ *
+ * 연차는 본인이 필요해서 쓴 것이라 교환 대상이 아니다. 가이드가 「OFF, VAC 가능」이라고
+ * 하는 것은 내 스케줄 안에서 휴가 날짜를 옮기는 이야기고, 「VAC 양도 불가」가 사람 사이의
+ * 이야기다. CrewSwap 의 교환은 전부 사람 대 사람이라 여기서는 언제나 양도가 된다.
+ *
+ * 규칙표에 `changeableTypes: ["OFF","VAC"]` 가 있었지만 읽는 코드가 없어, 실제로는 휴가를
+ * 올려 남과 바꿀 수 있었다.
+ */
+const VACATION_TYPES = new Set(["VAC", "VAC_A", "VAC_P"]);
+
+function vacationCheck(ss) {
+  const days = (ss || []).filter(s => VACATION_TYPES.has(String(s.type || "").toUpperCase()));
+  return {
+    label: "휴가(VAC) 양도 불가",
+    status: days.length ? "FAIL" : "PASS",
+    detail: days.length ? `${days.map(s => `${s.day}일`).join(", ")} — 휴가는 교환할 수 없습니다` : "해당 없음",
+    ref: "휴가는 본인에게 부여된 것이라 다른 사람에게 넘길 수 없습니다.",
+  };
+}
+
 function checkRulesForSelection() {
   const ss = selectedSchedules();
   if (ss.length === 0) return [];
@@ -1715,6 +1737,7 @@ function checkRulesForSelection() {
     { label:"RSV/STBY 부분 SWAP 차단", status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
       ref: "연속된 RSV·STBY는 나눠서 바꿀 수 없습니다. 인접한 것을 모두 함께 선택해주세요." },
+    vacationCheck(ss),
   ];
 }
 
