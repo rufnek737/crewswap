@@ -170,7 +170,7 @@ const RULES = {
     active: true,
     deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
     positions: ["CC","AP","PS","SP","CP"], // CrewConnex AABB 코드 앞 2자리
-    monthlyHoursLimit: 100,        // 객실 승무시간 월 100h (FOM 2.1.5)
+    monthlyHoursLimit: 100,        // 객실 승무시간 월 100h (FOM 객실 승무시간 제한)
     swapLimitMonthly: 2,           // 한달 2회 (내가 진행하는 스왑)
     consentLimitMonthly: 1,        // Swap 동의권 한달 1회 (남의 요청을 수락하는 횟수)
     swapLimitYearly: 12,           // 연 12회
@@ -627,12 +627,12 @@ function dutyMinutesOf(s) {
  * 새로 받는 근무 블록의 직전/직후 날짜에 내 근무가 남아 있을 때, 그 사이 휴식이
  * 최소 기준을 만족하는지 검사한다.
  *
- * - 운항(PILOT): FOM 5.5.3 가 — 직전 근무 C/O → 새 근무 C/I 간격이 직전 FDT 기준 휴식 이상.
+ * - 운항(PILOT): FOM 비행근무시간 제한 가 — 직전 근무 C/O → 새 근무 C/I 간격이 직전 FDT 기준 휴식 이상.
  * - 객실(CABIN): 회사 SKD Swap 산정기준 — 직전 STA(도착) → 새 근무 C/I(출두) 간격.
  *     도착공항 ICN이면 12h00(인천-김포 셔틀 40분 포함), 그 외(GMP/PUS 등) 11h20.
  *     (Rest 10h 포함값. 객실 FOM상 비행근무 14h 초과 시 휴식 14h → +4h 가산) */
 
-// [운항] 비행근무시간(분) → 최소 휴식(분). FOM 5.5.3 가 표.
+// [운항] 비행근무시간(분) → 최소 휴식(분). FOM 비행근무시간 제한 가 표.
 function minRestMinForFDT(fdtMin) {
   const h = fdtMin / 60;
   if (h < 8)  return 600;   // 10h
@@ -1300,15 +1300,15 @@ function cumulativeLimitChecks(rules) {
   const entries = state.schedules || [];
   const rows = [
     { key: "consecutive28dLimit", windowDays: 28,  minutes: flightMinutesOf, label: "연속 28일 승무시간",
-      ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 승무시간 100시간. 달력상의 한 달이 아니라 어느 28일 구간을 잡아도 넘으면 안 됩니다." },
+      ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 승무시간 100시간." },
     { key: "duty7dLimit",         windowDays: 7,   minutes: dutyMinutesOf,   label: "연속 7일 근무시간",
-      ref: "FOM 비행근무시간 제한에 의거 — 연속 7일 최대 근무시간 60시간. 승무시간이 아니라 출두부터 해제까지의 근무시간입니다." },
+      ref: "FOM 비행근무시간 제한에 의거 — 연속 7일 최대 근무시간 60시간(출두~해제)." },
     { key: "duty28dLimit",        windowDays: 28,  minutes: dutyMinutesOf,   label: "연속 28일 근무시간",
       ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 근무시간 190시간." },
   ];
   return rows.filter(r => rules[r.key]).map(r => {
     const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key] });
-    const unknownNote = " 이 항목은 불러온 근무표가 해당 기간을 덮지 못해 앱이 확인하지 못했습니다. 회사 시스템에서 직접 확인해주세요.";
+    const unknownNote = " 근무표가 해당 기간을 덮지 못해 확인하지 못했습니다.";
     return {
       label: r.label + " (" + rules[r.key] + "h 미만)",
       status: res.status,
@@ -1318,7 +1318,7 @@ function cumulativeLimitChecks(rules) {
   });
 }
 
-/* 연속 7일마다 30시간 연속 휴식 (FOM 5.5.3 가. 주2).
+/* 연속 7일마다 30시간 연속 휴식 (FOM 비행근무시간 제한.
    예전에는 "연속 근무일 5일 미만"을 검사했는데, 항공안전법 시행규칙 별표18·JPU
    단체협약·FOM 어디에도 그런 조항이 없었다. 근거 없는 숫자로 "불가"를 띄우고 있었다. */
 function restWindowCheck() {
@@ -1330,10 +1330,8 @@ function restWindowCheck() {
     ...base,
     status: result.status,
     detail: api.detailText(result),
-    ref: "FOM 5.5.3 가. 주2) — 운항승무원에게 연속되는 7일마다 연속되는 30시간 이상의 휴식을 부여해야 합니다. "
-      + "연속 근무 일수 자체를 제한하는 조항은 항공안전법 시행규칙 별표18·단체협약·FOM 어디에도 없습니다 — "
-      + "규정이 보는 것은 근무를 며칠 이어서 했는지가 아니라 7일 안에 30시간 연속 휴식이 있었는지입니다."
-      + (result.status === "UNKNOWN" ? " 불러온 근무표가 7일에 미치지 못해 앱이 확인하지 못했습니다." : ""),
+    ref: "FOM 비행근무시간 제한에 의거 — 연속되는 7일마다 연속되는 30시간 이상의 휴식이 있어야 합니다."
+      + (result.status === "UNKNOWN" ? " 근무표가 7일에 미치지 못해 확인하지 못했습니다." : ""),
   };
 }
 
@@ -1518,11 +1516,11 @@ function checkRulesCabin(ss, rules) {
     { label:`연속 근무일 (${consecLimit}일 미만)`,
       status: consecFail ? "FAIL" : consecWarn ? "WARN" : "PASS",
       detail:`최대 ${cum.maxConsec}일`,
-      ref: "Swap Guide p.48 — 스왑 후 7일 이상 연속 근무가 발생하면 신청 불가. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },
+      ref: "Swap Guide p.48 — 7일 이상 연속 근무가 되면 신청 불가(OFF·VAC 제외)." },
     { label:"RSV 다음날 OFF 불가",
       status: rsvNextOff ? "FAIL" : "PASS",
       detail: rsvNextOff ? "RSV 포함 최소 3일 SKD 필요" : "해당 없음",
-      ref: "Swap Guide p.48 — RSV를 포함한 스왑 시 패턴 전체(최소 3일)를 함께 변경해야 합니다. RSV 다음날 OFF 단독 스왑 불가." },
+      ref: "Swap Guide p.48 — RSV는 패턴 전체(최소 3일)를 함께 변경해야 합니다." },
     { label:"변경 불가 타입 (UV_ML)",
       status: hasUvml ? "FAIL" : "PASS",
       detail: hasUvml ? "UV_ML은 스왑 불가" : "해당 없음",
@@ -1534,15 +1532,15 @@ function checkRulesCabin(ss, rules) {
     { label:"공휴일/연휴 SWAP 제한",
       status: blockedHoliday ? "WARN" : "PASS",
       detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
-      ref: "Swap Guide p.49 — 공휴일·연휴 기간 스왑은 별도 회사 정책 적용. 편조팀 사전 문의 권장 (070-7420-1756)." },
+      ref: "Swap Guide p.49 — 공휴일·연휴는 별도 정책 적용. 편조팀 사전 문의." },
     { label:"RSV/STBY 부분 SWAP 차단",
       status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
-      ref: "Swap Guide p.48 — RSV·STBY는 연속된 패턴 전체를 단위로만 변경 가능. 인접 RSV/STBY 중 일부만 선택하는 것은 불가." },
+      ref: "Swap Guide p.48 — 연속된 RSV·STBY는 전체를 함께 변경해야 합니다." },
     { label:"방송등급 미보유 RSV/STBY 불가",
       status: broadcastFail ? "FAIL" : "PASS",
       detail: broadcastFail ? "방송등급 미보유 — RSV·공항대기(STBY) 변경 불가 (규정 5.아)" : "해당 없음",
-      ref: "객실 생활 백과사전 5.아 — 방송등급 미보유 승무원은 RSV(대기) 및 공항대기(STBY) 근무에 배정될 수 없으므로 해당 유형의 스왑 불가." },
+      ref: "방송등급 미보유자는 RSV·STBY에 배정될 수 없어 해당 스왑이 불가합니다." },
     { label: isPilotUser ? "월 스왑 횟수 (무제한)" : `월 스왑 횟수 (월 ${monthlyLimit}회)`,
       status: monthlyFail ? "FAIL" : (!isPilotUser && monthlyUsed >= monthlyLimit - 1 ? "WARN" : "PASS"),
       detail: isPilotUser ? "운항승무원 — 제한 없음" : `이번 달 ${monthlyUsed}/${monthlyLimit}회 사용`,
@@ -1560,19 +1558,19 @@ function checkRulesCabin(ss, rules) {
       detail: hasStby
         ? `STBY/RSV 변경 시 동일 or 상위 직급(${CABIN_ROLE_LABELS[myRankCode] || myRankCode} 이상)만 가능 — 상대방 확인 필요`
         : "해당 없음",
-      ref: "Swap Guide p.49 — STBY·RSV 스왑의 경우 본인보다 동일 직급 또는 상위 직급 승무원과만 교환 가능합니다." },
+      ref: "Swap Guide p.49 — STBY·RSV는 동일·상위 직급과만 교환 가능합니다." },
     { label:"6일 연속 근무 랜딩 시간",
       status:"WARN",
       detail:"6일 연속 근무 시 마지막 날 랜딩 20:00 이전 SKD인지 직접 확인 필요",
-      ref: "Swap Guide p.48 — 연속 6일 근무가 되는 경우, 6일차 비행의 착륙 시각(STA)이 20:00 이전인 스케줄만 배정 가능. 앱에서 자동 확인 불가 — 직접 CrewConnex에서 확인 필요." },
+      ref: "Swap Guide p.48 — 연속 6일 근무가 되면 6일차 착륙(STA)이 20:00 이전이어야 합니다." },
     { label:"Base별 신청 가능 시간",
       status:"WARN",
       detail:"전날 복귀(STA) 기준 신청 가능 시간 확인 (예: ICN-ICN STA 22:00 기준 당일 13:00 이후 STD)",
-      ref: "Swap Guide p.47 Base별 휴식시간 기준표 — 전날 도착(STA) 이후 충분한 휴식 후 신청 가능. ICN-ICN: STA 22:00 기준 다음날 13:00 이후 / GMP-GMP: 12:10 이후 / PUS-PUS: 11:30 이후 등. 앱에서 자동 확인 불가 — 직접 확인 필요." },
+      ref: "Swap Guide p.47 — Base별 휴식시간 기준표에 따라 전날 도착(STA) 이후 충분히 쉬어야 신청할 수 있습니다." },
     { label:"노선 언어/성별 자격",
       status:"WARN",
       detail:`내 자격: ${genderStr} · ${langStr} — MNL(남성 필수), 일본/중국 노선 배정 자격 확인`,
-      ref: "객실 편조 기준 — MNL(마닐라) 노선은 남성 승무원 1인 이상 필수 탑승. 일본 노선은 일본어 전공 또는 일본어 방송 자격 보유자 배정 우선. 중국 노선도 동일 기준 적용." },
+      ref: "객실 편조 기준 — MNL은 남성 승무원 1인 이상 필수. 일본·중국 노선은 해당 언어 자격자 우선 배정." },
   ];
 }
 
@@ -1663,37 +1661,37 @@ function checkRulesForSelection() {
         const gradeTxt = mutual.length ? ` · 요청 가능 등급 ${mutual.join("/")}` : "";
         return `${ROLE_LABELS[state.user.roleType]} · ${pos} 글 전체 노출${gradeTxt}`;
       })(),
-      ref: "편조 기준 — 기장↔기장, 부기장↔부기장 간 스왑만 가능. 목록에는 등급과 무관하게 같은 포지션 글이 모두 뜨고, 등급이 맞지 않는 글은 요청 단계에서 차단됩니다. A/B등급은 서로 교환 가능하며 C등급은 C등급끼리만 가능합니다." },
+      ref: "편조 기준 — 기장↔기장, 부기장↔부기장만 교환 가능. A·B등급은 서로, C등급은 C등급끼리만 됩니다." },
     { label:"비행 편조 기준", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
       detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족",
-      ref: "편조 기준표 — 기장 등급(A/B), 부기장 등급(A/B) 별 운항 가능 노선 제한. B등급 기장+A등급 FO 조합, A등급 기장+B등급 FO 조합 가능 여부 편조팀 확인 필요." },
+      ref: "편조 기준표 — 기장·부기장 등급 조합에 따라 운항 가능 노선이 제한됩니다." },
     { label:"기종 조건", status: ss.every(userAircraftOK) ? "PASS" : "FAIL",
       detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성",
-      ref: "기종 자격 — NG(B737-800)/MAX(B737-8/10) 자격은 별도 취득. NG 자격만 있으면 MAX 비행 불가. 기종이 다른 패턴과 스왑 시 자동 FAIL 처리됩니다." },
+      ref: "기종 자격 — NG(737-800)와 MAX(737-8/10)는 자격이 다릅니다. 내 자격에 없는 기종은 스왑 불가." },
     { label:"EDTO 조건", status: needsEdto && !state.user.edto ? "FAIL" : "PASS",
       detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음",
-      ref: "EDTO (Extended-range Twin-engine Operations) — 쌍발 항공기 장거리 운항 자격. 제주항공의 경우 BKI·CXR·MNL 등 일부 국제노선 비행에 필요. EDTO 미보유 시 해당 비행 스왑 불가." },
+      ref: "EDTO — 쌍발기 장거리 운항 자격. 미보유 시 해당 비행은 스왑할 수 없습니다." },
     { label:"CAT II/III 조건", status: needsCat3 && !state.user.cat3 ? "WARN" : "PASS",
       detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음",
-      ref: "CAT II/III — 저시정(안개 등) 착륙 자격. 특정 기상 조건이 예상되는 비행 편에 지정. 미보유 시 해당 비행 스왑 가능하나 기상 악화 시 운항 제한될 수 있어 편조팀 확인 권장." },
+      ref: "CAT II/III — 저시정 착륙 자격. 미보유 시에도 스왑은 되지만 기상 악화 시 운항이 제한될 수 있습니다." },
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
-      ref: "스왑 성사 후 J-CREW에 근무교환 신청서를 변경 시작일의 2영업일 전 17:00까지 제출해야 합니다. 예: 수요일 비행 변경 건은 전주 월요일 17시까지이며, 이후에는 회사 접수가 불가합니다." },
+      ref: "스왑 성사 후 J-CREW에 변경 시작일 2영업일 전 17:00까지 신청해야 합니다. 이후에는 접수되지 않습니다." },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
-      ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
+      ref: "월 최대 승무시간 90시간. 스왑 후 초과하면 편조 불가, 80시간부터 확인 표시." },
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
     restWindowCheck(),
     { label:"특수공항 자격 갱신 비행", status: hasLocked ? "FAIL" : "PASS",
       detail: hasLocked ? "자격 갱신 지정 비행 포함 — SWAP 불가" : "해당 없음",
-      ref: "특수공항 자격 갱신 비행 — TAG, HKG 등 특수공항 자격 유지를 위한 지정 비행은 스왑 대상에서 제외됩니다." },
+      ref: "특수공항 자격 유지를 위해 지정된 비행은 스왑 대상에서 제외됩니다." },
     { label:"공휴일/연휴 SWAP 제한", status: blockedHoliday ? "WARN" : "PASS",
       detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
-      ref: "공휴일·연휴 편조 정책 — 설날·추석 연휴 등 특별 기간은 회사 별도 편조 정책 적용. 스왑 가능 여부를 편조팀에 사전 문의 필요 (070-7420-1756)." },
+      ref: "설날·추석 등 연휴는 별도 편조 정책이 적용됩니다. 편조팀에 사전 문의하세요." },
     { label:"RSV/STBY 부분 SWAP 차단", status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
-      ref: "RSV·STBY 연속 패턴 단위 스왑 — 연속된 RSV/STBY는 개별 분리 스왑 불가. 인접 RSV/STBY가 있으면 모두 함께 선택해야 합니다." },
+      ref: "연속된 RSV·STBY는 나눠서 바꿀 수 없습니다. 인접한 것을 모두 함께 선택해주세요." },
   ];
 }
 

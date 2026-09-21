@@ -258,7 +258,7 @@ test("앱이 확인하지 못한 항목을 '모두 통과'에 섞지 않는다",
   assert.match(app, /\.\.\.cumulativeLimitChecks\(rules\)/);
   assert.doesNotMatch(app, /key: "yearlyHoursLimit"/, "365일 항목은 화면에 두지 않는다");
   // 조항 번호는 개정되면 틀린 인용이 된다 — 조문 이름으로만 쓴다
-  assert.doesNotMatch(app, /FOM 5\.5\.2\.2 —/);
+
   // 연속 365일(yearlyHoursLimit)은 뺐다 — 근무표가 한두 달치뿐이라 사실상 언제나
   // "확인 불가"로만 떠서 화면만 어지럽혔다. 한도 값 자체는 RULES에 남아 있다.
   for (const key of ["consecutive28dLimit", "duty7dLimit", "duty28dLimit"]) {
@@ -296,7 +296,9 @@ test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 �
   assert.doesNotMatch(app, /조종사 연속 근무 한도 5일/);
   assert.match(app, /restWindowCheck\(\)/);
   assert.match(app, /7일 내 30시간 연속 휴식/);
-  assert.match(app, /FOM 5\.5\.3 가\. 주2\)/);
+  // 조항 번호는 FOM 이 개정되면 틀린 인용이 된다 — 조문 이름만 쓴다.
+  assert.match(app, /FOM 비행근무시간 제한/);
+  assert.doesNotMatch(app, /FOM \d+\.\d+/, "FOM 조항 번호를 넣지 않는다");
   assert.match(html, /rest-window\.js/);
 
   // 3인 편조 승무시간은 FOM이 법(13h)보다 엄격한 12h다 — 제주항공은 기내 휴식시설
