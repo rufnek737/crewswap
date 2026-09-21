@@ -1318,6 +1318,25 @@ function cumulativeLimitChecks(rules) {
   });
 }
 
+/* 연속 7일마다 30시간 연속 휴식 (FOM 5.5.3 가. 주2).
+   예전에는 "연속 근무일 5일 미만"을 검사했는데, 항공안전법 시행규칙 별표18·JPU
+   단체협약·FOM 어디에도 그런 조항이 없었다. 근거 없는 숫자로 "불가"를 띄우고 있었다. */
+function restWindowCheck() {
+  const api = window.CrewSwapRestWindow;
+  const base = { label: "7일 내 30시간 연속 휴식" };
+  if (!api) return { ...base, status: "UNKNOWN", detail: "확인 불가", ref: null };
+  const result = api.check(state.schedules || []);
+  return {
+    ...base,
+    status: result.status,
+    detail: api.detailText(result),
+    ref: "FOM 5.5.3 가. 주2) — 운항승무원에게 연속되는 7일마다 연속되는 30시간 이상의 휴식을 부여해야 합니다. "
+      + "연속 근무 일수 자체를 제한하는 조항은 항공안전법 시행규칙 별표18·단체협약·FOM 어디에도 없습니다 — "
+      + "규정이 보는 것은 근무를 며칠 이어서 했는지가 아니라 7일 안에 30시간 연속 휴식이 있었는지입니다."
+      + (result.status === "UNKNOWN" ? " 불러온 근무표가 7일에 미치지 못해 앱이 확인하지 못했습니다." : ""),
+  };
+}
+
 function calcCumulative() {
   const monthScheds = currentMonthSchedules();
   const totalMin = monthScheds.reduce((sum, s) => sum + flightMinutesOf(s), 0);
@@ -1665,9 +1684,7 @@ function checkRulesForSelection() {
       ref: "항공법 제46조 및 운항기술기준 — 승무원 월 최대 비행 시간 90시간. 스왑 후 월 승무시간이 90시간을 초과하면 편조 불가. 80시간 이상 시 WARN 처리됩니다." },
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
-    { label:"연속 근무일 (5일 미만)", status: cum.maxConsec >= 6 ? "FAIL" : cum.maxConsec >= 5 ? "WARN" : "PASS",
-      detail:`최대 ${cum.maxConsec}일`,
-      ref: "항공법 승무기준 — 조종사 연속 근무 한도 5일(OFF 제외). 5일째 WARN, 6일 이상 FAIL. OFF·VAC는 연속 근무일 계산에서 제외됩니다." },
+    restWindowCheck(),
     { label:"특수공항 자격 갱신 비행", status: hasLocked ? "FAIL" : "PASS",
       detail: hasLocked ? "자격 갱신 지정 비행 포함 — SWAP 불가" : "해당 없음",
       ref: "특수공항 자격 갱신 비행 — TAG, HKG 등 특수공항 자격 유지를 위한 지정 비행은 스왑 대상에서 제외됩니다." },

@@ -285,3 +285,21 @@ test("항공사 목록이 2026년 합병 이후 상태를 따른다", () => {
   assert.match(app, /ASIANA: "대한항공"/);
   assert.match(app, /AIRBUSAN: "진에어"/);
 });
+
+test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 바꿨다", () => {
+  // 항공안전법 시행규칙 별표18·JPU 단체협약·FOM 어디에도 연속 근무일수 제한은 없다.
+  // 실제 조항은 FOM 5.5.3 가. 주2) — 연속 7일마다 30시간 연속 휴식.
+  const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.doesNotMatch(app, /연속 근무일 \(5일 미만\)/);
+  assert.doesNotMatch(app, /조종사 연속 근무 한도 5일/);
+  assert.match(app, /restWindowCheck\(\)/);
+  assert.match(app, /7일 내 30시간 연속 휴식/);
+  assert.match(app, /FOM 5\.5\.3 가\. 주2\)/);
+  assert.match(html, /rest-window\.js/);
+
+  // 3인 편조 승무시간은 FOM이 법(13h)보다 엄격한 12h다 — 제주항공은 기내 휴식시설
+  // 3등급 미충족이라 한도를 늘릴 수 없다. 13h로 바꾸면 규정 위반을 통과시킨다.
+  assert.match(app, /consecutive24hAugmentedLimit: 12/);
+});
