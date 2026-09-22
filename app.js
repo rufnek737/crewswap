@@ -1332,23 +1332,6 @@ function formatHM(minutes) {
    앱은 내가 어느 공항 자격을 가졌는지 알 수 없으므로 막지 않고 알린다.
    자격 갱신 지정 비행은 그 기장·부기장이 직접 가야 해서 스왑이 불가한데, 근무표에 그것이
    어떻게 표시되는지는 아직 확인되지 않았다(OPEN_ITEMS 1번). */
-/* SWAP 게시 기한 — 운항가이드 스케줄 변경 절차 상세.
- *   가) SWAP 희망일(패턴 시작일) 기준 최소 10일 전까지 게시판에 올린다.
- *   나) 7일 전까지 상대가 없으면 운항편조팀에 메일로 대상자를 요청할 수 있다.
- *
- * CrewSwap 이 그 게시판 역할을 한다. 늦게 올렸다고 규정 위반은 아니지만, 늦을수록 회사
- * 절차가 달라지므로 알려 준다. 막지는 않는다 — 막을 일이 아니라 알릴 일이다. */
-function postingWindowCheck(firstDay, month) {
-  const start = dayToDate(firstDay, month);
-  const now = today();
-  const days = Math.ceil((start - now) / 86400000);
-  const base = { label: "SWAP 게시 기한 (10일 전)" };
-  const ref = "패턴 시작일 10일 전까지 게시하는 것이 원칙이며, 7일 전까지 상대가 없으면 운항편조팀에 대상자를 요청할 수 있습니다.";
-  if (days >= 10) return { ...base, status: "PASS", detail: `시작까지 ${days}일`, ref };
-  if (days >= 7) return { ...base, status: "WARN", detail: `시작까지 ${days}일 — 게시 권장 기한(10일) 경과`, ref };
-  return { ...base, status: "WARN", detail: `시작까지 ${days}일 — 상대가 없으면 운항편조팀에 문의하세요`, ref };
-}
-
 function specialAirportCheck(ss, hasLocked) {
   if (hasLocked) {
     return { label: "특수공항 자격 갱신 비행", status: "FAIL",
@@ -1807,7 +1790,6 @@ function checkRulesForSelection() {
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
     restWindowCheck(),
-    postingWindowCheck(firstDay, ss[0].month),
     specialAirportCheck(ss, hasLocked),
     { label:"공휴일/연휴 SWAP 제한", status: blockedHoliday ? "WARN" : "PASS",
       detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
