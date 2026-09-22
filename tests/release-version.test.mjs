@@ -45,3 +45,11 @@ test('빌드 번호는 스토어별로 따로 센다', () => {
   assert.match(pbx, /CURRENT_PROJECT_VERSION = \d+;/);
   assert.match(gradle, /versionCode \d+/);
 });
+
+test('근무교환 마감은 두 직군 모두 시각을 명시한다', () => {
+  // 설정에 시각이 없으면 코드 기본값이 조용히 끼어들어, 어디서 온 숫자인지 알 수 없다.
+  const app = read('app.js');
+  const deadlines = [...app.matchAll(/deadline: \{ businessDays: (\d+), hour: (\d+) \}/g)];
+  assert.equal(deadlines.length, 2, '운항·객실 두 곳 모두 시각이 적혀 있어야 한다');
+  for (const [, , hour] of deadlines) assert.equal(hour, '17');
+});

@@ -147,7 +147,6 @@ const RULES = {
     aircraftOptions: ["NG","NG_MAX"],
     pairingRule: { A: ["A","B","C"], B: ["A","B"], C: ["A"] },
     specialAirports: ["CXR","TAG","BKI"],
-    monthlyHoursLimit: 90,
     // 아래 한도는 FOM 비행근무시간 제한 표 기준(확인 시점 REV.70, 2023.08.30 — 개정되면 값을 다시 볼 것).
     // 기본은 기장 1명 + 기장 외 조종사 1명(2인 편조) 행이고, 근무코드가 3으로 시작하는
     // 3인 편조(기장2+부기장1, 예: 발리 3PC/3NC)는 승무시간 12h 행이 적용된다.
@@ -168,9 +167,8 @@ const RULES = {
   JEJU_CABIN: {
     label: "제주항공 객실 승무원",
     active: true,
-    deadline: { businessDays: 3 }, // 패턴 시작일 미포함 영업 3일 전
+    deadline: { businessDays: 3, hour: 17 }, // 패턴 시작일 미포함 영업 3일 전 17시
     positions: ["CC","AP","PS","SP","CP"], // CrewConnex AABB 코드 앞 2자리
-    monthlyHoursLimit: 100,        // 객실 승무시간 월 100h (FOM 객실 승무시간 제한)
     swapLimitMonthly: 2,           // 한달 2회 (내가 진행하는 스왑)
     consentLimitMonthly: 1,        // Swap 동의권 한달 1회 (남의 요청을 수락하는 횟수)
     swapLimitYearly: 12,           // 연 12회
@@ -1383,7 +1381,9 @@ function dDayInfo(day, month) {
   /* 회사 근무교환 마감 — 패턴 시작일 기준으로 영업일을 거꾸로 센다.
      운항: 영업일 2일 전 17시까지 결재 기안과 **최종승인**이 끝나야 한다(운항가이드
      스케줄 변경 기준 및 절차). 신청 접수가 아니라 승인 완료 기준이라 더 이르다.
-     객실: 영업일 3일. 패턴 시작일을 세지 않고 주말을 건너뛴다(객실 Swap Guide). */
+     객실: 영업일 3일. 패턴 시작일을 세지 않고 주말을 건너뛴다(객실 Swap Guide).
+     마감 시각은 객실 가이드에 없지만 운항과 같은 17시로 통일한다(Kay, 2026-09-23) —
+     예전에는 설정에 시각이 없어 코드 기본값이 조용히 끼어들고 있었다. */
   const rules = currentRules();
   const bDays = (rules.deadline && rules.deadline.businessDays) || 2;
   const deadlineHour = (rules.deadline && rules.deadline.hour) || 17;
@@ -1689,12 +1689,8 @@ function checkRulesForSelection() {
   // 객실 승무원: 별도 룰 체크
   if (state.user.crewType === "CABIN") return checkRulesCabin(ss, rules);
 
-  const cum = calcCumulative();
   const firstDay = ss[0].day;
   const dd = dDayInfo(firstDay, ss[0].month);
-
-  const totalFlightMin = ss.reduce((sum, s) => sum + flightMinutesOf(s), 0);
-  const monthAfter = cum.totalHours; // 단순화: 선택분 포함 합계
 
   const pairChecks = ss.map(s => crewPairingCheck(s));
   const pairFail = pairChecks.some(c => c.status === "FAIL");
@@ -1739,9 +1735,6 @@ function checkRulesForSelection() {
     { label:"상호 합의 스왑 수당", status:"NA",
       detail: "OFF 협조 수당·모기지 수당 미지급",
       ref: "개인 상호 합의로 스케줄을 바꾸면 그로 인해 생긴 OFF 협조 수당과 모기지 수당은 지급되지 않습니다." },
-    { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
-      detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
-      ref: "월 최대 승무시간 90시간. 스왑 후 초과하면 편조 불가, 80시간부터 확인 표시." },
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
     restWindowCheck(),
