@@ -304,6 +304,37 @@ async function handleSchedulesGet(env, authEmail) {
   return json({ schedules: rec?.schedules || [], updatedAt: rec?.updatedAt || null });
 }
 
+/* 알고 있는 A등급 명단.
+ *
+ * C등급인 사람이 그 비행에 타고 있다는 사실이 반대 좌석이 A임을 증명한다(편조표가
+ * 양방향이라서). A만 모은다 — B·C 는 언젠가 상향되는 과도기 등급이라 쌓으면 썩는다.
+ *
+ * **이 명단은 기기로 내려보내지 않는다.** 판정은 서버가 해서 참/거짓만 알려준다.
+ * 가입하지 않은 사람의 이름을 다루는 일이라 밖으로 흘릴 이유가 없다.
+ */
+const A_GRADE_KEY = name => `agrade:${name}`;
+
+async function recordAGrades(env, names, sourceEmail) {
+  const now = new Date().toISOString();
+  await Promise.all((names || []).slice(0, 200).map(async name => {
+    const key = A_GRADE_KEY(name);
+    const prev = await env.POSTS.get(key, { type: 'json' });
+    await env.POSTS.put(key, JSON.stringify({
+      grade: 'A',
+      firstSeen: prev?.firstSeen || now,
+      lastSeen: now,
+      sources: [...new Set([...(prev?.sources || []), sourceEmail])].slice(-5),
+    }));
+  }));
+}
+
+async function knownAGrades(env, names) {
+  const unique = [...new Set(names || [])].slice(0, 50);
+  const found = await Promise.all(unique.map(async name =>
+    (await env.POSTS.get(A_GRADE_KEY(name), { type: 'json' })) ? name : null));
+  return new Set(found.filter(Boolean));
+}
+
 async function handleSchedulesSync(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
@@ -312,6 +343,12 @@ async function handleSchedulesSync(request, env, authEmail) {
   if (schedules.length > 500) return json({ error: '스케줄 항목이 너무 많습니다' }, 400);
   const updatedAt = new Date().toISOString();
   await env.POSTS.put(`schedule:${authEmail}`, JSON.stringify({ schedules, updatedAt }));
+
+  // 이 사람이 C등급이면, 그가 탄 비행의 반대 좌석은 규정상 A로 확정된다.
+  const profile = await env.POSTS.get(`user:${authEmail}`, { type: 'json' });
+  const names = crewGrades.aGradesFromRoster(schedules, profile?.roleType, gradePolicy);
+  if (names.length) await recordAGrades(env, names, authEmail);
+
   return json({ ok: true, updatedAt });
 }
 
@@ -1036,6 +1073,20 @@ async function handlePostsGet(request, env) {
       }
       return pub;
     });
+
+    /* 아는 A등급 명단으로 각 글의 반대 좌석을 미리 판정해 준다.
+       판정은 서버가 하고 참/거짓만 내려보낸다 — 명단 자체는 기기로 나가지 않는다. */
+    const viewer = auth ? await env.POSTS.get(`user:${auth.email}`, { type: 'json' }) : null;
+    if (viewer?.crewType === 'PILOT' && gradePolicy.gradeOf(viewer.roleType)) {
+      const everyName = posts.flatMap(p =>
+        crewGrades.parseCrew(p.offered?.crewComposition).map(c => c.name));
+      const known = await knownAGrades(env, everyName);
+      for (const p of posts) {
+        if (!p.offered) continue;
+        const verdict = crewGrades.oppositeIsKnownA(p.offered, viewer.roleType, known, gradePolicy);
+        if (verdict === true) p.offered.oppositeGrades = ['A'];
+      }
+    }
     return json({ posts });
   } catch (e) { return json({ error: e.message }, 500); }
 }
