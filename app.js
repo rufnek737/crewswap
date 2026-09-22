@@ -630,6 +630,18 @@ function dutyMinutesOf(s) {
  *     도착공항 ICN이면 12h00(인천-김포 셔틀 40분 포함), 그 외(GMP/PUS 등) 11h20.
  *     (Rest 10h 포함값. 객실 FOM상 비행근무 14h 초과 시 휴식 14h → +4h 가산) */
 
+/* [운항] 휴식은 체크아웃 시각부터 바로 세지 않는다.
+ *
+ * 편조가 스왑을 볼 때 체크아웃에 **1시간 40분**을 더한 시각부터 휴식을 센다(Kay가 편조에
+ * 확인). 1시간은 집까지 이동, 40분은 지연 여유다. 체크아웃 자체는 CrewConnex 가 이미
+ * 계산해서 준다 — 인천은 램프인 +1시간, 김포는 램프인 +20분.
+ *
+ *   예) 램프인 13:35 국제선 → 체크아웃 14:35 → 휴식 시작 16:15
+ *
+ * 이 범퍼가 없으면 앱이 편조보다 느슨해진다. 앱은 통과시켰는데 회사에서 반려되는 쪽이
+ * 가장 나쁘다 — 사용자는 앱을 믿고 상대와 약속까지 끝낸 뒤에 되돌려야 한다. */
+const REST_START_BUMPER_MIN = 100;
+
 // [운항] 비행근무시간(분) → 최소 휴식(분). FOM 비행근무시간 제한 가 표.
 function minRestMinForFDT(fdtMin) {
   const h = fdtMin / 60;
@@ -713,7 +725,7 @@ function restCheckIncoming(offered, givenAwayDays) {
         }
       } else {
         // 운항: C/O(퇴근) → C/I(출두), 직전 근무 FDT 기준
-        gap = newCI - absMinAt(prev.day, prev.releaseTime);
+        gap = newCI - (absMinAt(prev.day, prev.releaseTime) + REST_START_BUMPER_MIN);
         need = minRestMinForFDT(dutyMinutesOf(prev));
       }
       if (gap != null && !isNaN(gap) && gap < need)
@@ -739,7 +751,7 @@ function restCheckIncoming(offered, givenAwayDays) {
         if (offered.releaseTime && /^\d/.test(offered.releaseTime)) {
           const lastCI = offered.lastReport && /^\d/.test(offered.lastReport) ? offered.lastReport : firstCI;
           const blockFDT = Math.max(0, absMinAt(lastDay, offered.releaseTime) - absMinAt(lastDay, lastCI));
-          gap = nextCI - absMinAt(lastDay, offered.releaseTime);
+          gap = nextCI - (absMinAt(lastDay, offered.releaseTime) + REST_START_BUMPER_MIN);
           need = minRestMinForFDT(blockFDT);
         }
       }
@@ -755,7 +767,10 @@ function restIssueMessage(rc) {
   if (!rc || rc.ok) return null;
   const i = rc.issues[0];
   const where = i.side === "before" ? "직전" : "직후";
-  return `❌ 휴식시간 부족 — ${where} 근무(${i.label})와 간격 ${fmtDur(i.gap)} · 최소 ${fmtDur(i.need)} 필요`;
+  // 간격이 체크아웃 시각 그대로가 아니라는 점을 밝힌다. 안 밝히면 사용자가 자기 계산과
+  // 달라 앱이 틀렸다고 여긴다.
+  return `❌ 휴식시간 부족 — ${where} 근무(${i.label}) 기준 ${fmtDur(i.gap)} · 최소 ${fmtDur(i.need)} 필요`
+    + `\n(휴식은 체크아웃 ${fmtDur(REST_START_BUMPER_MIN)} 뒤부터 셉니다 — 이동 1시간 + 여유 40분)`;
 }
 
 /* ====== 노조 협약(JPUF 단체교섭 협약서) — 모기지 휴식일수 검증 (운항승무원 전용) ======
