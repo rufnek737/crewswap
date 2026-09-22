@@ -52,7 +52,6 @@ const CABIN_ROLE_LABELS = {
 // 객실 직급 위계 (STBY 상향 체크용: 낮을수록 하위)
 const CABIN_RANK = { CC:1, AP:2, PS:3, SP:4, CP:5 };
 
-const FO_GRADES_BY_CAPTAIN_GRADE = { A: ["A","B","C"], B: ["A","B"], C: ["A"] };
 // 등급 조합 판정은 grade-policy.js 한 곳에서만 한다 (목록 노출은 포지션만, 요청은 등급까지)
 const GRADE_POLICY = window.CrewSwapGradePolicy;
 
@@ -1420,31 +1419,49 @@ function companyDeadlineText(day, month, dd) {
     : `${targetLabel} 회사 제출: ${due}까지`;
 }
 
+/* 등급에 따른 비행편조 — 운항본부 인사관리 지침의 편조표.
+ *
+ *   기장 A → 부기장 A·B·C    기장 B → 부기장 A·B    기장 C → 부기장 A
+ *
+ * 내가 가져올 비행의 반대 좌석 등급을 본다. 사람 대 사람이 아니라 조종석 안의 조합이
+ * 규정이다 — 예전에 grade-policy.js 에 있던 사용자끼리의 등급 궁합표는 출처가 없었다.
+ *
+ * 등급을 알 수 없는 비행이 많다. 그때는 막지 않고 경고한다. A등급은 어느 등급과도 편조가
+ * 되므로 경고할 것이 없고, B·C 등급만 확인이 필요하다.
+ */
 function crewPairingCheck(s) {
-  if (!s.captainGrade || !s.foGrade) return { status:"NA", label:"편조 기준 해당 없음", detail:"OFF/RSV/STBY/LAYOV" };
-  // 미가입 → 등급 모름, 확인 필요
   if (!state.user.hasSignedUp) {
     return { status:"WARN", label:"가입 후 확인 가능", detail:"내 등급 정보가 없어 편조 기준 자동 체크 불가" };
   }
   const isCapt = state.user.roleType.startsWith("CAPTAIN");
+  const isFo = state.user.roleType.startsWith("FO");
+  if (!isCapt && !isFo) return { status:"NA", label:"편조 기준 해당 없음", detail:"등급 판정 대상 아님" };
+
   const myGrade = state.user.roleType.replace("CAPTAIN_","").replace("FO_","");
-  if (isCapt) {
-    // 기장: 내 등급이 허용하는 FO 등급 목록 확인
-    const allowedFo = FO_GRADES_BY_CAPTAIN_GRADE[myGrade] || [];
-    if (!allowedFo.includes(s.foGrade)) {
-      return { status:"FAIL", label:"편조 기준 불가", detail:`${myGrade}등급 기장 → ${allowedFo.join("/")}등급 부기장만 가능 (이 스케줄: ${s.foGrade}등급)` };
-    }
-    return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급 기장 · ${s.foGrade}등급 부기장 편조 가능` };
-  } else {
-    // 부기장: 내 등급을 허용하는 기장 등급 목록 확인
-    const allowedCapt = Object.entries(FO_GRADES_BY_CAPTAIN_GRADE)
-      .filter(([, fos]) => fos.includes(myGrade))
-      .map(([k]) => k);
-    if (!allowedCapt.includes(s.captainGrade)) {
-      return { status:"FAIL", label:"편조 기준 불가", detail:`${myGrade}등급 부기장은 ${allowedCapt.join("/")}등급 기장과만 편조 가능 (이 스케줄: ${s.captainGrade}등급 기장)` };
-    }
-    return { status:"PASS", label:"편조 기준 충족", detail:`${s.captainGrade}등급 기장 · ${myGrade}등급 부기장 편조 가능` };
+  const otherGrade = isCapt ? s.foGrade : s.captainGrade;
+  const otherLabel = isCapt ? "부기장" : "기장";
+
+  // 비행이 아닌 근무(OFF·RSV·STBY·LAYOV)는 편조가 없다.
+  if (!s.captainGrade && !s.foGrade && !["국내선","국제선"].includes(s.type)) {
+    return { status:"NA", label:"편조 기준 해당 없음", detail:"OFF/RSV/STBY/LAYOV" };
   }
+
+  // A등급은 어느 등급과도 편조가 된다 — 확인할 것이 없다.
+  const allowed = GRADE_POLICY.allowedOpposite(state.user.roleType);
+  const acceptsAll = allowed.length >= 3;
+
+  if (!otherGrade) {
+    if (acceptsAll) {
+      return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급은 모든 등급과 편조 가능` };
+    }
+    return { status:"WARN", label:"편조 기준 확인 필요",
+      detail:`${myGrade}등급은 ${allowed.join("/")}등급 ${otherLabel}과만 편조 가능한데, 이 비행의 ${otherLabel} 등급을 알 수 없습니다` };
+  }
+  if (!allowed.includes(otherGrade)) {
+    return { status:"FAIL", label:"편조 기준 불가",
+      detail:`${myGrade}등급은 ${allowed.join("/")}등급 ${otherLabel}과만 편조 가능 (이 비행: ${otherGrade}등급)` };
+  }
+  return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급 · ${otherGrade}등급 ${otherLabel} 편조 가능` };
 }
 
 function userAircraftOK(s) {
@@ -1700,16 +1717,12 @@ function checkRulesForSelection() {
   });
 
   return [
-    { label:"포지션/등급 매칭", status:"PASS", detail: (() => {
-        const pos = GRADE_POLICY.positionLabelOf(state.user.roleType) || "동일 포지션";
-        const mutual = GRADE_POLICY.mutualGrades(state.user.roleType);
-        const gradeTxt = mutual.length ? ` · 요청 가능 등급 ${mutual.join("/")}` : "";
-        return `${ROLE_LABELS[state.user.roleType]} · ${pos} 글 전체 노출${gradeTxt}`;
-      })(),
-      ref: "편조 기준 — 기장↔기장, 부기장↔부기장만 교환 가능. A·B등급은 서로, C등급은 C등급끼리만 됩니다." },
-    { label:"비행 편조 기준", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
+    { label:"포지션 매칭", status:"PASS",
+      detail: `${ROLE_LABELS[state.user.roleType]} · ${GRADE_POLICY.positionLabelOf(state.user.roleType) || "동일 포지션"} 글 전체 노출`,
+      ref: "기장↔기장, 부기장↔부기장 간에만 교환할 수 있습니다." },
+    { label:"등급에 따른 비행편조", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
       detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족",
-      ref: "편조 기준표 — 기장·부기장 등급 조합에 따라 운항 가능 노선이 제한됩니다." },
+      ref: "기장 등급에 따라 함께 탈 수 있는 부기장 등급이 정해집니다 — A등급 기장은 A·B·C, B등급은 A·B, C등급은 A등급 부기장과 편조합니다." },
     { label:"기종 조건", status: ss.every(userAircraftOK) ? "PASS" : "FAIL",
       detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성",
       ref: "기종 자격 — NG(737-800)와 MAX(737-8/10)는 자격이 다릅니다. 내 자격에 없는 기종은 스왑 불가." },
@@ -1823,7 +1836,21 @@ function matchesDirection(post, dir) {
 // 등급이 안 맞아도 목록에는 그대로 두고 여기 결과로 버튼만 막는다.
 function postGradeCheck(post) {
   if (state.user.crewType === "CABIN") return { status:"NA", reason:"", detail:"" };
-  return GRADE_POLICY.check(state.user.roleType, post?.ownerRole, { known: !!state.user.hasSignedUp });
+  const result = GRADE_POLICY.check(state.user.roleType, post?.ownerRole, { known: !!state.user.hasSignedUp });
+  if (result.status !== "PASS") return result;
+
+  /* C등급이 한쪽에만 얽힌 교환은 규정 위반이 아니지만 편조팀이 선호하지 않는다.
+     막지 않고 알려만 준다 — 앱이 통과시켜도 회사에서 반려될 수 있다. */
+  const mine = GRADE_POLICY.gradeOf(state.user.roleType);
+  const theirs = GRADE_POLICY.gradeOf(post?.ownerRole);
+  if (mine && theirs && mine !== theirs && (mine === "C" || theirs === "C")) {
+    return {
+      status: "WARN",
+      reason: "",
+      detail: `${mine}등급 ↔ ${theirs}등급 — 편조팀이 선호하지 않아 회사에서 반려될 수 있습니다`,
+    };
+  }
+  return result;
 }
 
 function visiblePosts() {
@@ -1925,8 +1952,7 @@ function candidateCountForOffered() {
   return state.posts.filter(p => {
     const roleOK = isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
-      : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole)
-        && GRADE_POLICY.isCompatible(state.user.roleType, p.ownerRole);
+      : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole);
     const typeOK = p.wanted.types.includes(myType)
       || p.wanted.types.includes("아무거나")
       || (isFlight && p.wanted.types.includes("비행(전체)"));
@@ -2932,6 +2958,9 @@ function renderMatches() {
     const isSubmitting = post.status === "submitting";
     const grade = postGradeCheck(post);
     const gradeBlocked = grade.status === "FAIL";
+    // 편조팀 선호 경고 — 막지 않고 버튼 위에 띄운다.
+    const gradeWarnHtml = grade.status === "WARN" && grade.detail
+      ? `<div class="card-grade-warn">⚠ ${escapeHtml(grade.detail)}</div>` : "";
     return `
     <article class="match-card${isSubmitting ? " is-submitting" : ""}${gradeBlocked ? " is-grade-blocked" : ""}">
       <div class="card-head">
@@ -2952,6 +2981,8 @@ function renderMatches() {
       ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${wantedTxt}</div>` : ""}
 
       ${matchPostDetailsHtml(post.offered)}
+
+      ${gradeWarnHtml}
 
       <div class="card-actions">
         ${post.status === "submitting"

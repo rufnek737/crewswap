@@ -84,10 +84,24 @@ test('지갑 응답에 쿠폰 잔량이 실린다', () => {
 const pilot = (roleType, extra = {}) => ({ crewType: 'PILOT', roleType, aircraft: 'NG_MAX', ...extra });
 const urgentPost = (ownerRole, offered = {}) => ({ crewType: 'PILOT', ownerRole, urgent: true, offered: { ...offered } });
 
-test('급구 알림은 등급이 맞는 사람에게만 간다', () => {
+test('급구 알림은 그 비행에 편조될 수 있는 사람에게 간다', () => {
+  // 등급은 글쓴이와 나를 견주는 것이 아니라, 그 비행에서 내 반대 좌석 등급을 본다.
+  const withFo = grade => urgentPost('CAPTAIN_A', { foGrade: grade });
+  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_C'), withFo('A'), gradePolicy), true);
+  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_C'), withFo('B'), gradePolicy), false);
+  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_A'), withFo('C'), gradePolicy), true);
+});
+
+test('편조 등급을 모르면 알림을 거르지 않는다', () => {
+  // 과하게 거르면 받을 수 있는 사람에게 급구가 닿지 않는다. 판정은 앱이 다시 한다.
   const post = urgentPost('CAPTAIN_A');
+  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_C'), post, gradePolicy), true);
   assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_B'), post, gradePolicy), true);
-  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_C'), post, gradePolicy), false);
+});
+
+test('글쓴이와 등급이 달라도 알림은 간다', () => {
+  // 사용자끼리의 등급 궁합은 규정이 아니다.
+  assert.equal(subscriberCanTakeUrgentPost(pilot('CAPTAIN_C'), urgentPost('CAPTAIN_A'), gradePolicy), true);
 });
 
 test('급구 알림도 직책과 자격은 기존 규칙을 그대로 따른다', () => {

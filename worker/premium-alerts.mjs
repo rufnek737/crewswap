@@ -79,7 +79,13 @@ export function matchingSearches(post, searches) {
 export function subscriberCanTakeUrgentPost(profile, post, gradePolicy) {
   if (!subscriberCanUsePost(profile, post)) return false;
   if ((profile?.crewType || post?.crewType) !== "PILOT") return true;
-  return gradePolicy.isCompatible(profile?.roleType, post?.ownerRole);
+  if (!gradePolicy.samePosition(profile?.roleType, post?.ownerRole)) return false;
+  /* 등급은 사람 대 사람이 아니라 조종석 안의 조합이 규정이다. 이 글의 비행에서 내가 앉을
+     자리의 반대 좌석 등급을 본다. 모르면 보낸다 — 알림을 과하게 거르면 받을 수 있는
+     사람에게 급구가 닿지 않는다. */
+  const seat = String(profile?.roleType || "").startsWith("CAPTAIN")
+    ? post?.offered?.foGrade : post?.offered?.captainGrade;
+  return gradePolicy.pairs(profile?.roleType, seat) !== false;
 }
 
 // 객실 직급 위계. Swap Guide 5-가: STBY(RSV 포함) 변경은 동일 혹은 상위 Duty만 가능.
