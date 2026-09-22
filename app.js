@@ -1380,8 +1380,10 @@ function calcCumulative() {
 }
 
 function dDayInfo(day, month) {
-  // 회사 근무교환 신청 마감: 패턴 시작일 기준 영업일 역산
-  // (조종사 2영업일 전 17시 / 객실 3영업일 전)
+  /* 회사 근무교환 마감 — 패턴 시작일 기준으로 영업일을 거꾸로 센다.
+     운항: 영업일 2일 전 17시까지 결재 기안과 **최종승인**이 끝나야 한다(운항가이드
+     스케줄 변경 기준 및 절차). 신청 접수가 아니라 승인 완료 기준이라 더 이르다.
+     객실: 영업일 3일. 패턴 시작일을 세지 않고 주말을 건너뛴다(객실 Swap Guide). */
   const rules = currentRules();
   const bDays = (rules.deadline && rules.deadline.businessDays) || 2;
   const deadlineHour = (rules.deadline && rules.deadline.hour) || 17;
@@ -1731,7 +1733,12 @@ function checkRulesForSelection() {
       ref: "EDTO — 쌍발기 장거리 운항 자격. 미보유 시 해당 비행은 스왑할 수 없습니다." },
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
-      ref: "스왑 성사 후 J-CREW에 변경 시작일 2영업일 전 17:00까지 신청해야 합니다. 이후에는 접수되지 않습니다." },
+      ref: "패턴 시작일 기준 영업일 2일 전 17시까지 결재 기안과 최종승인이 모두 끝나야 합니다. 신청만 해두면 늦습니다." },
+    /* 이 앱을 거치는 스왑은 전부 상호 합의라 늘 해당된다. 경고로 띄우면 매번 떠서
+       진짜 경고가 묻힌다 — 알아둘 것이지 막을 일이 아니므로 안내로 둔다. */
+    { label:"상호 합의 스왑 수당", status:"NA",
+      detail: "OFF 협조 수당·모기지 수당 미지급",
+      ref: "개인 상호 합의로 스케줄을 바꾸면 그로 인해 생긴 OFF 협조 수당과 모기지 수당은 지급되지 않습니다." },
     { label:"월 승무시간 (90h 미만)", status: monthAfter >= 90 ? "FAIL" : monthAfter >= 80 ? "WARN" : "PASS",
       detail:`현재 ${monthAfter.toFixed(1)}h / 90h`,
       ref: "월 최대 승무시간 90시간. 스왑 후 초과하면 편조 불가, 80시간부터 확인 표시." },
