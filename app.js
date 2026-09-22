@@ -1464,6 +1464,8 @@ function crewPairingCheck(s) {
   return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급 · ${otherGrade}등급 ${otherLabel} 편조 가능` };
 }
 
+/* 기종 자격 — MAX 교육을 받지 않은 인원이 남아 있어 그 사람들은 NG 만 탈 수 있다.
+   FOM 도 B737-800 과 B737-8 을 별개 기종으로 다루고, 자격은 해 기종 한정 증명 기준이다. */
 function userAircraftOK(s) {
   if (!s.aircraft) return true;
   if (state.user.aircraft === "NG_MAX") return true;
@@ -1471,8 +1473,6 @@ function userAircraftOK(s) {
 }
 function userQualOK(s) {
   if (s.requiresEdto && !state.user.edto) return false;
-  if (s.requiresCat2 && !state.user.cat2) return false;
-  if (s.requiresCat3 && !state.user.cat3) return false;
   return true;
 }
 
@@ -1698,7 +1698,6 @@ function checkRulesForSelection() {
   const pairWarn = !pairFail && pairChecks.some(c => c.status === "WARN");
   const pairDetailObj = pairChecks.find(c => c.status === "FAIL") || pairChecks.find(c => c.status === "WARN") || pairChecks.find(c => c.status === "PASS");
   const needsEdto = ss.some(s => s.requiresEdto);
-  const needsCat3 = ss.some(s => s.requiresCat3);
   const hasLocked = ss.some(s => s.lockReason);
 
   // 특정 사유로 차단되는 패턴
@@ -1729,9 +1728,6 @@ function checkRulesForSelection() {
     { label:"EDTO 조건", status: needsEdto && !state.user.edto ? "FAIL" : "PASS",
       detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음",
       ref: "EDTO — 쌍발기 장거리 운항 자격. 미보유 시 해당 비행은 스왑할 수 없습니다." },
-    { label:"CAT II/III 조건", status: needsCat3 && !state.user.cat3 ? "WARN" : "PASS",
-      detail: needsCat3 ? (state.user.cat3 ? "CAT III 자격 보유" : "CAT III 미보유 — 확인") : "해당 없음",
-      ref: "CAT II/III — 저시정 착륙 자격. 미보유 시에도 스왑은 되지만 기상 악화 시 운항이 제한될 수 있습니다." },
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
       ref: "스왑 성사 후 J-CREW에 변경 시작일 2영업일 전 17:00까지 신청해야 합니다. 이후에는 접수되지 않습니다." },
@@ -1786,7 +1782,6 @@ function matchScore(post) {
   if (!aircraftOK) return null;
   // 자격
   if (post.offered.edto && !state.user.edto) return null;
-  if (post.offered.cat3 && !state.user.cat3) return null;
 
   // 점수 계산 (100 만점)
   const breakdown = {
@@ -1839,15 +1834,15 @@ function postGradeCheck(post) {
   const result = GRADE_POLICY.check(state.user.roleType, post?.ownerRole, { known: !!state.user.hasSignedUp });
   if (result.status !== "PASS") return result;
 
-  /* C등급이 한쪽에만 얽힌 교환은 규정 위반이 아니지만 편조팀이 선호하지 않는다.
-     막지 않고 알려만 준다 — 앱이 통과시켜도 회사에서 반려될 수 있다. */
+  /* C등급이 한쪽에만 얽힌 교환은 규정 위반이 아니지만 회사에서 최종 반려될 수 있다.
+     막지 않고 알려만 준다 — 앱이 통과시켜도 상신이 통과한다는 뜻은 아니다. */
   const mine = GRADE_POLICY.gradeOf(state.user.roleType);
   const theirs = GRADE_POLICY.gradeOf(post?.ownerRole);
   if (mine && theirs && mine !== theirs && (mine === "C" || theirs === "C")) {
     return {
       status: "WARN",
       reason: "",
-      detail: `${mine}등급 ↔ ${theirs}등급 — 편조팀이 선호하지 않아 회사에서 반려될 수 있습니다`,
+      detail: `${mine}등급 ↔ ${theirs}등급 — 등급이 달라 최종 반려될 수 있습니다`,
     };
   }
   return result;
