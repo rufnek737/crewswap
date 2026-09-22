@@ -314,6 +314,13 @@ async function handleSchedulesGet(env, authEmail) {
  */
 const A_GRADE_KEY = name => `agrade:${name}`;
 
+/* 등급 하향은 사고·이벤트가 있을 때만 일어나고 주기가 없다(Kay). 그래서 "몇 달 지나면
+   틀렸을 것"이라고 기간을 정할 근거가 없다. 대신 **다시 목격될 때마다 갱신**하고, 오래
+   확인되지 않은 기록은 아는 것으로 치지 않는다. 앱이 하향을 알아챌 방법은 없으므로,
+   이 명단은 경고를 지우는 데만 쓰고 차단에는 쓰지 않는다.
+   동명이인은 근무표가 이름 뒤에 A·B·C 를 붙여 구분해 준다(김단비A). */
+const A_GRADE_STALE_MS = 365 * 24 * 60 * 60 * 1000;
+
 async function recordAGrades(env, names, sourceEmail) {
   const now = new Date().toISOString();
   await Promise.all((names || []).slice(0, 200).map(async name => {
@@ -328,10 +335,14 @@ async function recordAGrades(env, names, sourceEmail) {
   }));
 }
 
-async function knownAGrades(env, names) {
+async function knownAGrades(env, names, now = Date.now()) {
   const unique = [...new Set(names || [])].slice(0, 50);
-  const found = await Promise.all(unique.map(async name =>
-    (await env.POSTS.get(A_GRADE_KEY(name), { type: 'json' })) ? name : null));
+  const found = await Promise.all(unique.map(async name => {
+    const rec = await env.POSTS.get(A_GRADE_KEY(name), { type: 'json' });
+    if (!rec?.lastSeen) return null;
+    const age = now - Date.parse(rec.lastSeen);
+    return Number.isFinite(age) && age <= A_GRADE_STALE_MS ? name : null;
+  }));
   return new Set(found.filter(Boolean));
 }
 

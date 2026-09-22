@@ -38,3 +38,17 @@ test('조종사이고 등급이 있는 사람에게만 판정한다', () => {
   // 객실승무원과 등급 없는 계정에는 헛일이다.
   assert.match(worker, /viewer\?\.crewType === 'PILOT' && gradePolicy\.gradeOf\(viewer\.roleType\)/);
 });
+
+test('오래 확인되지 않은 기록은 아는 것으로 치지 않는다', () => {
+  // 등급 하향은 사고·이벤트가 있을 때만 일어나고 주기가 없다(Kay). 앱이 하향을 알아챌
+  // 방법이 없으므로, 다시 목격될 때마다 갱신하고 오래된 것은 모름으로 되돌린다.
+  assert.match(worker, /const A_GRADE_STALE_MS/);
+  assert.match(worker, /age <= A_GRADE_STALE_MS \? name : null/);
+});
+
+test('명단은 경고를 지우는 데만 쓰고 차단에는 쓰지 않는다', () => {
+  // 틀리더라도 "경고가 안 뜬다" 수준이어야 한다. 멀쩡한 스왑이 막히면 안 된다.
+  const block = worker.match(/if \(verdict === true\) p\.offered\.oppositeGrades = \['A'\];/);
+  assert.ok(block, '확정된 경우에만 A 로 좁힌다');
+  assert.doesNotMatch(worker, /verdict === false/);
+});
