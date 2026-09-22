@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "build:web": "sh scripts/build-web.sh",
-    "review": "node scripts/review-status.mjs"
+    "review": "node scripts/review-status.mjs",
+    "bump": "node scripts/bump.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
