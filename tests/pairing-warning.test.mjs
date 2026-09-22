@@ -57,3 +57,42 @@ test('CAT II/III 규정은 없앴다', () => {
   assert.doesNotMatch(app, /label:"CAT II\/III 조건"/);
   assert.doesNotMatch(app, /requiresCat2 && !state\.user\.cat2/);
 });
+
+/* 편조표가 양방향이라, 글쓴이 등급이 그 비행의 반대 좌석을 좁혀 준다.
+   Kay가 제안했다 — "C등급의 기장 부기장 들은 편조가 무조건 A등급이여야 하잖아.
+   그럼 가입이 되어 있지 않아도 A등급은 데이터화 할수 있지 않을까?" */
+
+test('C등급이 타고 있으면 반대 좌석은 A로 확정된다', () => {
+  assert.deepEqual(gradePolicy.narrowOpposite('CAPTAIN_C'), ['A']);
+  assert.deepEqual(gradePolicy.narrowOpposite('FO_C'), ['A']);
+});
+
+test('B등급은 두 가지로 좁혀지고 A등급은 좁혀지지 않는다', () => {
+  assert.deepEqual(gradePolicy.narrowOpposite('CAPTAIN_B'), ['A', 'B']);
+  assert.equal(gradePolicy.narrowOpposite('CAPTAIN_A'), null);
+});
+
+test('C등급끼리는 경고 없이 통과한다', () => {
+  // C기장의 비행은 부기장이 반드시 A다. 내가 C기장이어도 편조가 성립한다.
+  const posted = gradePolicy.narrowOpposite('CAPTAIN_C');
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_C', posted), true);
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_B', posted), true);
+});
+
+test('후보가 섞이면 확인이 필요하다', () => {
+  // B기장의 부기장은 A 이거나 B 다. B 이면 C기장은 편조할 수 없다.
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_C', gradePolicy.narrowOpposite('CAPTAIN_B')), null);
+  // A기장의 부기장은 좁혀지지 않는다.
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_C', gradePolicy.narrowOpposite('CAPTAIN_A')), null);
+});
+
+test('후보가 전부 불가하면 막는다', () => {
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_C', ['B']), false);
+  assert.equal(gradePolicy.pairsWithin('CAPTAIN_C', ['B', 'C']), false);
+});
+
+test('추론 결과를 글에 실어 보낸다', () => {
+  assert.match(app, /oppositeGrades: state\.user\.crewType === "PILOT"/);
+  assert.match(app, /GRADE_POLICY\.narrowOpposite\(state\.user\.roleType\)/);
+  assert.match(worker, /oppositeGrades: Array\.isArray\(offered\.oppositeGrades\)/);
+});

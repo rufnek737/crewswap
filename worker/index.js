@@ -1244,6 +1244,7 @@ function requestPostOfferSnapshot(offered) {
     dateKeys: Array.isArray(offered.dateKeys) ? offered.dateKeys : [],
     captainGrade: offered.captainGrade || null,
     foGrade: offered.foGrade || null,
+    oppositeGrades: Array.isArray(offered.oppositeGrades) ? offered.oppositeGrades : null,
     daySchedules,
   };
 }

@@ -36,6 +36,33 @@
     return allowed.includes(oppositeGrade);
   }
 
+  /* 편조표는 양방향이라, 한 좌석의 등급을 알면 반대 좌석이 좁혀진다.
+   *
+   *   C등급이 타고 있다  →  반대 좌석은 반드시 A     (한 가지로 확정)
+   *   B등급이 타고 있다  →  반대 좌석은 A 또는 B
+   *   A등급이 타고 있다  →  좁혀지지 않는다
+   *
+   * 회사가 규정을 지켜 편성했다는 전제다. 상대가 이 앱에 가입하지 않았어도, 글을 올린
+   * 사람의 등급만 알면 그 비행의 반대 좌석을 이만큼은 알 수 있다.
+   */
+  function narrowOpposite(roleType) {
+    const candidates = allowedOpposite(roleType);
+    return candidates.length && candidates.length < 3 ? candidates : null;
+  }
+
+  /* 반대 좌석이 여러 등급일 수 있을 때의 판정.
+     전부 되면 true, 하나도 안 되면 false, 섞이면 null(확인 필요). */
+  function pairsWithin(roleType, candidates) {
+    const allowed = allowedOpposite(roleType);
+    if (!allowed.length) return null;
+    const list = (candidates || []).filter(Boolean);
+    if (!list.length) return allowed.length >= 3 ? true : null;
+    const ok = list.filter(g => allowed.includes(g));
+    if (ok.length === list.length) return true;
+    if (ok.length === 0) return false;
+    return null;
+  }
+
   function positionOf(roleType) {
     const code = String(roleType || "").toUpperCase();
     if (code.startsWith("CAPTAIN")) return "CAPTAIN";
@@ -85,7 +112,7 @@
     };
   }
 
-  const api = { PAIRING, allowedOpposite, pairs, positionOf, gradeOf, positionLabelOf, samePosition, check };
+  const api = { PAIRING, allowedOpposite, narrowOpposite, pairs, pairsWithin, positionOf, gradeOf, positionLabelOf, samePosition, check };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.CrewSwapGradePolicy = api;
 })(typeof window !== "undefined" ? window : globalThis);

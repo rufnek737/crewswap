@@ -1841,7 +1841,9 @@ function postGradeCheck(post) {
   const seatGrade = GRADE_POLICY.positionOf(state.user.roleType) === "CAPTAIN"
     ? post?.offered?.foGrade : post?.offered?.captainGrade;
   const seatLabel = GRADE_POLICY.positionOf(state.user.roleType) === "CAPTAIN" ? "부기장" : "기장";
-  const pairing = GRADE_POLICY.pairs(state.user.roleType, seatGrade);
+  // 근무표에 실린 등급이 있으면 그것을, 없으면 글쓴이 등급에서 좁힌 후보를 쓴다.
+  const candidates = seatGrade ? [seatGrade] : (post?.offered?.oppositeGrades || null);
+  const pairing = GRADE_POLICY.pairsWithin(state.user.roleType, candidates);
   const allowed = GRADE_POLICY.allowedOpposite(state.user.roleType);
   const myGrade = GRADE_POLICY.gradeOf(state.user.roleType);
 
@@ -1849,14 +1851,17 @@ function postGradeCheck(post) {
     return {
       status: "FAIL",
       reason: `${myGrade}등급은 ${allowed.join("/")}등급 ${seatLabel}과만 편조할 수 있습니다`,
-      detail: `이 비행의 ${seatLabel}: ${seatGrade}등급`,
+      detail: `이 비행의 ${seatLabel}: ${candidates.join("/")}등급`,
     };
   }
   if (pairing === null) {
+    const known = candidates && candidates.length
+      ? `이 비행의 ${seatLabel}은 ${candidates.join("/")}등급 중 하나입니다`
+      : `이 비행의 ${seatLabel} 등급을 알 수 없습니다`;
     return {
       status: "WARN",
       reason: "",
-      detail: `이 비행의 ${seatLabel} 등급을 알 수 없습니다 — ${myGrade}등급은 ${allowed.join("/")}등급 ${seatLabel}과만 편조할 수 있어, 등급이 달라 최종 반려될 수 있습니다`,
+      detail: `${known} — ${myGrade}등급은 ${allowed.join("/")}등급 ${seatLabel}과만 편조할 수 있어, 등급이 달라 최종 반려될 수 있습니다`,
     };
   }
   return result;
@@ -3726,6 +3731,10 @@ function validationRosterSnapshot() {
       // 편조 등급 — 받는 쪽이 자기 등급과 맞춰 봐야 한다. 없으면 없는 대로 보낸다.
       captainGrade: s.captainGrade || null,
       foGrade: s.foGrade || null,
+      /* 근무표에 편조 등급이 없어도, 내가 이 비행에 편성돼 있다는 사실이 반대 좌석을
+         좁혀 준다 — C등급이 타고 있으면 반대 좌석은 반드시 A다. */
+      oppositeGrades: state.user.crewType === "PILOT"
+        ? GRADE_POLICY.narrowOpposite(state.user.roleType) : null,
       mogijiRest: state.user.crewType === "PILOT"
         ? window.CrewSwapMogijiPolicy?.markerForEntry(s, mogijiProtectedDays)
         : null,
