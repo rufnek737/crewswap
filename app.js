@@ -1338,7 +1338,23 @@ function cumulativeLimitChecks(rules) {
     { key: "duty28dLimit",        windowDays: 28,  minutes: dutyMinutesOf,   label: "연속 28일 근무시간",
       ref: "FOM 비행근무시간 제한에 의거 — 연속 28일 최대 근무시간 190시간." },
   ];
+  /* 승무시간(BLH)이 없는 비행이 섞여 있으면 그 날은 0시간으로 세어진다. 날짜는 다 있으니
+     창은 덮이는데 합계만 낮게 나와 "여유 있다"는 틀린 답이 된다 — 붙여넣기로 불러온
+     근무표에는 BLH 가 아예 없어 모든 비행이 0h 로 통과하고 있었다.
+     날짜가 덮였는지만이 아니라 값이 있는지도 봐야 한다. */
+  const blhMissing = entries.some(e =>
+    ["국내선", "국제선"].includes(e.type) && typeof e.blockMinutes !== "number");
+
   return rows.filter(r => rules[r.key]).map(r => {
+    const isFlightTime = r.minutes === flightMinutesOf;
+    if (isFlightTime && blhMissing) {
+      return {
+        label: r.label + " (" + rules[r.key] + "h 미만)",
+        status: "UNKNOWN",
+        detail: "확인 불가 — 승무시간(BLH)이 없는 비행이 있습니다",
+        ref: r.ref + " 불러온 근무표에 승무시간이 실려 있지 않아 합계를 낼 수 없습니다.",
+      };
+    }
     const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key] });
     const unknownNote = " 근무표가 해당 기간을 덮지 못해 확인하지 못했습니다.";
     return {
