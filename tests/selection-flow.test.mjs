@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import selectionFlow from "../selection-flow.js";
 
 function stateWithSelection() {
@@ -299,6 +299,12 @@ test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 �
   // 조항 번호는 FOM 이 개정되면 틀린 인용이 된다 — 조문 이름만 쓴다.
   assert.match(app, /FOM 비행근무시간 제한/);
   assert.doesNotMatch(app, /FOM \d+\.\d+/, "FOM 조항 번호를 넣지 않는다");
+
+  // app.js 만 보다가 duty-window.js 에 남은 「FOM 5.5.2.2」를 놓쳤다. 전부 본다.
+  for (const file of readdirSync(new URL("../", import.meta.url)).filter(f => f.endsWith(".js"))) {
+    const text = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(text, /FOM \d+\.\d+/, `${file} 에 FOM 조항 번호가 있다`);
+  }
 
   // 객실 생활 백과사전도 개정된다(파일명이 Update_260609). 쪽 번호를 근거로 박으면
   // 틀린 인용이 된다 — 실제로 p.47 규정 여럿이 p.48 로 적혀 있었다.

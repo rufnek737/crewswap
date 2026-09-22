@@ -86,18 +86,22 @@
     return worst;
   }
 
-  /* 한도는 편조 구성에 따라 다르다(FOM 5.5.2.2).
-       기장1 + 기장 외 조종사1 (2인 편조) → 승무시간 8시간
-       기장2 + 부기장1 (3인 편조)        → 승무시간 12시간
-     CrewConnex 근무코드가 3으로 시작하면(3PC·3NC 등) 3인 편조다. 발리(ICN-DPS)가 여기
-     해당하고, 편도만으로 7h30이라 2인 편조 한도를 그대로 씌우면 정상 비행이 통째로 막힌다.
+  /* 한도는 편조 구성에 따라 다르다(FOM 비행근무시간 제한).
+       기장1 + 조종사1 (2인 편조)  → 승무시간 8시간
+       기장1 + 조종사2 (3인 편조)  → 12시간
+       기장2 + 조종사1 (3인 편조)  → 12시간
+       기장2 + 조종사2 (4인 편조)  → 12시간
+     즉 조종사가 셋 이상이면 12시간이다. CrewConnex 근무코드가 3으로 시작하면(3PC·3NC 등)
+     3인 편조다. 발리(ICN-DPS)가 여기 해당하고, 편도만으로 7h30이라 2인 편조 한도를 그대로
+     씌우면 정상 비행이 통째로 막힌다.
 
      창에 편조가 섞이면 더 엄격한 쪽(작은 한도)을 쓴다. 그 창 안에서 2인 편조로 비행하는
      구간이 있는 이상 그 구간의 한도를 넘길 수는 없기 때문이다.
 
      결과는 기존 룰 체크 카드와 같은 모양({status, label, detail, ref})으로 돌려준다. */
   function limitHoursFor(entry, limits) {
-    return Number(entry?.crewSet) === 3 ? limits.augmented : limits.standard;
+    // 3인이든 4인이든 한도는 같다. === 3 으로 두면 4인 편조가 2인 한도로 걸린다.
+    return Number(entry?.crewSet) >= 3 ? limits.augmented : limits.standard;
   }
 
   function check(entries, {
@@ -122,7 +126,7 @@
     const total = worst.totalMinutes;
     const appliedHours = Math.min(...worst.entries.map(e => limitHoursFor(e, limits)));
     const limitMin = appliedHours * 60;
-    // FOM 5.5.2.2는 "연속 24시간 동안 **최대** 승무시간"이라 정확히 한도까지는 적법하다.
+    // 규정은 "연속 24시간 동안 **최대** 승무시간"이라 정확히 한도까지는 적법하다.
     // 따라서 초과(>)만 FAIL로 본다. 다만 한도에 근접하면 다른 근무를 하나도 더 얹을 수
     // 없다는 뜻이라 WARN으로 알린다.
     const status = total > limitMin ? "FAIL" : total >= limitMin * warnRatio ? "WARN" : "PASS";

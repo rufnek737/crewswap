@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const { check, worstWindow } = require('../duty-window.js');
@@ -139,4 +140,11 @@ test('편조 정보가 없으면 2인 편조로 보수적으로 판정한다', (
   const r = check([flight(10, 'A', '09:00', 9 * 60)], { limitHours: 8, augmentedLimitHours: 12, fallbackMonth: M });
   assert.equal(r.limitHours, 8);
   assert.equal(r.status, 'FAIL');
+});
+
+test('조종사가 셋 이상이면 한도가 같다 — 4인 편조도 12시간', () => {
+  // === 3 으로 두면 4인 편조가 2인 한도(8시간)로 걸린다. 규정 표는 3인·4인이 모두 12시간이다.
+  const src = readFileSync(new URL('../duty-window.js', import.meta.url), 'utf8');
+  assert.match(src, /Number\(entry\?\.crewSet\) >= 3/);
+  assert.doesNotMatch(src, /Number\(entry\?\.crewSet\) === 3/);
 });

@@ -1656,7 +1656,7 @@ function consecutive24hCheck(ss, rules) {
     label: result.label,
     status: result.status,
     detail: result.detail,
-    ref: `연속 24시간 이내 승무시간 한도는 편조 구성에 따라 2인 편조 ${limitHours}시간, 3인 편조(기장2+부기장1) ${rules?.consecutive24hAugmentedLimit || limitHours}시간입니다(FOM 비행근무시간 제한). 선택한 근무만이 아니라 앞뒤 근무와 겹치는 24시간 구간을 함께 계산합니다. 2026-08-31 "연속 24시간내 승무시간 초과" 반려 사례로 추가된 검사입니다.`,
+    ref: `연속 24시간 안의 승무시간은 2인 편조 ${limitHours}시간, 조종사 3인 이상 ${rules?.consecutive24hAugmentedLimit || limitHours}시간을 넘을 수 없습니다.`,
   };
 }
 
