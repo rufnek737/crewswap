@@ -7,6 +7,7 @@ import {
 } from './premium-alerts.mjs';
 import gradePolicy from '../grade-policy.js';
 import crewGrades from '../crew-grades.js';
+import airportAliases from '../airport-aliases.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import {
   createStore, listPosts, listRequests,
@@ -2052,7 +2053,6 @@ function detectUserName(html) {
   const m = /([가-힣]{2,4})\s+(?:Mr|Ms)\.?\s+[A-Z]/i.exec(html); return m ? m[1] : null;
 }
 const DOM_AIRPORTS = new Set(['ICN','GMP','PUS','CJU','TAE','CJJ','RSU','MWX','KPO','USN','WJU','HIN','KUV','KWJ','YEC','KAG']);
-const EDTO_AIRPORTS = new Set(['GUM','SPN']);
 const HOME_BASES = new Set(['GMP','ICN','PUS','CJU']);
 const STBY_CODES = /^S[AB]\d*$/i;
 // 휴가/비근무 코드 (CrewConnex 실제 코드): 모두 근무 아님 → 연속근무 계산 제외
@@ -2173,7 +2173,7 @@ function parseRosterToSchedules(html, userNameHint) {
       if (fr.length) {
         e.dep = fr[0][cols.iFrom]; e.arr = fr[fr.length - 1][cols.iTo];
         if (fr.length > 1) { e.routeSummary = [fr[0][cols.iFrom], ...fr.map(r => r[cols.iTo])].join('→'); e.legs = fr.length; }
-        if (type === '국제선' && fr.some(r => EDTO_AIRPORTS.has(r[cols.iTo]) || EDTO_AIRPORTS.has(r[cols.iFrom]))) e.requiresEdto = true;
+        if (type === '국제선' && fr.some(r => airportAliases.requiresEdto(r[cols.iTo], r[cols.iFrom]))) e.requiresEdto = true;
       }
     } else if (type === 'LAYOV') { const m = /LAYOV\s*\(?([A-Z]{3})/i.exec(activity + ' ' + pairing); if (m) e.layoverAirport = m[1]; }
     else if (type === 'GND') {

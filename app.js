@@ -83,6 +83,7 @@ const AIRPORT_REGION = {
   KIX:"JAPAN", NRT:"JAPAN", NGO:"JAPAN", FUK:"JAPAN", KMQ:"JAPAN",
   CXR:"SEA", BKI:"SEA", TAG:"SEA", MNL:"SEA", BKK:"SEA", DAD:"SEA",
   PVG:"CHINA", PEK:"CHINA", CTU:"CHINA", TAO:"CHINA",
+  GUM:"PACIFIC", SPN:"PACIFIC",   // 제주항공 EDTO 노선
 };
 const SPECIAL_AIRPORTS = ["CXR","TAG","BKI"];
 const AIRPORT_ALIASES = globalThis.CrewSwapAirportAliases;
@@ -298,18 +299,18 @@ function createMockSchedules() {
     turn(14, "P10", "국제선", "7C1101", ["ICN","ICN→NRT→ICN"], "08:15", "15:30", "16:10", "MAX", 280),
     turn(15, "P11", "국내선", "7C107",  ["GMP","GMP→CJU→GMP"], "10:10", "14:20", "14:55", "MAX", 130),
     off(16),
-    { month:M, day:17, patternId:"P12", type:"국제선", title:"7C5303", dep:"ICN", arr:"DPS", reportTime:"19:10", arrivalTime:"01:20+1", releaseTime:"02:00+1", aircraft:"MAX", blockMinutes:420, requiresEdto:true, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · EDTO · 3인 편조` },
+    { month:M, day:17, patternId:"P12", type:"국제선", title:"7C5303", dep:"ICN", arr:"DPS", reportTime:"19:10", arrivalTime:"01:20+1", releaseTime:"02:00+1", aircraft:"MAX", blockMinutes:420, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · 3인 편조` },
     { month:M, day:18, patternId:"P12", type:"LAYOV",  title:"LAYOV DPS", layoverAirport:"DPS", aircraft:"MAX", crewComposition:"DPS 체류" },
-    { month:M, day:19, patternId:"P12", type:"국제선", title:"7C5304", dep:"DPS", arr:"ICN", reportTime:"02:20", arrivalTime:"10:45", releaseTime:"11:25", aircraft:"MAX", blockMinutes:400, requiresEdto:true, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · EDTO · 3인 편조` },
+    { month:M, day:19, patternId:"P12", type:"국제선", title:"7C5304", dep:"DPS", arr:"ICN", reportTime:"02:20", arrivalTime:"10:45", releaseTime:"11:25", aircraft:"MAX", blockMinutes:400, crewSet:3, captainGrade:"B", foGrade:"A", crewComposition:`${CREW3} · 3인 편조` },
     off(20),
     rsv(21, "P13"),
     turn(22, "P14", "국내선", "7C907", ["GMP","GMP→PUS→GMP"], "06:40", "10:30", "11:05", "NG", 120),
     off(23),
     off(24),
-    { month:M, day:25, patternId:"P15", type:"국제선", title:"7C2107", dep:"ICN", arr:"CXR", reportTime:"19:15", arrivalTime:"00:55+1", releaseTime:"01:35+1", aircraft:"MAX", blockMinutes:320, requiresEdto:true, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2} · EDTO` },
+    { month:M, day:25, patternId:"P15", type:"국제선", title:"7C2107", dep:"ICN", arr:"CXR", reportTime:"19:15", arrivalTime:"00:55+1", releaseTime:"01:35+1", aircraft:"MAX", blockMinutes:320, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2}` },
     { month:M, day:26, patternId:"P15", type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"MAX", crewComposition:"CXR 체류" },
     { month:M, day:27, patternId:"P15", type:"LAYOV",  title:"LAYOV CXR", layoverAirport:"CXR", aircraft:"MAX", crewComposition:"CXR 체류" },
-    { month:M, day:28, patternId:"P15", type:"국제선", title:"7C2108", dep:"CXR", arr:"ICN", reportTime:"00:25", arrivalTime:"09:45", releaseTime:"10:20", aircraft:"MAX", blockMinutes:330, requiresEdto:true, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2} · EDTO` },
+    { month:M, day:28, patternId:"P15", type:"국제선", title:"7C2108", dep:"CXR", arr:"ICN", reportTime:"00:25", arrivalTime:"09:45", releaseTime:"10:20", aircraft:"MAX", blockMinutes:330, captainGrade:"B", foGrade:"A", crewComposition:`${CREW2}` },
     off(29),
     { month:M, day:30, patternId:"P16", type:"국제선", title:"7C2125", dep:"ICN", arr:"TAG", reportTime:"06:40", arrivalTime:"11:20", releaseTime:"12:00", aircraft:"NG", blockMinutes:280, captainGrade:"B", foGrade:"A", crewComposition:CREW2 },
   ];
@@ -344,7 +345,7 @@ function buildCrewPublic(crewComposition, ownerRole) {
 function createMockPosts() {
   return [
     { id:"P-001", airline:"JEJU", crewType:"PILOT", ownerRole:"FO_B", ownerNick:"BlueSky*", ownerRating:4.8, ownerBase:"GMP",
-      offered:{ patternName:"6/25-28 CXR 패턴", days:[25,26,27,28], summary:"ICN-CXR · 2박 · CXR-ICN", type:"국제선", aircraft:"NG", edto:true, cat3:true, flightMinutes:790, region:"SEA",
+      offered:{ patternName:"6/25-28 CXR 패턴", days:[25,26,27,28], summary:"ICN-CXR · 2박 · CXR-ICN", type:"국제선", aircraft:"NG", edto:false, cat3:true, flightMinutes:790, region:"SEA",
         reportTime:"19:15", releaseTime:"10:20",
         crewPublic:"강민준(Capt), 이서연(OBSP), 박지우(PUR), 최은지(JC1), 정수아(FA), 한가람(FA)" },
       wanted:{ types:["OFF","국내선"], dateFlex:"any", time:["AM"], excludedAirports:["CXR","BKI"], memo:"국내선 또는 OFF 희망" },
@@ -356,7 +357,7 @@ function createMockPosts() {
       wanted:{ types:["OFF"], dateFlex:"sameDay", time:[], excludedAirports:[], memo:"같은 날 OFF 절실" },
       deadlineDay:13, watchers:7, postedHoursAgo:5 },
     { id:"P-003", airline:"JEJU", crewType:"PILOT", ownerRole:"FO_B", ownerNick:"NightOwl*", ownerRating:4.2, ownerBase:"PUS",
-      offered:{ patternName:"6/10-12 BKI 패턴 (EDTO)", days:[10,11,12], summary:"ICN-BKI · 1박 · BKI-ICN", type:"국제선", aircraft:"MAX", edto:true, cat3:false, flightMinutes:570, region:"SEA",
+      offered:{ patternName:"6/10-12 GUM 패턴 (EDTO)", days:[10,11,12], summary:"ICN-GUM · 1박 · GUM-ICN", type:"국제선", aircraft:"MAX", edto:true, cat3:false, flightMinutes:570, region:"PACIFIC",
         reportTime:"19:10", releaseTime:"09:20",
         crewPublic:"박현우(Capt), 임소연(OBSP), 조혜정(PUR), 안기옥(JC1), 양효정(FA), 김나래(FA)" },
       wanted:{ types:["국내선"], dateFlex:"sameMonth", time:["AM"], excludedAirports:[], memo:"오전 국내선 희망" },
@@ -378,13 +379,13 @@ function createMockPosts() {
       deadlineDay:4, watchers:2, postedHoursAgo:12 },
     // 기장 글 (필터링 테스트용)
     { id:"P-007", airline:"JEJU", crewType:"PILOT", ownerRole:"CAPTAIN_B", ownerNick:"CaptainK*", ownerRating:4.9, ownerBase:"GMP",
-      offered:{ patternName:"6/25 CXR", days:[25,26,27,28], summary:"ICN-CXR", type:"국제선", aircraft:"NG", edto:true, cat3:true, flightMinutes:790, region:"SEA",
+      offered:{ patternName:"6/25 CXR", days:[25,26,27,28], summary:"ICN-CXR", type:"국제선", aircraft:"NG", edto:false, cat3:true, flightMinutes:790, region:"SEA",
         reportTime:"19:15", releaseTime:"10:20",
         crewPublic:"이민혁(FO), 최원준(OBSP), 조혜정(PUR), 안기옥(JC1), 양효정(FA), 김나래(FA)" },
       wanted:{ types:["OFF"], dateFlex:"any", time:[], excludedAirports:[], memo:"OFF 희망" },
       deadlineDay:25, watchers:1, postedHoursAgo:1 },
     { id:"P-008", airline:"JEJU", crewType:"PILOT", ownerRole:"FO_A", ownerNick:"AceFlyer*", ownerRating:5.0, ownerBase:"GMP",
-      offered:{ patternName:"6/21 RSV", days:[21], summary:"RSV 1일", type:"RSV", aircraft:null, edto:true, cat3:false, flightMinutes:0, region:null,
+      offered:{ patternName:"6/21 RSV", days:[21], summary:"RSV 1일", type:"RSV", aircraft:null, edto:false, cat3:false, flightMinutes:0, region:null,
         reportTime:"12:00", releaseTime:"20:00", crewPublic:null },
       wanted:{ types:["OFF"], dateFlex:"sameDay", time:[], excludedAirports:[], memo:"" },
       deadlineDay:21, watchers:1, postedHoursAgo:6 },
@@ -1119,8 +1120,7 @@ function parseDayBlock(block, codeDescriptions) {
     const region = AIRPORT_REGION[arr] || AIRPORT_REGION[dep] || "OTHER";
     const isDom = region === "DOMESTIC";
     const isSpecialIntl = !isDom && (SPECIAL_AIRPORTS.includes(arr) || SPECIAL_AIRPORTS.includes(dep));
-    // 제주항공 EDTO: GUM / SPN만
-    const isEdto = arr === "GUM" || arr === "SPN" || dep === "GUM" || dep === "SPN";
+    const isEdto = window.CrewSwapAirportAliases.requiresEdto(dep, arr);
     return {
       ...base,
       type: isDom ? "국내선" : "국제선",

@@ -125,9 +125,27 @@
     });
   }
 
-  root.CrewSwapAirportAliases = Object.freeze({
+  /* EDTO 노선 — 제주항공이 가는 곳은 괌과 사이판 둘뿐이다(Kay, 2026-09-23).
+     목록을 앱과 워커에 따로 두었더니 한쪽만 고치면 어긋났다. 여기 하나만 둔다. */
+  const EDTO_AIRPORTS = Object.freeze(["GUM", "SPN"]);
+
+  function isEdtoAirport(code) {
+    return EDTO_AIRPORTS.includes(String(code || "").trim().toUpperCase());
+  }
+
+  /* 구간 중 하나라도 EDTO 공항을 지나면 그 근무는 EDTO 자격이 필요하다. */
+  function requiresEdto(...codes) {
+    return codes.flat().some(isEdtoAirport);
+  }
+
+  const api = Object.freeze({
     canonicalAirportCode,
     expandAirportSearchText,
     airportKeywordMatches,
+    EDTO_AIRPORTS,
+    isEdtoAirport,
+    requiresEdto,
   });
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.CrewSwapAirportAliases = api;
 })(typeof globalThis !== "undefined" ? globalThis : window);
