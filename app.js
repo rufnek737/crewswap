@@ -1132,8 +1132,9 @@ function parseDayBlock(block, codeDescriptions) {
       aircraft: "NG",
       requiresEdto: isEdto,
       requiresCat3: false,
-      captainGrade: "B", foGrade: "B",
-      crewComposition: "PIC B · FO B · (편조 정보 입력 필요)",
+      // 근무표에는 편조 등급이 없다. 예전에는 여기에 B 를 박아 넣었는데, 그러면 C등급
+      // 기장에게 "B등급 부기장이라 불가"라는 근거 없는 차단이 떴다. 모르는 것은 비워 둔다.
+      crewComposition: "편조 정보 없음",
       lockReason: arr === "TAG" && /자격|갱신|qualif/i.test(full) ? "특수공항 자격 갱신 비행" : undefined,
     };
   }
@@ -1260,12 +1261,12 @@ function reclassifyGroundDuty(s) {
 }
 
 
-// 편조는 CrewConnex가 등급만 내려주는 날이 있어, 기장/부기장 등급이 있으면 만들어 채운다.
+// 편조 이름이 없는 날도 자격 표시는 붙여 준다. 등급은 지어내지 않는다 —
+// 근무표가 내려주지 않는 값을 채우면 규정 판정이 그 가짜 값을 믿는다.
 function fillCrewComposition(s) {
-  if (s.captainGrade && s.foGrade && s.type !== "OFF" && !s.crewComposition) {
-    s.crewComposition = `PIC ${s.captainGrade} · FO ${s.foGrade}`;
-    if (s.requiresEdto) s.crewComposition += " · EDTO";
-    if (s.requiresCat3) s.crewComposition += " · CAT III";
+  if (!s.crewComposition && s.type !== "OFF" && (s.requiresEdto || s.requiresCat3)) {
+    s.crewComposition = [s.requiresEdto ? "EDTO" : null, s.requiresCat3 ? "CAT III" : null]
+      .filter(Boolean).join(" · ");
   }
   return s;
 }
@@ -1834,15 +1835,28 @@ function postGradeCheck(post) {
   const result = GRADE_POLICY.check(state.user.roleType, post?.ownerRole, { known: !!state.user.hasSignedUp });
   if (result.status !== "PASS") return result;
 
-  /* C등급이 한쪽에만 얽힌 교환은 규정 위반이 아니지만 회사에서 최종 반려될 수 있다.
-     막지 않고 알려만 준다 — 앱이 통과시켜도 상신이 통과한다는 뜻은 아니다. */
-  const mine = GRADE_POLICY.gradeOf(state.user.roleType);
-  const theirs = GRADE_POLICY.gradeOf(post?.ownerRole);
-  if (mine && theirs && mine !== theirs && (mine === "C" || theirs === "C")) {
+  /* 규정이 보는 것은 글쓴이의 등급이 아니라 **내가 가져올 비행의 반대 좌석 등급**이다.
+     근무표에 그 등급이 없으면 판정할 수 없다. 막지 않고 알린다 — A등급은 어느 등급과도
+     편조되므로 경고할 것이 없고, B·C 등급만 확인이 필요하다. */
+  const seatGrade = GRADE_POLICY.positionOf(state.user.roleType) === "CAPTAIN"
+    ? post?.offered?.foGrade : post?.offered?.captainGrade;
+  const seatLabel = GRADE_POLICY.positionOf(state.user.roleType) === "CAPTAIN" ? "부기장" : "기장";
+  const pairing = GRADE_POLICY.pairs(state.user.roleType, seatGrade);
+  const allowed = GRADE_POLICY.allowedOpposite(state.user.roleType);
+  const myGrade = GRADE_POLICY.gradeOf(state.user.roleType);
+
+  if (pairing === false) {
+    return {
+      status: "FAIL",
+      reason: `${myGrade}등급은 ${allowed.join("/")}등급 ${seatLabel}과만 편조할 수 있습니다`,
+      detail: `이 비행의 ${seatLabel}: ${seatGrade}등급`,
+    };
+  }
+  if (pairing === null) {
     return {
       status: "WARN",
       reason: "",
-      detail: `${mine}등급 ↔ ${theirs}등급 — 등급이 달라 최종 반려될 수 있습니다`,
+      detail: `이 비행의 ${seatLabel} 등급을 알 수 없습니다 — ${myGrade}등급은 ${allowed.join("/")}등급 ${seatLabel}과만 편조할 수 있어, 등급이 달라 최종 반려될 수 있습니다`,
     };
   }
   return result;
@@ -3709,6 +3723,9 @@ function validationRosterSnapshot() {
       aircraft: s.aircraft || null,
       requiresEdto: !!s.requiresEdto,
       requiresCat3: !!s.requiresCat3,
+      // 편조 등급 — 받는 쪽이 자기 등급과 맞춰 봐야 한다. 없으면 없는 대로 보낸다.
+      captainGrade: s.captainGrade || null,
+      foGrade: s.foGrade || null,
       mogijiRest: state.user.crewType === "PILOT"
         ? window.CrewSwapMogijiPolicy?.markerForEntry(s, mogijiProtectedDays)
         : null,

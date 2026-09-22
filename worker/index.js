@@ -1232,6 +1232,9 @@ function requestPostOfferSnapshot(offered) {
     arr: schedule?.arr || '',
     reportTime: schedule?.reportTime || '',
     releaseTime: schedule?.releaseTime || '',
+    // 편조 등급 — 받는 쪽이 자기 등급과 맞춰 봐야 규정 판정이 된다. 이름은 싣지 않는다.
+    captainGrade: schedule?.captainGrade || null,
+    foGrade: schedule?.foGrade || null,
   }));
   return {
     patternName: offered.patternName || '',
@@ -1239,6 +1242,8 @@ function requestPostOfferSnapshot(offered) {
     type: offered.type || '',
     days: Array.isArray(offered.days) ? offered.days : [],
     dateKeys: Array.isArray(offered.dateKeys) ? offered.dateKeys : [],
+    captainGrade: offered.captainGrade || null,
+    foGrade: offered.foGrade || null,
     daySchedules,
   };
 }
@@ -2125,8 +2130,11 @@ function parseRosterToSchedules(html, userNameHint) {
     if (blockMin > 0) e.blockMinutes = blockMin;
     if (userPos) {
       e.dutyCode = userPos;
-      if (CAPT_CODES.test(userPos) || /Capt|PIC/i.test(userPos)) e.captainGrade = 'B';
-      if (FO_CODES.test(userPos) || /^FO\b/i.test(userPos)) e.foGrade = 'B';
+      /* 근무표는 좌석(Pos)만 내려주고 편조 등급(A/B/C)은 내려주지 않는다.
+         예전에는 좌석을 보고 'B' 를 넣었는데 그건 등급이 아니라 자리 표시자였고,
+         규정 판정이 그 가짜 값을 진짜 등급으로 믿었다. 좌석은 좌석으로 남긴다. */
+      if (CAPT_CODES.test(userPos) || /Capt|PIC/i.test(userPos)) e.mySeat = 'CAPTAIN';
+      if (FO_CODES.test(userPos) || /^FO\b/i.test(userPos)) e.mySeat = 'FO';
       if (/^3/i.test(userPos)) e.crewSet = 3; else if (/^2|^[PN]C$/i.test(userPos)) e.crewSet = 2;
     }
     if (type === 'VAC' && HOLD_CODES.test(actPair)) {
