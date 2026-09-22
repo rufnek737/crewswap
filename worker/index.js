@@ -6,6 +6,7 @@ import {
   subscriberCanTakeUrgentPost,
 } from './premium-alerts.mjs';
 import gradePolicy from '../grade-policy.js';
+import crewGrades from '../crew-grades.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import {
   createStore, listPosts, listRequests,
@@ -1991,8 +1992,6 @@ function detectUserName(html) {
 const DOM_AIRPORTS = new Set(['ICN','GMP','PUS','CJU','TAE','CJJ','RSU','MWX','KPO','USN','WJU','HIN','KUV','KWJ','YEC','KAG']);
 const EDTO_AIRPORTS = new Set(['GUM','SPN']);
 const HOME_BASES = new Set(['GMP','ICN','PUS','CJU']);
-const CAPT_CODES = /^(C|H|L|K|2C|2NC|C1|C2|PC|NC|3PC|3NC)$/i;
-const FO_CODES = /^(F|2F|2NF|F1|F2|3F)$/i;
 const STBY_CODES = /^S[AB]\d*$/i;
 // 휴가/비근무 코드 (CrewConnex 실제 코드): 모두 근무 아님 → 연속근무 계산 제외
 //   OV_FE(경조) OV_MAT(배우자출산) OV_MV(주거이전) OV_FLT(비행휴직) OVSICK(공상)
@@ -2134,8 +2133,12 @@ function parseRosterToSchedules(html, userNameHint) {
       /* 근무표는 좌석(Pos)만 내려주고 편조 등급(A/B/C)은 내려주지 않는다.
          예전에는 좌석을 보고 'B' 를 넣었는데 그건 등급이 아니라 자리 표시자였고,
          규정 판정이 그 가짜 값을 진짜 등급으로 믿었다. 좌석은 좌석으로 남긴다. */
-      if (CAPT_CODES.test(userPos) || /Capt|PIC/i.test(userPos)) e.mySeat = 'CAPTAIN';
-      if (FO_CODES.test(userPos) || /^FO\b/i.test(userPos)) e.mySeat = 'FO';
+      /* 근무표는 좌석(Pos)만 내려주고 편조 등급(A/B/C)은 내려주지 않는다.
+         예전에는 좌석을 보고 'B' 를 넣었는데 그건 등급이 아니라 자리 표시자였고,
+         규정 판정이 그 가짜 값을 진짜 등급으로 믿었다. 좌석은 좌석으로 남긴다.
+         좌석 코드표는 crew-grades.js 한 곳에만 둔다 — 사본을 두면 어긋난다. */
+      const seat = crewGrades.seatOf(userPos);
+      if (seat) e.mySeat = seat;
       if (/^3/i.test(userPos)) e.crewSet = 3; else if (/^2|^[PN]C$/i.test(userPos)) e.crewSet = 2;
     }
     if (type === 'VAC' && HOLD_CODES.test(actPair)) {
