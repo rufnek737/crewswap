@@ -85,7 +85,6 @@ const AIRPORT_REGION = {
   PVG:"CHINA", PEK:"CHINA", CTU:"CHINA", TAO:"CHINA",
   GUM:"PACIFIC", SPN:"PACIFIC",   // 제주항공 EDTO 노선
 };
-const SPECIAL_AIRPORTS = ["CXR","TAG","BKI"];
 const AIRPORT_ALIASES = globalThis.CrewSwapAirportAliases;
 
 const PILL_CLASS = {
@@ -1132,7 +1131,6 @@ function parseDayBlock(block, codeDescriptions) {
     const [, dep, arr] = [route[0], route[1].toUpperCase(), route[2].toUpperCase()];
     const region = AIRPORT_REGION[arr] || AIRPORT_REGION[dep] || "OTHER";
     const isDom = region === "DOMESTIC";
-    const isSpecialIntl = !isDom && (SPECIAL_AIRPORTS.includes(arr) || SPECIAL_AIRPORTS.includes(dep));
     const isEdto = window.CrewSwapAirportAliases.requiresEdto(dep, arr);
     return {
       ...base,
@@ -1148,7 +1146,11 @@ function parseDayBlock(block, codeDescriptions) {
       // 근무표에는 편조 등급이 없다. 예전에는 여기에 B 를 박아 넣었는데, 그러면 C등급
       // 기장에게 "B등급 부기장이라 불가"라는 근거 없는 차단이 떴다. 모르는 것은 비워 둔다.
       crewComposition: "편조 정보 없음",
-      lockReason: arr === "TAG" && /자격|갱신|qualif/i.test(full) ? "특수공항 자격 갱신 비행" : undefined,
+      /* 자격 갱신 비행은 근무표에 어떻게 표시되는지 아직 실물을 못 봤다. 예전에는 도착지가
+         TAG 일 때로 판정했는데, 그건 데모용으로 박아둔 값이고 TAG 는 특수공항도 아니다.
+         실제 표기(Activity·Remark)를 확인하기 전까지는 판정하지 않는다 — 추측으로 막으면
+         멀쩡한 스왑이 근거 없이 막힌다. */
+      specialAirports: window.CrewSwapAirportAliases.specialAirportsIn(dep, arr),
     };
   }
   // 인식 불가 — 사용자 편집 유도
@@ -1326,6 +1328,25 @@ function formatHM(minutes) {
    값은 RULES에 있었지만 읽는 코드가 없어 "통과"로 표시되고 있었다.
    근무표가 창을 못 덮으면 PASS가 아니라 "확인 불가"로 답한다 — 확인하지 않은 것을
    확인했다고 말하면 사용자가 그 말을 믿고 스왑을 진행한다. */
+/* 특수공항 — 기장은 최근 12개월 안에 그 공항에 대한 자격 요건을 채워야 운항할 수 있다.
+   앱은 내가 어느 공항 자격을 가졌는지 알 수 없으므로 막지 않고 알린다.
+   자격 갱신 지정 비행은 그 기장·부기장이 직접 가야 해서 스왑이 불가한데, 근무표에 그것이
+   어떻게 표시되는지는 아직 확인되지 않았다(OPEN_ITEMS 1번). */
+function specialAirportCheck(ss, hasLocked) {
+  if (hasLocked) {
+    return { label: "특수공항 자격 갱신 비행", status: "FAIL",
+      detail: "자격 갱신 지정 비행 포함 — SWAP 불가",
+      ref: "자격 유지를 위해 지정된 비행은 그 승무원이 직접 수행해야 해 스왑할 수 없습니다." };
+  }
+  const names = [...new Set((ss || []).flatMap(s => s.specialAirports || []))];
+  if (!names.length) {
+    return { label: "특수공항", status: "PASS", detail: "해당 없음",
+      ref: "특수공항은 기장이 최근 12개월 안에 해당 공항 자격 요건을 충족해야 운항할 수 있습니다." };
+  }
+  return { label: "특수공항", status: "WARN", detail: `${names.join(", ")} — 자격 확인 필요`,
+    ref: "특수공항은 기장이 최근 12개월 안에 해당 공항 자격 요건을 충족해야 운항할 수 있습니다." };
+}
+
 function cumulativeLimitChecks(rules) {
   const api = window.CrewSwapDutyLimits;
   if (!api) return [];
@@ -1769,9 +1790,7 @@ function checkRulesForSelection() {
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
     restWindowCheck(),
-    { label:"특수공항 자격 갱신 비행", status: hasLocked ? "FAIL" : "PASS",
-      detail: hasLocked ? "자격 갱신 지정 비행 포함 — SWAP 불가" : "해당 없음",
-      ref: "특수공항 자격 유지를 위해 지정된 비행은 스왑 대상에서 제외됩니다." },
+    specialAirportCheck(ss, hasLocked),
     { label:"공휴일/연휴 SWAP 제한", status: blockedHoliday ? "WARN" : "PASS",
       detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",
       ref: "설날·추석 등 연휴는 별도 편조 정책이 적용됩니다. 편조팀에 사전 문의하세요." },

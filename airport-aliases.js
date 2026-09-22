@@ -138,7 +138,34 @@
     return codes.flat().some(isEdtoAirport);
   }
 
+  /* 특수공항 — 이착륙에 특별한 주의가 필요해 기장에게 별도 자격이 요구되는 공항.
+     FOM Supplement 「특수공항 현황」 그대로다. 국토교통부 지정분과 회사 지정분(*)을 모두 담는다.
+     예전에는 `["CXR","TAG","BKI"]` 가 들어 있었는데 셋 다 특수공항이 아니다 — 목록 전체가
+     근거 없이 지어진 값이었고, 게다가 계산만 하고 쓰이지도 않았다. */
+  const SPECIAL_AIRPORTS = Object.freeze({
+    // 국내
+    PUS: "김해", KPO: "포항", WJU: "원주", CJU: "제주", YNY: "양양",
+    // 국외
+    AOJ: "아오모리", TOY: "도야마", FUK: "후쿠오카", MFM: "마카오",
+    ULN: "울란바토르", UBN: "울란바토르(신)", KMG: "쿤밍", REP: "시엠립",
+    ROR: "팔라우", CEB: "세부", HKG: "홍콩", DYG: "장자제", DLC: "다롄",
+    LJG: "리지앙", YNJ: "옌지", MYJ: "마츠야마", HND: "하네다", DLI: "달랏",
+  });
+
+  function specialAirportName(code) {
+    return SPECIAL_AIRPORTS[String(code || "").trim().toUpperCase()] || null;
+  }
+
+  /* 구간 중 특수공항이 있으면 그 이름들을 돌려준다. 없으면 빈 배열. */
+  function specialAirportsIn(...codes) {
+    const found = codes.flat().map(specialAirportName).filter(Boolean);
+    return [...new Set(found)];
+  }
+
   const api = Object.freeze({
+    SPECIAL_AIRPORTS,
+    specialAirportName,
+    specialAirportsIn,
     canonicalAirportCode,
     expandAirportSearchText,
     airportKeywordMatches,
