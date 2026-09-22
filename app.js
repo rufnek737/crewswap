@@ -640,7 +640,7 @@ function dutyMinutesOf(s) {
  *
  * 이 범퍼가 없으면 앱이 편조보다 느슨해진다. 앱은 통과시켰는데 회사에서 반려되는 쪽이
  * 가장 나쁘다 — 사용자는 앱을 믿고 상대와 약속까지 끝낸 뒤에 되돌려야 한다. */
-const REST_START_BUMPER_MIN = 100;
+const REST_START_BUMPER_MIN = window.CrewSwapRestWindow.REST_START_BUMPER_MIN;
 
 // [운항] 비행근무시간(분) → 최소 휴식(분). FOM 비행근무시간 제한 가 표.
 function minRestMinForFDT(fdtMin) {

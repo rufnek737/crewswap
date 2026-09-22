@@ -13,8 +13,11 @@ import { readFileSync } from 'node:fs';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
-test('범퍼는 1시간 40분이다', () => {
-  assert.match(app, /const REST_START_BUMPER_MIN = 100;/);
+test('범퍼는 1시간 40분이고 정의는 한 곳에만 있다', () => {
+  // app.js 와 rest-window.js 에 사본을 두면 어긋난다 — 등급표·EDTO 에서 겪은 문제다.
+  const restWindow = readFileSync(new URL('../rest-window.js', import.meta.url), 'utf8');
+  assert.match(restWindow, /const REST_START_BUMPER_MIN = 100;/);
+  assert.match(app, /REST_START_BUMPER_MIN = window\.CrewSwapRestWindow\.REST_START_BUMPER_MIN/);
 });
 
 test('직전·직후 휴식 모두에 범퍼를 적용한다', () => {

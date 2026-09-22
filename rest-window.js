@@ -12,6 +12,12 @@
   const WINDOW_MIN = 7 * DAY;
   const REQUIRED_MIN = 30 * 60;
 
+  /* 휴식은 체크아웃 시각부터 바로 세지 않는다. 편조가 스왑을 볼 때 체크아웃에 1시간
+     40분을 더한 시각부터 센다(Kay가 편조에 확인) — 1시간은 집까지 이동, 40분은 지연
+     여유다. 체크아웃 자체는 CrewConnex 가 계산해 준다(인천 램프인+1시간, 김포 +20분).
+     app.js 의 앞뒤 휴식 검사도 이 값을 쓴다 — 사본을 두면 어긋난다. */
+  const REST_START_BUMPER_MIN = 100;
+
   function toMinutes(entry, time) {
     const m = /^(\d{1,2}):(\d{2})(\+1)?$/.exec(String(time || "").trim());
     if (!m || !entry) return null;
@@ -31,7 +37,9 @@
       const start = toMinutes(e, e.reportTime);
       const end = toMinutes(e, e.releaseTime);
       if (start === null || end === null) continue;
-      out.push({ start, end: end < start ? end + DAY : end, entry: e });
+      const close = end < start ? end + DAY : end;
+      // 근무가 끝나도 범퍼만큼은 휴식으로 치지 않는다.
+      out.push({ start, end: close + REST_START_BUMPER_MIN, entry: e });
     }
     return out.sort((a, b) => a.start - b.start);
   }
@@ -93,7 +101,7 @@
     return `7일 중 가장 긴 연속 휴식 ${h(result.worstRestMin)} / ${h(result.requiredMin)} 필요`;
   }
 
-  const api = { check, detailText, dutyIntervals, restGaps };
+  const api = { check, detailText, dutyIntervals, restGaps, REST_START_BUMPER_MIN };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.CrewSwapRestWindow = api;
 })(typeof window !== "undefined" ? window : globalThis);
