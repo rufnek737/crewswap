@@ -29,7 +29,8 @@ test("keeps the current release notes in the announcement list", () => {
   assert.equal(item.kind, "announce");
   assert.match(item.title, /2027년 9월 30일까지 모든 기능 무료/);
   assert.match(item.body, /급구 쿠폰 매달 1장/);
-  assert.equal(item.releaseVersion, "1.1.9");
+  // 버전을 여기 박아두면 올릴 때마다 깨진다. 모듈이 말하는 값과 같은지만 본다.
+  assert.equal(item.releaseVersion, releaseNotice.current.version);
 });
 
 test("replaces old update notices while preserving all other alerts", () => {

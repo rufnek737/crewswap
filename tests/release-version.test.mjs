@@ -53,3 +53,13 @@ test('근무교환 마감은 두 직군 모두 시각을 명시한다', () => {
   assert.equal(deadlines.length, 2, '운항·객실 두 곳 모두 시각이 적혀 있어야 한다');
   for (const [, , hour] of deadlines) assert.equal(hour, '17');
 });
+
+test('공지 팝업의 버전이 앱 표시 버전과 같다', () => {
+  // 팝업에 버전이 찍혀 나간다. 버전을 올리고 이것을 잊으면 스토어 스크린샷에 옛 버전이
+  // 박힌다 — 실제로 1.2.0 빌드에서 v1.1.9 가 떠 있었다.
+  const notice = read('release-notice.js');
+  const pbx = read('ios/App/App.xcodeproj/project.pbxproj');
+  const appVersion = /MARKETING_VERSION = ([\d.]+);/.exec(pbx)[1];
+  const noticeVersion = /version: "([\d.]+)"/.exec(notice)[1];
+  assert.equal(noticeVersion, appVersion);
+});
