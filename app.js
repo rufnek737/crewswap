@@ -1309,9 +1309,7 @@ function applyImportedSchedules(schedules) {
   closeGenericModal("crewDialog", "crewOverlay");
   renderAll();
   if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
-  const monthInfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월: ${monthsAvail.join(", ")})` : "";
-  const navHint = monthsAvail.length > 1 ? " 상단 월 칩으로 빠른 전환 가능." : " ‹ › 버튼으로 월 이동.";
-  showToast(`스케줄 ${finalSchedules.length}건 적용${monthInfo}.${navHint}`);
+  showToast(`스케줄 ${finalSchedules.length}건 적용`);
 }
 
 // 분 → "HH:MM" (CrewConnex 형식)
@@ -1472,53 +1470,6 @@ function companyDeadlineText(day, month, dd) {
     : `${targetLabel} 회사 제출: ${due}까지`;
 }
 
-/* 등급에 따른 비행편조 — 운항본부 인사관리 지침의 편조표.
- *
- *   기장 A → 부기장 A·B·C    기장 B → 부기장 A·B    기장 C → 부기장 A
- *
- * 내가 가져올 비행의 반대 좌석 등급을 본다. 사람 대 사람이 아니라 조종석 안의 조합이
- * 규정이다 — 예전에 grade-policy.js 에 있던 사용자끼리의 등급 궁합표는 출처가 없었다.
- *
- * 등급을 알 수 없는 비행이 많다. 그때는 막지 않고 경고한다. A등급은 어느 등급과도 편조가
- * 되므로 경고할 것이 없고, B·C 등급만 확인이 필요하다.
- */
-function crewPairingCheck(s) {
-  if (!state.user.hasSignedUp) {
-    return { status:"WARN", label:"가입 후 확인 가능", detail:"내 등급 정보가 없어 편조 기준 자동 체크 불가" };
-  }
-  const isCapt = state.user.roleType.startsWith("CAPTAIN");
-  const isFo = state.user.roleType.startsWith("FO");
-  if (!isCapt && !isFo) return { status:"NA", label:"편조 기준 해당 없음", detail:"등급 판정 대상 아님" };
-
-  const myGrade = state.user.roleType.replace("CAPTAIN_","").replace("FO_","");
-  const otherGrade = isCapt ? s.foGrade : s.captainGrade;
-  const otherLabel = isCapt ? "부기장" : "기장";
-
-  // 비행이 아닌 근무(OFF·RSV·STBY·LAYOV)는 편조가 없다.
-  if (!s.captainGrade && !s.foGrade && !["국내선","국제선"].includes(s.type)) {
-    return { status:"NA", label:"편조 기준 해당 없음", detail:"OFF/RSV/STBY/LAYOV" };
-  }
-
-  // A등급은 어느 등급과도 편조가 된다 — 확인할 것이 없다.
-  const allowed = GRADE_POLICY.allowedOpposite(state.user.roleType);
-  const acceptsAll = allowed.length >= 3;
-
-  if (!otherGrade) {
-    if (acceptsAll) {
-      return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급은 모든 등급과 편조 가능` };
-    }
-    return { status:"WARN", label:"편조 기준 확인 필요",
-      detail:`${myGrade}등급은 ${allowed.join("/")}등급 ${otherLabel}과만 편조 가능한데, 이 비행의 ${otherLabel} 등급을 알 수 없습니다` };
-  }
-  if (!allowed.includes(otherGrade)) {
-    return { status:"FAIL", label:"편조 기준 불가",
-      detail:`${myGrade}등급은 ${allowed.join("/")}등급 ${otherLabel}과만 편조 가능 (이 비행: ${otherGrade}등급)` };
-  }
-  return { status:"PASS", label:"편조 기준 충족", detail:`${myGrade}등급 · ${otherGrade}등급 ${otherLabel} 편조 가능` };
-}
-
-/* 기종 자격 — MAX 교육을 받지 않은 인원이 남아 있어 그 사람들은 NG 만 탈 수 있다.
-   FOM 도 B737-800 과 B737-8 을 별개 기종으로 다루고, 자격은 해 기종 한정 증명 기준이다. */
 function userAircraftOK(s) {
   if (!s.aircraft) return true;
   if (state.user.aircraft === "NG_MAX") return true;
@@ -1742,10 +1693,6 @@ function checkRulesForSelection() {
   const firstDay = ss[0].day;
   const dd = dDayInfo(firstDay, ss[0].month);
 
-  const pairChecks = ss.map(s => crewPairingCheck(s));
-  const pairFail = pairChecks.some(c => c.status === "FAIL");
-  const pairWarn = !pairFail && pairChecks.some(c => c.status === "WARN");
-  const pairDetailObj = pairChecks.find(c => c.status === "FAIL") || pairChecks.find(c => c.status === "WARN") || pairChecks.find(c => c.status === "PASS");
   const needsEdto = ss.some(s => s.requiresEdto);
   const hasLocked = ss.some(s => s.lockReason);
 
@@ -1768,9 +1715,6 @@ function checkRulesForSelection() {
     { label:"포지션 매칭", status:"PASS",
       detail: `${ROLE_LABELS[state.user.roleType]} · ${GRADE_POLICY.positionLabelOf(state.user.roleType) || "동일 포지션"} 글 전체 노출`,
       ref: "기장↔기장, 부기장↔부기장 간에만 교환할 수 있습니다." },
-    { label:"등급에 따른 비행편조", status: pairFail ? "FAIL" : pairWarn ? "WARN" : "PASS",
-      detail: pairDetailObj ? pairDetailObj.detail : "편조 기준 충족",
-      ref: "기장 등급에 따라 함께 탈 수 있는 부기장 등급이 정해집니다 — A등급 기장은 A·B·C, B등급은 A·B, C등급은 A등급 부기장과 편조합니다." },
     { label:"기종 조건", status: ss.every(userAircraftOK) ? "PASS" : "FAIL",
       detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성",
       ref: "기종 자격 — NG(737-800)와 MAX(737-8/10)는 자격이 다릅니다. 내 자격에 없는 기종은 스왑 불가." },
@@ -1780,11 +1724,6 @@ function checkRulesForSelection() {
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
       ref: "패턴 시작일 기준 영업일 2일 전 17시까지 결재 기안과 최종승인이 모두 끝나야 합니다. 신청만 해두면 늦습니다." },
-    /* 이 앱을 거치는 스왑은 전부 상호 합의라 늘 해당된다. 경고로 띄우면 매번 떠서
-       진짜 경고가 묻힌다 — 알아둘 것이지 막을 일이 아니므로 안내로 둔다. */
-    { label:"상호 합의 스왑 수당", status:"NA",
-      detail: "OFF 협조 수당·모기지 수당 미지급",
-      ref: "개인 상호 합의로 스케줄을 바꾸면 그로 인해 생긴 OFF 협조 수당과 모기지 수당은 지급되지 않습니다." },
     consecutive24hCheck(ss, rules),
     ...cumulativeLimitChecks(rules),
     restWindowCheck(),
@@ -2521,7 +2460,6 @@ function renderSelection() {
     ${patternHtml}
     <div class="selected-list">
       ${ss.map(s => {
-        const pair = crewPairingCheck(s);
         return `
         <div class="selected-item">
           <strong>${schedMonthNum(s)}/${s.day} · ${s.title}</strong>
@@ -2530,7 +2468,6 @@ function renderSelection() {
             ${s.reportTime ? `<div><dt>check in</dt><dd>${s.reportTime}</dd></div>` : ""}
             ${s.releaseTime ? `<div><dt>check out</dt><dd>${s.releaseTime}</dd></div>` : ""}
             <div><dt>편조</dt><dd>${s.crewComposition || "-"}</dd></div>
-            <div><dt>편조기준</dt><dd>${pair.label}</dd></div>
             ${s.aircraft ? `<div><dt>기종/자격</dt><dd>${s.aircraft}${s.requiresEdto?" · EDTO":""}${s.requiresCat3?" · CAT III":""}</dd></div>` : ""}
           </dl>
         </div>`;

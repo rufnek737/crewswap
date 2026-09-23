@@ -96,3 +96,18 @@ test('추론 결과를 글에 실어 보낸다', () => {
   assert.match(app, /GRADE_POLICY\.narrowOpposite\(state\.user\.roleType\)/);
   assert.match(worker, /oppositeGrades: Array\.isArray\(offered\.oppositeGrades\)/);
 });
+
+test('내가 올리는 스케줄에는 편조 기준을 걸지 않는다', () => {
+  // Kay: "내가 c등급인데 당연히 A등급 부기장이잖아. 저건 적절하지 않지 — 상대방이
+  // 스왑을 하려고 할 때 필요한 거지." 내가 이미 그 비행에 편성돼 있으니 적법한 것이 당연하다.
+  // 판정이 필요한 것은 내가 **가져올** 비행이고, 그건 postGradeCheck 이 한다.
+  assert.doesNotMatch(app, /label:"등급에 따른 비행편조"/);
+  assert.doesNotMatch(app, /crewPairingCheck/);
+  assert.doesNotMatch(app, /<dt>편조기준<\/dt>/);
+  assert.match(app, /function postGradeCheck\(post\)/);
+});
+
+test('상호 합의 스왑 수당 안내는 넣지 않는다', () => {
+  // Kay 지시. 규정에 있다고 전부 앱에 넣을 일은 아니다.
+  assert.doesNotMatch(app, /상호 합의 스왑 수당/);
+});
