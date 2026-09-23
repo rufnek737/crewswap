@@ -7,7 +7,10 @@
 // 네이티브 앱(Capacitor)은 capacitor://localhost에서 로드되므로 API를 절대경로로 부른다.
 // API는 Cloudflare Worker 한 곳뿐이다 — 서버리스 함수는 모두 Worker로 이관했다.
 // URL 변경 시: npx wrangler deploy 출력값으로 교체.
-const API_BASE = "https://crewswap-api.tae26001.workers.dev";
+/* 커스텀 도메인. workers.dev 주소도 계속 살아 있다(`wrangler.toml` 의 workers_dev = true) —
+   이미 배포된 빌드가 그쪽을 보고 있으므로 절대 끄지 않는다. 한 번 껐다가 설치된 앱 전원이
+   약 2분간 서버를 잃었다. */
+const API_BASE = "https://api.rufnekcrew.com";
 // 앱 버전 표기 — 대부분의 앱처럼 '내 정보' 맨 아래에 버전과 배포일을 담백하게 보여준다.
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
