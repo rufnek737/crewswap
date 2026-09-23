@@ -61,7 +61,7 @@ test("the PRO alert screen stays concise and verifies native delivery", () => {
   assert.doesNotMatch(html, /PRO 전용 편의 기능/);
   assert.match(app, /\/api\/premium-alert-test/);
   assert.match(app, /테스트 알림을 보냈습니다/);
-  assert.match(worker, /CrewSwap 알림 테스트/);
+  assert.match(worker, /듀티스왑 알림 테스트/);
 
   // 알림은 iOS·안드로이드 양쪽으로 나간다. 안내 문구를 iPhone으로 못박으면
   // 안드로이드 사용자에게 자기 얘기가 아닌 것처럼 읽힌다.
@@ -74,7 +74,7 @@ test("PRO benefits and purchase entry points are visible without opening Q&A", (
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(html, /맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기/);
-  assert.match(html, /CrewSwap PRO 혜택/);
+  assert.match(html, /듀티스왑 PRO 혜택/);
   assert.match(html, /id="openPremiumAlertManager"/);
   assert.match(html, /id="openProfilePro"/);
   assert.match(html, /id="openMainPro"/);

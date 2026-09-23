@@ -471,10 +471,10 @@ async function handleSendVerify(request, env) {
       body: JSON.stringify({
         from: env.RESEND_FROM,
         to: email,
-        subject: '[CrewSwap] 이메일 인증 코드',
+        subject: '[듀티스왑] 이메일 인증 코드',
         html: `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;">
           <div style="background:#2B9FD9;color:#fff;padding:14px 20px;border-radius:10px 10px 0 0;">
-            <strong style="font-size:18px;">CrewSwap</strong>
+            <strong style="font-size:18px;">듀티스왑</strong>
             <span style="opacity:.8;font-size:12px;margin-left:8px;">승무원 스케줄 스왑 매칭</span>
           </div>
           <div style="border:1px solid #dce3ec;border-top:0;padding:28px;border-radius:0 0 10px 10px;background:#fff;">
@@ -638,7 +638,7 @@ async function handleProPurchaseVerify(request, env, authEmail) {
     const clientPayload = decodeAppleTransaction(signedTransaction);
     const clientValidation = validateCrewSwapTransaction(clientPayload, transactionId);
     if (!clientValidation.ok && !clientValidation.revoked) {
-      return json({ error: 'CrewSwap PRO 거래 정보가 일치하지 않습니다', code: clientValidation.code }, 400);
+      return json({ error: '듀티스왑 PRO 거래 정보가 일치하지 않습니다', code: clientValidation.code }, 400);
     }
   } catch {
     return json({ error: 'App Store 거래 정보 형식이 올바르지 않습니다' }, 400);
@@ -656,7 +656,7 @@ async function handleProPurchaseVerify(request, env, authEmail) {
   const bindingKey = `iap:apple:${verified.environment}:${originalTransactionId}`;
   const existingOwner = await env.POSTS.get(bindingKey, { type: 'json' });
   if (existingOwner?.email && existingOwner.email !== authEmail) {
-    return json({ error: '이 App Store 구매는 다른 CrewSwap 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
+    return json({ error: '이 App Store 구매는 다른 듀티스왑 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
   }
 
   const userKey = `user:${authEmail}`;
@@ -738,7 +738,7 @@ async function handleCouponPurchaseVerify(request, env, authEmail) {
   const bindingKey = `iap:coupon:${verified.environment}:${payload.transactionId || transactionId}`;
   const existingOwner = await env.POSTS.get(bindingKey, { type: 'json' });
   if (existingOwner?.email && existingOwner.email !== authEmail) {
-    return json({ error: '이 App Store 구매는 다른 CrewSwap 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
+    return json({ error: '이 App Store 구매는 다른 듀티스왑 계정에 연결되어 있습니다', code: 'PURCHASE_ALREADY_LINKED' }, 409);
   }
 
   const grant = await runWalletCommand(env, authEmail, {
@@ -889,7 +889,7 @@ async function handlePremiumAlertTest(env, authEmail, allowSandbox = false) {
   for (const device of record.nativeDevices || []) {
     try {
       const result = await sendNativeNotification(env, device, {
-        title: '🔔 CrewSwap 알림 테스트',
+        title: '🔔 듀티스왑 알림 테스트',
         body: '백그라운드 알림이 정상 연결되었습니다.',
         route: 'find',
         postId: '',

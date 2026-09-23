@@ -1,6 +1,6 @@
 {
-  "name": "CrewSwap — 승무원 스케줄 스왑 매칭",
-  "short_name": "CrewSwap",
+  "name": "듀티스왑 — 승무원 스케줄 스왑 매칭",
+  "short_name": "듀티스왑",
   "description": "항공사 승무원 스케줄 스왑 매칭 플랫폼",
   "start_url": "/",
   "scope": "/",

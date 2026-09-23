@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v185';
-const SHELL = ['./index.html', './styles.css?v=185', './credit-policy.js?v=185', './post-dates.js?v=185', './schedule-continuity.js?v=185', './request-disclosure.js?v=185', './swap-usage.js?v=185', './post-history.js?v=185', './post-details.js?v=185', './mogiji-policy.js?v=185', './cabin-policy.js?v=185', './release-notice.js?v=185', './selection-flow.js?v=185', './airport-aliases.js?v=185', './grade-policy.js?v=185', './crew-seniority.js?v=185', './duty-window.js?v=185', './activity-codes.js?v=185', './duty-limits.js?v=185', './rest-window.js?v=185', './app.js?v=185', './manifest.json', './privacy.html', './terms.html', './support.html'];
+const CACHE = 'crewswap-v186';
+const SHELL = ['./index.html', './styles.css?v=186', './credit-policy.js?v=186', './post-dates.js?v=186', './schedule-continuity.js?v=186', './request-disclosure.js?v=186', './swap-usage.js?v=186', './post-history.js?v=186', './post-details.js?v=186', './mogiji-policy.js?v=186', './cabin-policy.js?v=186', './release-notice.js?v=186', './selection-flow.js?v=186', './airport-aliases.js?v=186', './grade-policy.js?v=186', './crew-seniority.js?v=186', './duty-window.js?v=186', './activity-codes.js?v=186', './duty-limits.js?v=186', './rest-window.js?v=186', './app.js?v=186', './manifest.json', './privacy.html', './terms.html', './support.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {
@@ -58,7 +58,7 @@ self.addEventListener('push', event => {
   if (!event.data) return;
   let data = {};
   try { data = event.data.json(); } catch { data = { body: event.data.text() }; }
-  event.waitUntil(self.registration.showNotification(data.title || 'CrewSwap', {
+  event.waitUntil(self.registration.showNotification(data.title || '듀티스왑', {
     body: data.body || '조건에 맞는 새 스왑이 올라왔습니다.',
     icon: './icon-192.png',
     badge: './icon-192.png',

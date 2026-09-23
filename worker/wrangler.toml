@@ -54,7 +54,7 @@ namespace_id = "737002"
 #   AUTH_SECRET=generate-a-long-random-secret
 #   VERIFY_SECRET=your-secret
 #   RESEND_API_KEY=re_xxxx
-#   RESEND_FROM=CrewSwap <no-reply@notify.rufnekcrew.com>
+#   RESEND_FROM=듀티스왑 <no-reply@notify.rufnekcrew.com>
 #   SUBMIT_REJECTION_VIEWERS=you@jejuair.net,ops@jejuair.net
 #     └ 회사 상신 반려 사유 로그(/api/submit-rejections)를 조회할 수 있는 계정.
 #       비워 두면 아무도 조회할 수 없다(기본 잠금).

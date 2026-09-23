@@ -81,7 +81,7 @@ export async function sendApnsNotification(env, device, message, fetchImpl = fet
   const topic = cleanDevice.bundleId || String(env.APNS_TOPIC).trim();
   const payload = {
     aps: {
-      alert: { title: String(message?.title || 'CrewSwap'), body: String(message?.body || '') },
+      alert: { title: String(message?.title || '듀티스왑'), body: String(message?.body || '') },
       sound: 'default',
       'thread-id': 'premium-swap-alerts',
     },
