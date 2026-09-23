@@ -144,8 +144,6 @@ const RULES = {
     grades: ["A","B","C"],
     positions: ["CAPT","FO"],
     aircraftOptions: ["NG","NG_MAX"],
-    pairingRule: { A: ["A","B","C"], B: ["A","B"], C: ["A"] },
-    specialAirports: ["CXR","TAG","BKI"],
     // 아래 한도는 FOM 비행근무시간 제한 표 기준(확인 시점 REV.70, 2023.08.30 — 개정되면 값을 다시 볼 것).
     // 기본은 기장 1명 + 기장 외 조종사 1명(2인 편조) 행이고, 근무코드가 3으로 시작하는
     // 3인 편조(기장2+부기장1, 예: 발리 3PC/3NC)는 승무시간 12h 행이 적용된다.
@@ -153,7 +151,6 @@ const RULES = {
     consecutive24hAugmentedLimit: 12, // 3인 편조(기장2+부기장1) 연속 24시간 최대 승무시간
     consecutive24hFdpLimit: 13, // 연속 24시간 최대 비행근무시간 13h
     consecutive28dLimit: 100, // 연속 28일 최대 승무시간 100h (종전 consecutive30dLimit 95h는 기간·값 모두 오류)
-    yearlyHoursLimit: 1000,   // 연속 365일 최대 승무시간
     duty7dLimit: 60,          // 연속 7일 최대 근무시간 (승무시간이 아니라 근무시간)
     duty28dLimit: 190,        // 연속 28일 최대 근무시간
     dutyConsecLimit: 5,
@@ -173,7 +170,6 @@ const RULES = {
     swapLimitYearly: 12,           // 연 12회
     dutyConsecLimit: 7,            // 7일 연속 근무 불가 (STBY 포함)
     restHoursMin: 10,              // 항공안전법 객실승무원 휴식시간
-    changeableTypes: ["OFF","VAC"],// UV_ML 불가
     parser: "crewconnex_jejuair",
     submitMenu: "J-ONE → 스케줄 변경 신청 → 신청",
     submitContact: "객실편조팀 ☎ 070-7420-1756",
@@ -688,11 +684,10 @@ function cabinRestReqMin(arrAirport, nextDepAirport, fdtMin, nextType) {
   };
   const policy = window.CrewSwapCabinPolicy;
   const next = { dep: nextDepAirport, type: nextType };
-  const stdGap = policy?.minimumRestGapMinutes(
-    previous,
-    next,
-  ) ?? 10 * 60;
-  return Math.max(10 * 60, stdGap - (policy?.reportToDepartureMinutes(next) || 0));
+  // 최소 휴식은 규칙표에서 읽는다 — 숫자를 코드에 박아두면 설정을 고쳐도 반영되지 않는다.
+  const minRest = (currentRules()?.restHoursMin || 10) * 60;
+  const stdGap = policy?.minimumRestGapMinutes(previous, next, { minRestMinutes: minRest }) ?? minRest;
+  return Math.max(minRest, stdGap - (policy?.reportToDepartureMinutes(next) || 0));
 }
 
 // offered: { days, reportTime(첫날 C/I), firstDepAirport(첫 출발공항),

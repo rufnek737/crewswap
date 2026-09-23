@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import cabinPolicy from "../cabin-policy.js";
+import { readFileSync } from "node:fs";
 
 const {
   preserveRestrictedType,
@@ -68,4 +69,28 @@ test("recalculates cabin rest after replacing an outgoing day with incoming work
   assert.equal(violation?.gapMinutes, 870);
   assert.equal(violation?.requiredMinutes, 900);
   assert.equal(findRestViolation(original, outgoing, allowed), null);
+});
+
+test('최소 휴식은 규칙표에서 읽는다', () => {
+  // 숫자를 코드에 박아두면 설정을 고쳐도 반영되지 않는다 — restHoursMin 이 그런 상태였다.
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(app, /currentRules\(\)\?\.restHoursMin \|\| 10/);
+  assert.doesNotMatch(app, /\?\? 10 \* 60;/);
+
+  const policy = readFileSync(new URL('../cabin-policy.js', import.meta.url), 'utf8');
+  assert.match(policy, /minRestMinutes = DEFAULT_MIN_REST_MIN/);
+});
+
+test('넘겨준 최소 휴식이 실제로 쓰인다', () => {
+  const previous = { type: '국제선', arr: 'ICN' };
+  const next = { dep: 'PUS', type: '국제선' };   // 표에 없는 구간 → 기본값이 쓰인다
+  assert.equal(cabinPolicy.minimumRestGapMinutes(previous, next), 600);
+  assert.equal(cabinPolicy.minimumRestGapMinutes(previous, next, { minRestMinutes: 720 }), 720);
+});
+
+test('전날 사무 근무는 기본 휴식보다 1시간 길다', () => {
+  const ofc = { type: 'OFC' };
+  const next = { dep: 'GMP', type: '국내선' };
+  assert.equal(cabinPolicy.minimumRestGapMinutes(ofc, next), 660);
+  assert.equal(cabinPolicy.minimumRestGapMinutes(ofc, next, { minRestMinutes: 720 }), 780);
 });

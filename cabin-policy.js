@@ -53,11 +53,16 @@
     return !!entry && !NON_DUTY_TYPES.has(String(entry.type || "").toUpperCase());
   }
 
-  function minimumRestGapMinutes(previous, next) {
-    if (!previous || !next) return 10 * 60;
-    if (String(previous.type || "").toUpperCase() === "OFC") return 11 * 60;
+  /* 객실승무원 최소 휴식 10시간(항공안전법). 규칙표의 `restHoursMin` 을 받아 쓴다 —
+     예전에는 여기에 숫자로 박혀 있어, 설정을 고쳐도 아무 일이 일어나지 않았다. */
+  const DEFAULT_MIN_REST_MIN = 10 * 60;
+
+  function minimumRestGapMinutes(previous, next, { minRestMinutes = DEFAULT_MIN_REST_MIN } = {}) {
+    if (!previous || !next) return minRestMinutes;
+    // 전날 사무 근무(18시 퇴근)는 다음날 05시부터 가능 — 기본 휴식보다 1시간 길다.
+    if (String(previous.type || "").toUpperCase() === "OFC") return minRestMinutes + 60;
     const routeKey = `${String(previous.arr || "").toUpperCase()}-${String(next.dep || "").toUpperCase()}`;
-    const baseGap = BASE_GAP_MINUTES.get(routeKey) || 10 * 60;
+    const baseGap = BASE_GAP_MINUTES.get(routeKey) || minRestMinutes;
     // 최소 객실승무원 수를 초과하는 장시간 비행근무는 규정상 휴식이 14시간이므로
     // 기본 10시간 대비 4시간을 추가한다.
     return dutyMinutes(previous) > 14 * 60 ? baseGap + 4 * 60 : baseGap;
@@ -126,6 +131,7 @@
 
   const api = {
     BASE_GAP_MINUTES,
+    DEFAULT_MIN_REST_MIN,
     NON_DUTY_TYPES,
     preserveRestrictedType,
     minimumRestGapMinutes,
