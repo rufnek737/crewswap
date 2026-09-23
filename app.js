@@ -1717,10 +1717,10 @@ function checkRulesForSelection() {
       ref: "기장↔기장, 부기장↔부기장 간에만 교환할 수 있습니다." },
     { label:"기종 조건", status: ss.every(userAircraftOK) ? "PASS" : "FAIL",
       detail: ss.every(userAircraftOK) ? "내 기종 자격으로 운항 가능" : "내 기종 자격으로 불가 가능성",
-      ref: "기종 자격 — NG(737-800)와 MAX(737-8/10)는 자격이 다릅니다. 내 자격에 없는 기종은 스왑 불가." },
+      ref: "내 기종 자격이 없는 비행은 스왑할 수 없습니다." },
     { label:"EDTO 조건", status: needsEdto && !state.user.edto ? "FAIL" : "PASS",
       detail: needsEdto ? (state.user.edto ? "EDTO 자격 보유" : "EDTO 미보유 — 불가") : "해당 없음",
-      ref: "EDTO — 쌍발기 장거리 운항 자격. 미보유 시 해당 비행은 스왑할 수 없습니다." },
+      ref: "EDTO 자격이 없으면 해당 비행은 스왑할 수 없습니다." },
     { label:"회사 근무교환 신청 마감", status: dd.expired ? "FAIL" : dd.days < 1 ? "WARN" : "PASS",
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
       ref: "패턴 시작일 기준 영업일 2일 전 17시까지 결재 기안과 최종승인이 모두 끝나야 합니다. 신청만 해두면 늦습니다." },
@@ -2423,9 +2423,12 @@ function renderSelection() {
     regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다" : "";
   } else {
     regBtn.textContent = state.guideFlow === "post" ? "다음: 희망 조건 입력 →" : "이 근무로 스왑 올리기";
-    regBtn.disabled = !has || hasFail || hasPast;
+    /* 규정에 걸려도 등록은 막지 않는다. 앱의 판정은 사전 검토일 뿐이고 최종 판단은 회사가
+       한다 — 앱이 잘못 걸러서 멀쩡한 스왑을 못 올리는 쪽이 더 나쁘다. 걸린 항목은 위
+       목록에 그대로 보인다. 지난 근무는 규정이 아니라 사실의 문제라 그대로 막는다. */
+    regBtn.disabled = !has || hasPast;
     regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다"
-      : hasFail ? `등록 불가: ${failItems.map(c => c.label).join(", ")}` : "";
+      : hasFail ? `규정 확인 필요: ${failItems.map(c => c.label).join(", ")}` : "";
   }
   $("#clearSelectionButton").disabled = !has;
   if (!has) {
@@ -2510,7 +2513,7 @@ function renderRuleCheck() {
         <span class="verdict">${c.status === "PASS" ? "통과" : c.status === "WARN" ? "확인" : c.status === "FAIL" ? "불가" : c.status === "UNKNOWN" ? "미확인" : "-"}</span>
       </div>
     `).join("")}
-    <p class="disclaimer">⚠️ 본 결과는 회사 최종 승인 전 사전 검토용입니다. 실제 가능 여부는 회사 시스템 및 규정에 따라 달라질 수 있습니다.</p>
+    <p class="disclaimer"><strong>본 결과는 회사 최종 승인 전 사전 검토용입니다.</strong><br>실제 가능 여부는 회사 시스템 및 규정에 따라 달라질 수 있습니다.</p>
   `;
   // 규정 원본 토글
   checks.forEach((c, i) => {
@@ -2865,13 +2868,13 @@ function renderPostFooter() {
   const checks = checkRulesForSelection();
   const hasFail = checks.some(c => c.status === "FAIL");
   const hasWarn = checks.some(c => c.status === "WARN");
-  const canSubmit = hasOffered && !hasFail;
-  submitBtn.disabled = !canSubmit || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
+  // 규정 위반만으로는 막지 않는다(위 주석 참고). 크레딧이 없을 때만 막는다.
+  submitBtn.disabled = !hasOffered || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
   $("#saveDraftButton").disabled = !hasOffered;
 
   const hasUnknown = checks.some(c => c.status === "UNKNOWN");
   const headerNote = hasFail
-    ? `<span class="rule-header-note fail">불가 항목 있음 — 등록 차단됨</span>`
+    ? `<span class="rule-header-note fail">불가 항목 있음 — 회사에서 반려될 수 있습니다</span>`
     : hasWarn
     ? `<span class="rule-header-note warn">확인 항목 있음 — 등록 후 회사 문의 필요</span>`
     : hasUnknown
@@ -2882,7 +2885,7 @@ function renderPostFooter() {
     <div class="rule-check-header">
       <div class="rule-check-title">
         <strong>회사 룰 사전 체크</strong>
-        <span class="hint" style="font-size:11px;">✗ 불가 = 등록 차단 · ⚠ 확인 = 등록 가능, 회사 문의 필요</span>
+        <span class="hint" style="font-size:11px;">✗ 불가 · ⚠ 확인 — 모두 등록은 가능하며 회사 승인에서 갈립니다</span>
       </div>
       ${headerNote}
     </div>

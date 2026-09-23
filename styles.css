@@ -405,7 +405,19 @@ input[readonly] { background: #f6f8fb; color: var(--muted); }
 .rule-check .rule-row.pass .verdict { color: var(--c-pass); background: #fff; }
 .rule-check .rule-row.warn .verdict { color: var(--c-warn); background: #fff; }
 .rule-check .rule-row.fail .verdict { color: var(--c-fail); background: #fff; }
-.rule-check .disclaimer { font-size: 11px; color: var(--muted); padding: 6px; }
+/* 앱의 판정은 사전 검토일 뿐이라는 것이 이 화면에서 가장 중요한 문장이다.
+   회색 11px 로 깔려 있어 아무도 읽지 않았다. */
+.rule-check .disclaimer {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--warn-fg, #7a5200);
+  background: var(--warn-bg, #fff6e5);
+  border: 1px solid rgba(122, 82, 0, .18);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+.rule-check .disclaimer strong { font-weight: 700; }
 
 /* ===== 버튼 ===== */
 .primary-button, .secondary-button {
