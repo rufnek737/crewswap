@@ -104,9 +104,15 @@ CrewConnex에서 근무표를 불러오면 달력에 정리됩니다. 다른 승
 
 ---
 
-## 4. 남은 준비물
+## 4. 준비물 (2026-09-24 전부 완료)
 
-- **Play용 스크린샷** — 폰 규격(최소 2장, 16:9 또는 9:16). iOS·iPad와 규격이 달라 따로 필요하다
-- **고해상도 아이콘** 512×512 PNG
-- **그래픽 이미지** 1024×500 PNG — Play 상단 배너. 없으면 등록이 막힌다
-- 개인정보처리방침 URL — `https://rufnek737.github.io/crewswap/privacy.html` (이미 있음)
+| 항목 | 위치 |
+|---|---|
+| Play 스크린샷 5장 (1104×2400) | `/tmp/shots/최종/11~15` |
+| 고해상도 아이콘 512×512 | `icon-512.png` |
+| 그래픽 이미지 1024×500 | `play-feature-graphic.png` |
+| AAB (versionCode 5) | `android/app/build/outputs/bundle/release/app-release.aab` |
+
+**개인정보처리방침 URL** — `https://rufnekcrew.com/crewswap/privacy` 를 쓴다.
+GitHub Pages 사본(`rufnek737.github.io/crewswap/privacy.html`)도 같은 내용이지만,
+자체 도메인이 조직 웹사이트로 등록돼 있고 Pilot Logbook 문서도 거기 있어 그쪽이 정본이다.
