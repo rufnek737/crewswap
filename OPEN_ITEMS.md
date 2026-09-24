@@ -112,21 +112,28 @@ A·C/BLH/CC/Pos` 다. 사번·방송등급이 CC 열 안에 같이 오는지, �
 23. ~~**안드로이드 AAB 가 2026-09-09 자다**~~ — **2026-09-24 재빌드 완료.** 26번 참조.
 24. **`splash.mp4` 가 「SCHEDULE SWAP」** — 지금은 그대로 가기로 했다(16번 참조).
     나중에 바꾼다면 영상 자산을 새로 만들어야 한다.
-25. ~~**rufnekcrew-site 를 내 손으로 배포할 수 없다**~~ — **2026-09-24 해결.**
-    ChatGPT 호스팅(`rufnekcrew.arpw-56.chatgpt.site`)에서 **Kay 의 Cloudflare 로 옮겼다**:
-    `https://rufnekcrew-site.tae26001.workers.dev`. 빌드가 이미 Worker 형태로 나오고
-    (`.wrangler/deploy/config.json` 이 `dist/server/wrangler.json` 을 가리킨다) d1·r2
-    바인딩이 없어 그대로 올라갔다. **프로젝트 루트에서** `npx wrangler deploy` 로 배포한다
+25. ~~**rufnekcrew-site 를 내 손으로 배포할 수 없다**~~ — **2026-09-24 완전 해결.**
+    ChatGPT 호스팅에서 **Kay 의 Cloudflare Worker `rufnekcrew-site` 로 옮기고
+    `rufnekcrew.com` 커스텀 도메인까지 붙였다.** 이제 Claude 가 직접 배포한다.
+    배포는 **프로젝트 루트에서** `npx wrangler deploy`
     (`dist/server` 안에서 하면 설정 파일이 둘이라며 거부한다).
 
-    ⏳ **남은 것: `rufnekcrew.com` DNS 전환.** 지금도 루트 A 레코드가 옛 호스팅
-    (`162.159.143.30`)을 가리켜 **공개 주소에는 아직 「CrewSwap」이 떠 있다.**
-    Claude 토큰에 dns 쓰기 권한이 없어 Kay 가 대시보드에서 해야 한다.
-    Play 웹사이트 인증은 DNS **TXT** 로 걸려 있어 A 레코드를 바꿔도 풀리지 않는다.
+    도메인 전환 때 루트 `A` 레코드 2개(`162.159.143.30`, `172.66.3.26`)를 지워야
+    「Add Domain」이 통과한다 — 「externally managed DNS records」 오류가 그 뜻이다.
+    **A 두 개만 지우고 나머지 15개는 손대지 않는다**: Play 인증 TXT, SPF TXT,
+    MX 3개(`info@` 수신), `api.rufnekcrew.com` Worker(앱 서버), Resend 용 CNAME·TXT.
+    전환 후 전부 살아 있는 것을 확인했다.
+
+    사이트에서 함께 고친 것 — 「듀티스왑」·항공사 일반화, **Pilot Logbook 을 「출시 예정」**
+    으로 내리고 링크 차단, 히어로 문구 `DUTY ✈ OFF`, 심볼을 앱 아이콘의 원형 화살표로.
+    ⚠️ **로고·메뉴 링크가 먹지 않던 것은 `vinext` 의 `next/link` 버그다**
+    (콘솔: `RSC prefetch setup error: f is not a function`). 옛 호스팅에서도 같았다.
+    평범한 `<a>` 로 되돌려 해결했으니 **`next/link` 를 다시 들이지 말 것.**
 
 26. **안드로이드 AAB 재빌드 완료(2026-09-24)** — 8.4MB, 업로드 키 서명 확인.
     번들 안까지 열어 확인했다: manifest·홈 화면 이름 「듀티스왑」, API 는 운영 도메인,
-    옛 이름 0건, versionCode 4 / 1.2.0.
+    옛 이름 0건. **스플래시 비율 수정을 담아 versionCode 5 로 다시 말았다**
+    (iOS 다음 빌드는 47 — 심사 중인 46 에는 영향 없다).
     ⚠️ **빌드에 `JAVA_HOME` 지정이 필요하다** — 시스템에 JDK 가 없어 `./gradlew` 가 바로
     실패한다. Android Studio 번들 JDK 를 쓴다:
     `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew bundleRelease`
@@ -136,4 +143,9 @@ A·C/BLH/CC/Pos` 다. 사번·방송등급이 CC 열 안에 같이 오는지, �
     승인받는 등의 작업」을 먼저 끝내라고 한다. 결과는 `hosihana2@gmail.com` 메일로 온다.
     승인되면 전화번호 2개(연락처·개발자, 둘 다 `+821086670785`)를 각각 인증하면
     「앱 만들기」가 열린다.
+
+28. **스플래시가 넓은 화면에서 잘리던 것(2026-09-24 수정)** — `splash.mp4` 는 1080x1920
+    세로인데 `object-fit: cover` 라 웹으로 열면 위아래가 잘려 로고와 문구가 사라졌다.
+    가로가 세로보다 길어지는 지점(`min-aspect-ratio: 3/4`)부터 `contain` 으로 바꾸고
+    버튼을 영상 폭에 맞춰 모았다. 폰에서는 종전대로 꽉 찬다.
 
