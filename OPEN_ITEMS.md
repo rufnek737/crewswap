@@ -109,19 +109,31 @@ A·C/BLH/CC/Pos` 다. 사번·방송등급이 CC 열 안에 같이 오는지, �
     어제 「스크린샷 완료」라고 적었던 것은 파일만 완료였고 App Store Connect 에는
     옛 08 번(「CrewSwap PRO」)이 올라가 있었다. 교체하고 순서를 3 번 자리로 되돌렸다
     (새 스샷은 세트 맨 뒤에 붙는다 — 업로드 후 반드시 순서를 확인할 것).
-23. **안드로이드 AAB 가 2026-09-09 자다** — 규정 검토·이름 변경 전 빌드라 Play 에
-    올리기 전에 다시 말아야 한다. versionCode 는 4 로 올려뒀다.
+23. ~~**안드로이드 AAB 가 2026-09-09 자다**~~ — **2026-09-24 재빌드 완료.** 26번 참조.
 24. **`splash.mp4` 가 「SCHEDULE SWAP」** — 지금은 그대로 가기로 했다(16번 참조).
     나중에 바꾼다면 영상 자산을 새로 만들어야 한다.
-25. **rufnekcrew-site 를 내 손으로 배포할 수 없다** — 소스는 `~/projects/rufnekcrew-site`
-    에 있고 2026-09-24 에 「듀티스왑」·항공사 일반화까지 고쳐 커밋했지만(테스트 11개 통과),
-    **호스팅이 ChatGPT(`rufnekcrew.arpw-56.chatgpt.site`)라 배포 경로가 없다.**
-    Kay 는 이제 ChatGPT 를 쓰지 않으므로 사실상 사이트가 얼어붙었다 — 지금도 화면에
-    「CrewSwap」이 떠 있다.
-    옮기면 된다: `vinext` + `@openai/sites-vite-plugin` 으로 Cloudflare Worker 를
-    빌드하는 구조이고 `.openai/hosting.json` 의 d1·r2 가 모두 null 이라 DB 의존이 없다.
-    Claude 토큰에 `workers(write)`·`pages(write)` 가 있어 **배포 자체는 가능**하지만
-    **DNS 전환은 Kay 가 해야 한다**(dns 쓰기 권한 없음).
-    **2026-09-24 로 이전을 막던 사유가 사라졌다** — Play 웹사이트 인증이 DNS TXT 로
-    끝나서, 사이트를 어디서 서빙하든 인증이 유지된다. 이제 옮겨도 된다.
+25. ~~**rufnekcrew-site 를 내 손으로 배포할 수 없다**~~ — **2026-09-24 해결.**
+    ChatGPT 호스팅(`rufnekcrew.arpw-56.chatgpt.site`)에서 **Kay 의 Cloudflare 로 옮겼다**:
+    `https://rufnekcrew-site.tae26001.workers.dev`. 빌드가 이미 Worker 형태로 나오고
+    (`.wrangler/deploy/config.json` 이 `dist/server/wrangler.json` 을 가리킨다) d1·r2
+    바인딩이 없어 그대로 올라갔다. **프로젝트 루트에서** `npx wrangler deploy` 로 배포한다
+    (`dist/server` 안에서 하면 설정 파일이 둘이라며 거부한다).
+
+    ⏳ **남은 것: `rufnekcrew.com` DNS 전환.** 지금도 루트 A 레코드가 옛 호스팅
+    (`162.159.143.30`)을 가리켜 **공개 주소에는 아직 「CrewSwap」이 떠 있다.**
+    Claude 토큰에 dns 쓰기 권한이 없어 Kay 가 대시보드에서 해야 한다.
+    Play 웹사이트 인증은 DNS **TXT** 로 걸려 있어 A 레코드를 바꿔도 풀리지 않는다.
+
+26. **안드로이드 AAB 재빌드 완료(2026-09-24)** — 8.4MB, 업로드 키 서명 확인.
+    번들 안까지 열어 확인했다: manifest·홈 화면 이름 「듀티스왑」, API 는 운영 도메인,
+    옛 이름 0건, versionCode 4 / 1.2.0.
+    ⚠️ **빌드에 `JAVA_HOME` 지정이 필요하다** — 시스템에 JDK 가 없어 `./gradlew` 가 바로
+    실패한다. Android Studio 번들 JDK 를 쓴다:
+    `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew bundleRelease`
+
+27. **Play 서류 승인 대기 중** — 홈 카드에서 본인 확인이 사라졌지만 그것은 **접수**이지
+    승인이 아니다. 전화번호 인증 화면은 여전히 「신원을 인증하고 Google 에서 서류를
+    승인받는 등의 작업」을 먼저 끝내라고 한다. 결과는 `hosihana2@gmail.com` 메일로 온다.
+    승인되면 전화번호 2개(연락처·개발자, 둘 다 `+821086670785`)를 각각 인증하면
+    「앱 만들기」가 열린다.
 
