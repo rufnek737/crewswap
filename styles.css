@@ -1290,6 +1290,14 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 /* 로그인된 사용자에게 보여주는 짧은 인트로 — 버튼이 없으므로 하단 그라데이션도 뺀다 */
 .splash-screen.is-intro::after { display: none; }
 .splash-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* 스플래시 영상은 1080x1920 세로다. 폰에서는 cover 가 맞지만 화면이 가로로 넓어지면
+   위아래가 잘려 로고와 문구가 사라진다(웹으로 열었을 때). 세로보다 가로가 길어지는
+   지점부터는 통째로 보여주고, 버튼도 영상 폭에 맞춰 가운데로 모은다. */
+@media (min-aspect-ratio: 3/4) {
+  .splash-video { object-fit: contain; }
+  .splash-buttons { max-width: min(420px, calc(100vh * 9 / 16)); margin: 0 auto; padding: 0; }
+  .splash-screen::after { display: none; }
+}
 .splash-screen::after {
   content: '';
   position: absolute;
