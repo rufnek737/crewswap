@@ -1,5 +1,6 @@
 import { compareAndSwap } from './atomic-store.mjs';
 import { createEmailChallenge, verifyEmailChallenge } from './email-verification.mjs';
+import { blockList, hiddenPairs, isHidden, setBlock, createReport } from './moderation.mjs';
 import webpush from 'web-push';
 import {
   matchingSearches,
@@ -1069,7 +1070,10 @@ async function handlePostsGet(request, env) {
     // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
     // 보여주되 클라이언트에서 요청 버튼을 막는다.
-    const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting')).map(p => {
+    // 차단은 양방향이다 — 내가 막은 사람도, 나를 막은 사람도 서로 보이지 않는다.
+    const visible = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting'));
+    const hidden = auth ? await hiddenPairs(env, auth.email, visible.map(p => p.ownerEmail)) : new Set();
+    const posts = visible.filter(p => !hidden.has(String(p.ownerEmail || '').toLowerCase())).map(p => {
       const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
@@ -1339,6 +1343,9 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (post.status !== 'active') return json({ error: '종료되었거나 이미 성사된 글입니다' }, 409);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
+    // 어느 방향이든 차단이면 요청 자체가 성립하지 않는다.
+    if (await isHidden(env, authEmail, post.ownerEmail))
+      return json({ error: '요청할 수 없는 상대입니다' }, 403);
 
     const requestedId = String(requestId || '').trim();
     const id = /^REQ-[A-Za-z0-9-]{8,100}$/.test(requestedId)
@@ -1923,6 +1930,28 @@ async function handleRequestsGet(request, env, authEmail) {
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
+/* ── 차단·신고 ──────────────────────────────────────────────── */
+
+async function handleBlocksGet(env, authEmail) {
+  return json({ blocked: await blockList(env, authEmail) });
+}
+
+async function handleBlocksSet(request, env, authEmail) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const result = await setBlock(env, authEmail, { ...body, blocked: body?.blocked !== false });
+  if (!result.ok) return json({ error: result.error }, result.status || 400);
+  return json({ ok: true, blocked: result.blocked });
+}
+
+async function handleReportCreate(request, env, authEmail) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  const result = await createReport(env, authEmail, body || {});
+  if (!result.ok) return json({ error: result.error }, result.status || 400);
+  return json({ ok: true, id: result.id });
+}
+
 /* ── posts-delete ───────────────────────────────────────────── */
 
 function postDeadlinePassed(post, now = Date.now()) {
@@ -2490,6 +2519,9 @@ export default {
       else if (path === '/api/schedules-sync') response = await handleSchedulesSync(request, env, auth.email);
       else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
+      else if (path === '/api/blocks-get') response = await handleBlocksGet(env, auth.email);
+      else if (path === '/api/blocks-set') response = await handleBlocksSet(request, env, auth.email);
+      else if (path === '/api/report-create') response = await handleReportCreate(request, env, auth.email);
       else if (path === '/api/posts-get') response = await handlePostsGet(request, env);
       else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
       else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);

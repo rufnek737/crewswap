@@ -17,6 +17,8 @@ function route(rawKey) {
   if (key.startsWith('iap:')) return { table: 'purchase_bindings', column: 'key', id: key };
   if (key.startsWith('verify:')) return { table: 'verification_challenges', column: 'email', id: key.slice(7) };
   if (key.startsWith('agrade:')) return { table: 'crew_grades', column: 'name', id: key.slice(7) };
+  if (key.startsWith('block:')) return { table: 'user_blocks', column: 'email', id: key.slice(6) };
+  if (key.startsWith('report:')) return { table: 'reports', column: 'id', id: key.slice(7) };
   if (key.startsWith('user:')) return { table: 'users', column: 'email', id: key.slice(5) };
   if (key.startsWith('wallet:')) return { table: 'wallets', column: 'email', id: key.slice(7) };
   if (key.startsWith('schedule:')) return { table: 'schedules', column: 'email', id: key.slice(9) };
@@ -32,6 +34,7 @@ function columnsFor(table, id, rec) {
     case 'users': return { created_at: rec?.createdAt ?? null };
     case 'posts': return { owner_email: rec?.ownerEmail ?? null, status: rec?.status ?? null, created_at: rec?.registeredAt ?? null };
     case 'requests': return { post_id: rec?.postId ?? null, from_email: rec?.fromEmail ?? null, to_email: rec?.toEmail ?? null, created_at: rec?.createdAt ?? null };
+    case 'reports': return { created_at: rec?.createdAt ?? null };
     case 'idempotency': return { created_at: new Date().toISOString() };
     default: return {};
   }
