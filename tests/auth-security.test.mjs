@@ -192,7 +192,7 @@ test('the server wallet charges once, blocks overspending, and refunds a cancell
 });
 
 test('formal requests use server credits while interest checks remain free and idempotent', async () => {
-  const targetPost = { id:'TARGET', ownerEmail:'owner@jejuair.net', ownerNick:'Owner', offered:{ patternName:'TARGET' } };
+  const targetPost = { status:'active', id:'TARGET', ownerEmail:'owner@jejuair.net', ownerNick:'Owner', offered:{ patternName:'TARGET' } };
   const runtime = env({
     'user:requester@jejuair.net': { email:'requester@jejuair.net' },
     'post:TARGET': targetPost,

@@ -7,78 +7,7 @@ import assert from 'node:assert/strict';
 import { createStore, listPosts, listRequests, listPremiumAlerts, savePremiumAlerts,
   listSubmitRejections, appendSubmitRejection } from '../worker/store.js';
 
-function createFakeD1() {
-  const tables = new Map(); // table -> Map(pk -> row)
-  const tableOf = (name) => {
-    if (!tables.has(name)) tables.set(name, new Map());
-    return tables.get(name);
-  };
-
-  function run(sql, binds) {
-    let m;
-    if ((m = /^SELECT (\w+) AS value FROM (\w+) WHERE (\w+) = \?$/.exec(sql))) {
-      const [, col, table, where] = m;
-      for (const row of tableOf(table).values()) {
-        if (String(row[where]) === String(binds[0])) return { first: { value: row[col] ?? null } };
-      }
-      return { first: null };
-    }
-    if ((m = /^INSERT OR REPLACE INTO (\w+) \(([^)]+)\) VALUES \(([^)]+)\)$/.exec(sql))) {
-      const [, table, colList] = m;
-      const cols = colList.split(',').map(s => s.trim());
-      const row = {};
-      cols.forEach((c, i) => { row[c] = binds[i]; });
-      tableOf(table).set(String(binds[0]), row);
-      return { first: null };
-    }
-    if ((m = /^DELETE FROM (\w+) WHERE (\w+) = \?$/.exec(sql))) {
-      const [, table, where] = m;
-      for (const [pk, row] of tableOf(table)) {
-        if (String(row[where]) === String(binds[0])) tableOf(table).delete(pk);
-      }
-      return { first: null };
-    }
-    if ((m = /^SELECT data FROM (\w+)$/.exec(sql))) {
-      return { results: [...tableOf(m[1]).values()].map(r => ({ data: r.data })) };
-    }
-    if ((m = /^SELECT data FROM (\w+) ORDER BY (\w+) ASC$/.exec(sql))) {
-      const [, table, col] = m;
-      const rows = [...tableOf(table).values()].sort((a, b) => String(a[col]).localeCompare(String(b[col])));
-      return { results: rows.map(r => ({ data: r.data })) };
-    }
-    if ((m = /^INSERT OR IGNORE INTO (\w+) \(([^)]+)\) VALUES \(([^)]+)\)$/.exec(sql))) {
-      const [, table, colList] = m;
-      const cols = colList.split(',').map(s => s.trim());
-      const pk = String(binds[0]);
-      if (tableOf(table).has(pk)) return { first: null }; // IGNORE — 기존 행 유지
-      const row = {};
-      cols.forEach((c, i) => { row[c] = binds[i]; });
-      tableOf(table).set(pk, row);
-      return { first: null };
-    }
-    if ((m = /^SELECT data FROM requests WHERE from_email = \? OR to_email = \?$/.exec(sql))) {
-      const results = [...tableOf('requests').values()]
-        .filter(r => r.from_email === binds[0] || r.to_email === binds[1])
-        .map(r => ({ data: r.data }));
-      return { results };
-    }
-    throw new Error(`fake D1이 처리하지 못한 SQL: ${sql}`);
-  }
-
-  return {
-    _tables: tables,
-    prepare(sql) {
-      let binds = [];
-      const stmt = {
-        bind(...args) { binds = args; return stmt; },
-        async first() { return run(sql, binds).first; },
-        async all() { return run(sql, binds); },
-        async run() { return run(sql, binds); },
-      };
-      return stmt;
-    },
-  };
-}
+import { createTestD1 as createFakeD1 } from './helpers/d1.mjs';
 
 test('키 접두사에 따라 알맞은 테이블에 저장·조회된다', async () => {
   const db = createFakeD1();
@@ -171,6 +100,8 @@ const worker = {
     env.AUTH_SECRET ||= TEST_AUTH_SECRET;
     env.VERIFY_SECRET ||= 'test-verify-secret-at-least-32-characters';
     const body = await request.clone().json().catch(() => ({}));
+    const store = env.DB ? createStore(env.DB) : env.POSTS;
+    if (!await store.get(`user:${body.email}`)) await store.put(`user:${body.email}`, JSON.stringify({ email: body.email }));
     const headers = new Headers(request.headers);
     headers.set('Authorization', `Bearer ${await issueSessionToken(env, body.email)}`);
     return rawWorker.fetch(new Request(request, { headers }), env, ctx);
@@ -188,8 +119,9 @@ function api(path, body) {
 test('요청 수락 흐름이 D1 저장소에서 그대로 동작한다', async () => {
   const db = createFakeD1();
   const seed = createStore(db);
+  await seed.put('post:POST-1', JSON.stringify({ id: 'POST-1', status: 'active', ownerEmail: 'poster@jejuair.net', offered: { days: [] } }));
   await seed.put('req:REQ-1', JSON.stringify({
-    id: 'REQ-1',
+    id: 'REQ-1', postId: 'POST-1',
     fromEmail: 'requester@jejuair.net',
     toEmail: 'poster@jejuair.net',
     stage: 1,

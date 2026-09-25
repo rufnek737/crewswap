@@ -1,3 +1,5 @@
+import { compareAndSwap } from './atomic-store.mjs';
+import { createEmailChallenge, verifyEmailChallenge } from './email-verification.mjs';
 import webpush from 'web-push';
 import {
   matchingSearches,
@@ -10,7 +12,7 @@ import crewGrades from '../crew-grades.js';
 import airportAliases from '../airport-aliases.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
 import {
-  createStore, listPosts, listRequests,
+  createStore, listPosts, listRequests, listRequestsForEmail,
   listPremiumAlerts, savePremiumAlerts, saveIndex,
   listSubmitRejections, appendSubmitRejection,
   POSTS_INDEX_KEY, REQUESTS_INDEX_KEY,
@@ -108,7 +110,8 @@ function requireSecret(env, name) {
 }
 
 export async function issueSessionToken(env, email, now = Date.now()) {
-  const payload = toBase64url(JSON.stringify({ sub: String(email).trim().toLowerCase(), iat: now, exp: now + SESSION_TTL_MS, v: 1 }));
+  const user = await (env.DB ? createStore(env.DB) : env.POSTS).get(`user:${String(email).trim().toLowerCase()}`, { type: 'json' });
+  const payload = toBase64url(JSON.stringify({ sv: user?.sessionVersion || null, sub: String(email).trim().toLowerCase(), iat: now, exp: now + SESSION_TTL_MS, v: 1 }));
   const signature = await hmacHex(requireSecret(env, 'AUTH_SECRET'), payload);
   return `${payload}.${signature}`;
 }
@@ -121,13 +124,19 @@ export async function verifySessionToken(env, token, now = Date.now()) {
   let data;
   try { data = JSON.parse(fromBase64url(payload)); } catch { return null; }
   if (data?.v !== 1 || !data.sub || !Number.isFinite(data.exp) || data.exp <= now) return null;
-  return { email: String(data.sub).trim().toLowerCase(), expiresAt: data.exp };
+  return { email: String(data.sub).trim().toLowerCase(), expiresAt: data.exp, sessionVersion: data.sv || null };
 }
 
 async function authenticateRequest(request, env) {
   const match = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
-  try { return await verifySessionToken(env, match[1]); } catch { return null; }
+  try {
+    const session = await verifySessionToken(env, match[1]);
+    if (!session) return null;
+    const user = await env.POSTS.get(`user:${session.email}`, { type: 'json' });
+    if (!user || (user.sessionVersion || null) !== session.sessionVersion) return null;
+    return session;
+  } catch { return null; }
 }
 
 function requestAllowsSandboxPro(request) {
@@ -156,23 +165,8 @@ async function rateLimit(env, request, scope, identity, limit, windowSeconds) {
   return true;
 }
 
-/* ── 이메일 인증 토큰 검증 (send-verify가 발급한 HMAC 토큰) ─────── */
-async function verifyEmailToken(env, email, code, token) {
-  email = (email || '').trim().toLowerCase();
-  code = (code || '').trim().replace(/\s/g, '');
-  if (!email || !code || !token) return { ok: false, error: '이메일, 코드, 토큰을 모두 전달해주세요' };
-  let parsed;
-  try { parsed = JSON.parse(fromBase64url(token)); } catch { return { ok: false, error: '토큰 형식 오류' }; }
-  const { t: ts, h: storedHmac } = parsed;
-  if (!ts || !storedHmac) return { ok: false, error: '토큰 형식 오류' };
-  if (Date.now() - parseInt(ts, 10) > 10 * 60 * 1000)
-    return { ok: false, error: '인증 코드가 만료되었습니다. 코드를 다시 발송해 주세요.' };
-  const secret = requireSecret(env, 'VERIFY_SECRET');
-  const expectedHmac = await hmacHex(secret, `${email}:${code}:${ts}`);
-  if (!timingSafeEqual(expectedHmac, storedHmac))
-    return { ok: false, error: '인증 코드가 올바르지 않습니다' };
-  return { ok: true, email };
-}
+/* ── 이메일 인증: D1 공유 시도 제한 및 일회 사용 ─────────────── */
+const verifyEmailToken = verifyEmailChallenge;
 
 /* ── 비밀번호 해싱 (PBKDF2-SHA256, 10만 회) ───────────────────── */
 function bytesToHex(bytes) {
@@ -220,14 +214,16 @@ function freeCouponsPerMonth(env) {
 
 async function runWalletCommand(env, email, command = {}) {
   const key = `wallet:${String(email || '').trim().toLowerCase()}`;
-  const stored = await env.POSTS.get(key, { type: 'json' });
   const options = { freeCouponsPerMonth: freeCouponsPerMonth(env) };
-  const result = applyWalletCommand(stored, command, Date.now(), options);
-  // 명령이 실패해도(예: 쿠폰 부족) 그달의 무료 지급은 저장한다. 안 그러면 화면에는
-  // 지급된 것으로 보이는데 서버에는 남지 않아 다음에 또 지급된다.
-  const granted = result.wallet.freeCouponMonth !== stored?.freeCouponMonth;
-  if (result.ok || granted) await env.POSTS.put(key, JSON.stringify(result.wallet));
-  return { ...result, wallet: publicWallet(result.wallet, Date.now(), options) };
+  for (let retry = 0; retry < 20; retry++) {
+    const raw = await env.POSTS.get(key);
+    const stored = raw ? JSON.parse(raw) : null;
+    const result = applyWalletCommand(stored, command, Date.now(), options);
+    const next = JSON.stringify(result.wallet);
+    if (raw === next || await compareAndSwap(env.POSTS, key, raw, next))
+      return { ...result, wallet: publicWallet(result.wallet, Date.now(), options) };
+  }
+  throw new Error('잔액 처리 요청이 겹쳤습니다. 잠시 후 다시 시도해주세요.');
 }
 
 async function walletStatus(env, email) {
@@ -243,13 +239,13 @@ async function handleUserSignup(request, env) {
   if (password.length < 6) return json({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
   if (policyConsent?.privacyVersion !== POLICY_VERSION || policyConsent?.termsVersion !== POLICY_VERSION)
     return json({ error: '개인정보처리방침과 이용약관에 동의해주세요' }, 400);
-  const v = await verifyEmailToken(env, email, code, token);
-  if (!v.ok) return json({ error: v.error }, 400);
+  const v = await verifyEmailToken(env, email, code, token, true);
+  if (!v.ok) return json({ error: v.error }, v.status || 400);
   const existing = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (existing) return json({ error: '이미 가입된 이메일입니다. 로그인해주세요.' }, 409);
   const { salt, hash } = await hashPassword(password);
   const rec = {
-    email, username: username.trim(), salt, hash,
+    email, username: username.trim(), salt, hash, sessionVersion: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     profile: { ...pickProfile(profile), nickname: username.trim() },
     policyConsent: {
@@ -358,7 +354,7 @@ async function handleSchedulesSync(request, env, authEmail) {
 
   // 이 사람이 C등급이면, 그가 탄 비행의 반대 좌석은 규정상 A로 확정된다.
   const profile = await env.POSTS.get(`user:${authEmail}`, { type: 'json' });
-  const names = crewGrades.aGradesFromRoster(schedules, profile?.roleType, gradePolicy);
+  const names = crewGrades.aGradesFromRoster(schedules, profile?.profile?.roleType, gradePolicy);
   if (names.length) await recordAGrades(env, names, authEmail);
 
   return json({ ok: true, updatedAt });
@@ -371,12 +367,13 @@ async function handleUserResetPassword(request, env) {
   const { code, token, password } = body;
   if (!email || !password) return json({ error: '이메일과 새 비밀번호를 입력해주세요' }, 400);
   if (password.length < 6) return json({ error: '비밀번호는 6자 이상이어야 합니다' }, 400);
-  const v = await verifyEmailToken(env, email, code, token);
-  if (!v.ok) return json({ error: v.error }, 400);
+  const v = await verifyEmailToken(env, email, code, token, true);
+  if (!v.ok) return json({ error: v.error }, v.status || 400);
   const rec = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!rec) return json({ error: '가입되지 않은 이메일입니다.' }, 404);
   const { salt, hash } = await hashPassword(password);
   rec.salt = salt; rec.hash = hash;
+  rec.sessionVersion = crypto.randomUUID();
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   return json({ ok: true });
 }
@@ -452,12 +449,9 @@ async function handleSendVerify(request, env) {
   if (!(await rateLimit(env, request, 'verify', email, 5, 600)))
     return json({ error: '인증 코드 요청이 너무 많습니다. 10분 후 다시 시도해주세요.' }, 429);
 
-  const EXPIRY = 10 * 60 * 1000;
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const ts = Date.now().toString();
-  const secret = requireSecret(env, 'VERIFY_SECRET');
-  const hmac = await hmacHex(secret, `${email}:${code}:${ts}`);
-  const token = toBase64url(JSON.stringify({ t: ts, h: hmac }));
+  const challenge = await createEmailChallenge(env, email);
+  if (!challenge.ok) return json({ error: challenge.error }, 429);
+  const { code, token, expiresAt } = challenge;
 
   if (!env.RESEND_API_KEY || !env.RESEND_FROM) {
     console.error('Email delivery is not configured: RESEND_API_KEY or RESEND_FROM is missing');
@@ -495,7 +489,7 @@ async function handleSendVerify(request, env) {
   } catch (e) {
     return json({ error: `이메일 발송 중 오류: ${e.message}` }, 502);
   }
-  return json({ token, expiresAt: Date.now() + EXPIRY });
+  return json({ token, expiresAt });
 }
 
 /* ── check-verify ───────────────────────────────────────────── */
@@ -504,7 +498,7 @@ async function handleCheckVerify(request, env) {
   let email, code, token;
   try { ({ email, code, token } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   const v = await verifyEmailToken(env, email, code, token);
-  if (!v.ok) return json({ error: v.error }, 400);
+  if (!v.ok) return json({ error: v.error }, v.status || 400);
   // 이미 가입된 이메일인지도 알려줌 (클라이언트가 가입/로그인 분기)
   const registered = !!(await env.POSTS.get(`user:${v.email}`, { type: 'json' }));
   return json({ verified: true, email: v.email, registered });
@@ -1086,16 +1080,17 @@ async function handlePostsGet(request, env) {
       return pub;
     });
 
-    /* 아는 A등급 명단으로 각 글의 반대 좌석을 미리 판정해 준다.
-       판정은 서버가 하고 참/거짓만 내려보낸다 — 명단 자체는 기기로 나가지 않는다. */
-    const viewer = auth ? await env.POSTS.get(`user:${auth.email}`, { type: 'json' }) : null;
+    // Use the server's original post snapshot: public crew names may already
+    // have been removed for this viewer, and offered has no crewComposition.
+    const viewerRecord = auth ? await env.POSTS.get(`user:${auth.email}`, { type: 'json' }) : null;
+    const viewer = viewerRecord?.profile;
     if (viewer?.crewType === 'PILOT' && gradePolicy.gradeOf(viewer.roleType)) {
-      const everyName = posts.flatMap(p =>
-        crewGrades.parseCrew(p.offered?.crewComposition).map(c => c.name));
+      const gradeInputs = new Map(idx.map(p => [p.id, { crewComposition: p.offered?.crewPublic }]));
+      const everyName = posts.flatMap(p => crewGrades.parseCrew(gradeInputs.get(p.id)?.crewComposition).map(c => c.name));
       const known = await knownAGrades(env, everyName);
       for (const p of posts) {
         if (!p.offered) continue;
-        const verdict = crewGrades.oppositeIsKnownA(p.offered, viewer.roleType, known, gradePolicy);
+        const verdict = crewGrades.oppositeIsKnownA(gradeInputs.get(p.id), viewer.roleType, known, gradePolicy);
         if (verdict === true) p.offered.oppositeGrades = ['A'];
       }
     }
@@ -1193,11 +1188,13 @@ async function handlePostsUpdate(request, env, authEmail) {
   if (!id || !deleteToken || !wanted) return json({ error: '필수 필드 누락' }, 400);
 
   try {
-    const post = await env.POSTS.get(`post:${id}`, { type: 'json' });
+    const raw = await env.POSTS.get(`post:${id}`);
+    const post = raw ? JSON.parse(raw) : null;
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (post.ownerEmail !== authEmail || post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     post.wanted = wanted;
-    await env.POSTS.put(`post:${id}`, JSON.stringify(post));
+    if (!await compareAndSwap(env.POSTS, `post:${id}`, raw, JSON.stringify(post)))
+      return json({ error: '글 상태가 변경되었습니다. 새로고침 후 다시 시도해주세요.' }, 409);
     const idx = await getPostsIndex(env);
     const i = idx.findIndex(p => p.id === id);
     if (i >= 0) idx[i] = post; else idx.push(post);
@@ -1273,6 +1270,10 @@ function requestWithPrivateDaysRemoved(record, viewerIsPro = false) {
   // 상호 수락이 끝난 뒤에는(postCrewPublic이 채워짐) 무료 사용자에게도 공개된다.
   const includeCrew = viewerIsPro || !!record.postCrewPublic;
   const out = { ...record, offeredCrewPublic: offeredCrewPublicOf(record, includeCrew) };
+  // PRO may disclose crew names; it never authorizes personal contact details.
+  if (!(record.stage >= 3)) {
+    for (const field of ['fromRealName', 'fromEmployeeId', 'fromPhone', 'toRealName', 'toEmployeeId', 'toPhone', 'fromEmail', 'toEmail']) delete out[field];
+  }
   if (Array.isArray(record.openRoster)) {
     out.openRoster = openRosterForViewer(
       publicOpenRoster(record.openRoster, record.lockedDays),
@@ -1336,6 +1337,7 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
   try {
     const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
+    if (post.status !== 'active') return json({ error: '종료되었거나 이미 성사된 글입니다' }, 409);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
 
     const requestedId = String(requestId || '').trim();
@@ -1403,12 +1405,16 @@ async function handleRequestsAccept(request, env, authEmail) {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
     if (rec.toEmail !== email) return json({ error: '수락 권한이 없습니다' }, 403);
+    if ((rec.stage || 1) !== 1 || rec.declined || rec.posterSelected || !rec.offered || rec.type === 'ask')
+      return json({ error: '현재 상태에서는 수락할 수 없습니다' }, 409);
     const post = rec.postId ? await env.POSTS.get(`post:${rec.postId}`, { type: 'json' }) : null;
     const requesterValidationRoster = await env.POSTS.get(`reqval:${id}`, { type: 'json' });
     const cabinViolation = validateCabinExchange(rec, post, rec.offered, requesterValidationRoster);
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    if (!await claimPostForRequest(env, rec.postId, rec.id))
+      return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
     rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
@@ -1422,8 +1428,6 @@ async function handleRequestsAccept(request, env, authEmail) {
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
-    // 성사된 글은 다른 사람이 중복 요청하지 못하도록 '회사 상신중'으로 잠근다.
-    await lockPostAsSubmitting(env, rec.postId);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -1568,6 +1572,8 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    if (!await claimPostForRequest(env, rec.postId, rec.id))
+      return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
     rec.stage = 3;
     rec.status = '상호 수락 — 회사 상신 필요';
     rec.acceptedAt = new Date().toISOString();
@@ -1580,8 +1586,6 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
     await env.POSTS.delete(`reqval:${id}`);
-    // 성사된 글은 다른 사람이 중복 요청하지 못하도록 '회사 상신중'으로 잠근다.
-    await lockPostAsSubmitting(env, rec.postId);
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -1694,17 +1698,25 @@ async function handleRequestsSubmitNudge(request, env, authEmail) {
    글을 목록에서 지우는 대신 'submitting'(회사 상신중)으로 바꿔, 남들에게는
    진행 중이라는 사실이 보이되 선택은 막는다. 실제 삭제는 글 작성자가
    회사 상신을 완료했다고 표시할 때 이뤄진다. */
-async function lockPostAsSubmitting(env, postId) {
-  if (!postId) return;
-  const post = await env.POSTS.get(`post:${postId}`, { type: 'json' });
-  if (!post || post.status !== 'active') return;
-  post.status = 'submitting';
-  post.matched = true;
-  post.matchedAt = new Date().toISOString();
-  await env.POSTS.put(`post:${postId}`, JSON.stringify(post));
-  const idx = await getPostsIndex(env);
-  const i = idx.findIndex(p => p && p.id === postId);
-  if (i >= 0) { idx[i] = post; await savePostsIndex(env, idx); }
+async function claimPostForRequest(env, postId, requestId) {
+  if (!postId || !requestId) return false;
+  const key = `post:${postId}`;
+  for (let retry = 0; retry < 12; retry++) {
+    const raw = await env.POSTS.get(key);
+    const post = raw ? JSON.parse(raw) : null;
+    if (!post) return false;
+    if (post.status === 'submitting' && post.matchedRequestId === requestId) return true;
+    if (post.status !== 'active') return false;
+    const next = { ...post, status: 'submitting', matched: true,
+      matchedRequestId: requestId, matchedAt: new Date().toISOString() };
+    if (await compareAndSwap(env.POSTS, key, raw, JSON.stringify(next))) {
+      const idx = await getPostsIndex(env);
+      const i = idx.findIndex(p => p?.id === postId);
+      if (i >= 0) { idx[i] = next; await savePostsIndex(env, idx); }
+      return true;
+    }
+  }
+  return false;
 }
 
 /* 급구 보상 — 급구 쿠폰 0.5장. 크레딧은 주지 않는다.
@@ -1788,6 +1800,7 @@ async function reopenSubmittingPost(env, postId) {
   post.status = 'active';
   post.matched = false;
   delete post.matchedAt;
+  delete post.matchedRequestId;
   await env.POSTS.put(`post:${postId}`, JSON.stringify(post));
   const idx = await getPostsIndex(env);
   const i = idx.findIndex(p => p && p.id === postId);
@@ -1878,7 +1891,7 @@ async function handleRequestsGet(request, env, authEmail) {
   const viewerIsPro = await isPremiumAccount(env, email);
 
   try {
-    const idx = await getRequestsIndex(env);
+    const idx = env.DB ? await listRequestsForEmail(env.DB, email) : await getRequestsIndex(env);
     // 구버전 요청에는 대상 글의 상세 일정이 저장되지 않았다. 현재 글이 남아 있으면
     // 조회 시 보강해 요청 카드에서 양쪽 근무를 모두 확인할 수 있게 한다.
     const relevant = idx.filter(r => r.fromEmail === email || r.toEmail === email);

@@ -16,6 +16,7 @@ const worker = {
       email = body.email || body.fromEmail || body.ownerEmail;
     }
     if (!email) throw new Error(`테스트 인증 이메일 누락: ${url.pathname}`);
+    if (!await env.POSTS.get(`user:${email}`)) await env.POSTS.put(`user:${email}`, JSON.stringify({ email }));
     const headers = new Headers(request.headers);
     headers.set('Authorization', `Bearer ${await issueSessionToken(env, email)}`);
     return rawWorker.fetch(new Request(request, { headers }), env, ctx);
@@ -52,6 +53,7 @@ function api(path, body) {
 function pendingRequest() {
   return {
     id: 'REQ-1',
+    postId: 'POST-1',
     fromEmail: 'requester@jejuair.net',
     toEmail: 'poster@jejuair.net',
     stage: 1,
@@ -65,7 +67,7 @@ function pendingRequest() {
 
 test('poster selection waits for requester final approval', async () => {
   const original = pendingRequest();
-  const env = { POSTS: createKv({ 'req:REQ-1': original, 'idx:requests': [original] }) };
+  const env = { POSTS: createKv({ 'post:POST-1': { id: 'POST-1', status: 'active', ownerEmail: 'poster@jejuair.net', offered: { days: [] } }, 'req:REQ-1': original, 'idx:requests': [original] }) };
 
   const selectResponse = await worker.fetch(api('/api/requests-poster-select', {
     id: 'REQ-1',
@@ -143,7 +145,7 @@ test('direct 1:1 request keeps the full validation roster private and still vali
 });
 
 test('hidden days are removed when a roster request is created and fetched', async () => {
-  const post = { id:'POST-HIDE', ownerEmail:'poster@jejuair.net', ownerNick:'poster', offered:{ patternName:'8/13 국내선' } };
+  const post = { status:'active', id:'POST-HIDE', ownerEmail:'poster@jejuair.net', ownerNick:'poster', offered:{ patternName:'8/13 국내선' } };
   const env = { POSTS: createKv({
     'post:POST-HIDE': post,
     'idx:requests': [],

@@ -10,13 +10,13 @@ import { readFileSync } from 'node:fs';
 const worker = readFileSync(new URL('../worker/index.js', import.meta.url), 'utf8');
 
 test('근무표를 올릴 때 A등급을 모은다', () => {
-  assert.match(worker, /crewGrades\.aGradesFromRoster\(schedules, profile\?\.roleType, gradePolicy\)/);
+  assert.match(worker, /crewGrades\.aGradesFromRoster\(schedules, profile\?\.profile\?\.roleType, gradePolicy\)/);
   assert.match(worker, /if \(names\.length\) await recordAGrades/);
 });
 
 test('판정은 서버가 하고 참/거짓만 내려간다', () => {
   // 명단을 통째로 내려보내면 가입하지 않은 사람들의 이름이 모든 기기에 퍼진다.
-  assert.match(worker, /crewGrades\.oppositeIsKnownA\(p\.offered, viewer\.roleType, known, gradePolicy\)/);
+  assert.match(worker, /crewGrades\.oppositeIsKnownA\(gradeInputs\.get\(p\.id\), viewer\.roleType, known, gradePolicy\)/);
   assert.match(worker, /if \(verdict === true\) p\.offered\.oppositeGrades = \['A'\]/);
   assert.doesNotMatch(worker, /json\(\{\s*aGrades/);
 });

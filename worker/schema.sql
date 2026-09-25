@@ -83,3 +83,7 @@ CREATE TABLE IF NOT EXISTS submit_rejections (
   at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_submit_rejections_at ON submit_rejections(at);
+
+-- 2026-09-25 security: opaque, limited-use email verification challenges.
+CREATE TABLE IF NOT EXISTS verification_challenges (email TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS crew_grades (name TEXT PRIMARY KEY, data TEXT NOT NULL);

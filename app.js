@@ -532,9 +532,9 @@ function parseAirportList(str) {
 }
 
 function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str || "";
-  return div.innerHTML;
+  return String(str ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[ch]);
 }
 
 function showToast(msg) {
@@ -2587,7 +2587,7 @@ function syncOfferedSlot() {
     if (post) {
       slot.className = "slot-card filled is-editing";
       slot.innerHTML = `
-        <strong>✏️ 수정 중인 글: ${post.offered.patternName}</strong>
+        <strong>✏️ 수정 중인 글: ${escapeHtml(post.offered.patternName)}</strong>
         <div>${post.offered.summary || ""}</div>
         <div class="slot-meta">
           <span>오퍼/크레딧은 변경 불가 — 희망 조건만 아래에서 수정</span>
@@ -2685,30 +2685,30 @@ function renderMyPosts() {
     return `
     <div class="my-post-card" data-my-post-id="${escapeHtml(p.id)}">
       <div class="my-post-head">
-        <strong>${p.offered.patternName}</strong>
+        <strong>${escapeHtml(p.offered.patternName)}</strong>
         ${statusHtml}
       </div>
       <div class="my-post-meta">
-        <span>${p.offered.type} · ${p.offered.summary || ""}</span>
+        <span>${escapeHtml(p.offered.type)} · ${escapeHtml(p.offered.summary || "")}</span>
         <span class="my-post-time">${rdDisplay}</span>
       </div>
       <details class="my-post-detail">
         <summary>자세히 보기 ▾</summary>
         <dl class="my-post-detail-dl">
-          ${p.offered.reportTime ? `<div><dt>Check-in</dt><dd>${p.offered.reportTime}</dd></div>` : ""}
-          ${p.offered.releaseTime ? `<div><dt>Check-out</dt><dd>${p.offered.releaseTime}</dd></div>` : ""}
+          ${p.offered.reportTime ? `<div><dt>Check-in</dt><dd>${escapeHtml(p.offered.reportTime)}</dd></div>` : ""}
+          ${p.offered.releaseTime ? `<div><dt>Check-out</dt><dd>${escapeHtml(p.offered.releaseTime)}</dd></div>` : ""}
           ${p.offered.flightMinutes ? `<div><dt>비행시간</dt><dd>${(p.offered.flightMinutes/60).toFixed(1)}h</dd></div>` : ""}
-          ${p.offered.aircraft ? `<div><dt>기종</dt><dd>${p.offered.aircraft}${p.offered.edto?" · EDTO":""}${p.offered.cat3?" · CAT III":""}</dd></div>` : ""}
-          ${p.offered.crewPublic ? `<div><dt>편조</dt><dd>${p.offered.crewPublic}</dd></div>` : ""}
-          <div><dt>희망 조건</dt><dd>${wantedSummary(p.wanted)}</dd></div>
+          ${p.offered.aircraft ? `<div><dt>기종</dt><dd>${escapeHtml(p.offered.aircraft)}${p.offered.edto?" · EDTO":""}${p.offered.cat3?" · CAT III":""}</dd></div>` : ""}
+          ${p.offered.crewPublic ? `<div><dt>편조</dt><dd>${escapeHtml(p.offered.crewPublic)}</dd></div>` : ""}
+          <div><dt>희망 조건</dt><dd>${escapeHtml(wantedSummary(p.wanted))}</dd></div>
         </dl>
       </details>
       ${refundedHistory
         ? `<p class="hint" style="margin:8px 0 0;">이미 마감되어 크레딧 처리가 끝난 글입니다.</p>
-          ${managing ? `<button class="delete-post-history-button" data-my-post-id="${p.id}">기록 삭제</button>` : ""}`
+          ${managing ? `<button class="delete-post-history-button" data-my-post-id="${escapeHtml(p.id)}">기록 삭제</button>` : ""}`
         : `<div class="my-post-btn-row">
-        <button class="secondary-button edit-post-button" data-my-post-id="${p.id}">희망 조건 수정</button>
-        <button class="cancel-post-button" data-my-post-id="${p.id}">${creditSpent > 0 ? `등록 취소 · 최대 ${creditSpent}크레딧 환급` : "등록 취소 · PRO 등록"}</button>
+        <button class="secondary-button edit-post-button" data-my-post-id="${escapeHtml(p.id)}">희망 조건 수정</button>
+        <button class="cancel-post-button" data-my-post-id="${escapeHtml(p.id)}">${creditSpent > 0 ? `등록 취소 · 최대 ${creditSpent}크레딧 환급` : "등록 취소 · PRO 등록"}</button>
       </div>`}
     </div>
   `;
@@ -2731,7 +2731,7 @@ function renderMyPosts() {
       const creditNote = creditSpent > 0
         ? `기본 크레딧이 3개 미만일 때만 최대 ${creditSpent}크레딧이 환급됩니다.`
         : "PRO 무제한으로 등록한 글이라 크레딧 변동은 없습니다.";
-      if (!confirm(`"${post.offered.patternName}" 등록을 취소하시겠습니까?\n${creditNote}`)) return;
+      if (!confirm(`"${escapeHtml(post.offered.patternName)}" 등록을 취소하시겠습니까?\n${creditNote}`)) return;
       if (!post.deleteToken) { showToast("구버전 글은 서버에서 취소할 수 없습니다."); return; }
       let result;
       try {
@@ -2762,7 +2762,7 @@ function renderMyPosts() {
       const pid = b.dataset.myPostId;
       const post = state.myPosts.find(x => x.id === pid);
       if (!window.CrewSwapPostHistory.isRefundedHistory(post)) return;
-      if (!confirm(`"${post.offered.patternName}" 환급 완료 기록을 삭제하시겠습니까?\n크레딧은 변동되지 않습니다.`)) return;
+      if (!confirm(`"${escapeHtml(post.offered.patternName)}" 환급 완료 기록을 삭제하시겠습니까?\n크레딧은 변동되지 않습니다.`)) return;
       if (post.deleteToken) {
         try {
           await apiFetch(`${API_BASE}/api/posts-delete`, {
@@ -2968,10 +2968,10 @@ function renderMatches() {
     <article class="match-card${isSubmitting ? " is-submitting" : ""}${gradeBlocked ? " is-grade-blocked" : ""}">
       <div class="card-head">
         <div>
-          <h3>${post.urgent ? `<span class="urgent-badge">급구</span> ` : ""}${post.offered.patternName}${isSubmitting ? ` <span class="badge badge-submitting">회사 상신중</span>` : ""}${gradeBlocked ? ` <span class="badge badge-grade-blocked">등급 불가</span>` : ""}</h3>
-          <p>${post.offered.summary}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</p>
+          <h3>${post.urgent ? `<span class="urgent-badge">급구</span> ` : ""}${escapeHtml(post.offered.patternName)}${isSubmitting ? ` <span class="badge badge-submitting">회사 상신중</span>` : ""}${gradeBlocked ? ` <span class="badge badge-grade-blocked">등급 불가</span>` : ""}</h3>
+          <p>${escapeHtml(post.offered.summary)}${post.offered.flightMinutes ? ` · ${(post.offered.flightMinutes/60).toFixed(1)}h` : ""}</p>
           <div class="badges">
-            <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${post.offered.type}</span>
+            <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${escapeHtml(post.offered.type)}</span>
             <span class="badge badge-position">${positionLabel(post.ownerRole)}</span>
             ${post.offered.aircraft ? `<span class="badge badge-aircraft">✈ ${aircraftLabel(post.offered.aircraft)}</span>` : ""}
             ${post.offered.edto ? `<span class="badge">EDTO</span>` : ""}
@@ -2981,7 +2981,7 @@ function renderMatches() {
         <div class="match-deadline ${dd.days<=1?"urgent":""}">회사 제출<br>${dd.expired?"마감됨":`${companyDeadlineDueText(dd)}까지`}</div>
       </div>
 
-      ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${wantedTxt}</div>` : ""}
+      ${wantedTxt && wantedTxt !== "조건 없음" ? `<div class="match-wanted"><strong>원하는 조건</strong> ${escapeHtml(wantedTxt)}</div>` : ""}
 
       ${matchPostDetailsHtml(post.offered)}
 
@@ -2994,8 +2994,8 @@ function renderMatches() {
           ? `<div class="card-unavailable">이전 버전 글이라 요청할 수 없습니다</div>`
           : gradeBlocked
           ? `<div class="card-unavailable grade-blocked">🚫 <strong>${escapeHtml(grade.reason)}</strong><br><span class="card-unavailable-sub">${escapeHtml(grade.detail)}</span></div>`
-          : `<button class="secondary-button" data-action="ask" data-post="${post.id}">💬 양도 의향 묻기</button>
-        <button class="primary-button" data-action="request" data-post="${post.id}">${isPremiumUser() ? "요청하기 · PRO 무제한" : "요청하기 · 1크레딧"}</button>`}
+          : `<button class="secondary-button" data-action="ask" data-post="${escapeHtml(post.id)}">💬 양도 의향 묻기</button>
+        <button class="primary-button" data-action="request" data-post="${escapeHtml(post.id)}">${isPremiumUser() ? "요청하기 · PRO 무제한" : "요청하기 · 1크레딧"}</button>`}
       </div>
     </article>`;
   }).join("");
@@ -3884,7 +3884,7 @@ function openAskModal(postId, directOffer = null) {
     ? directOfferSummaryHtml(directOffer)
     : openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("askTheirs").innerHTML =
-    `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
+    `<strong>${escapeHtml(p.offered.patternName)}</strong><div>${p.offered.summary || p.offered.type}</div>`;
   const askHint = document.getElementById("askHint");
   askHint.textContent = window.CrewSwapRequestDisclosure.disclosureHint("ask", !!directOffer);
   askHint.style.color = "";
@@ -3948,7 +3948,7 @@ function openRequestModal(postId, directOffer = null) {
     ? directOfferSummaryHtml(directOffer)
     : openRosterSummaryHtml(roster, lockedCount);
   document.getElementById("reqTheirs").innerHTML =
-    `<strong>${p.offered.patternName}</strong><div>${p.offered.summary || p.offered.type}</div>`;
+    `<strong>${escapeHtml(p.offered.patternName)}</strong><div>${p.offered.summary || p.offered.type}</div>`;
   const hintEl = document.getElementById("reqHint");
   hintEl.textContent = window.CrewSwapRequestDisclosure.disclosureHint("request", !!directOffer);
   hintEl.style.color = "";
@@ -4967,7 +4967,7 @@ function requestCard(r) {
     <article class="request-card" data-req-card-id="${escapeHtml(r.id || "")}">
       <div class="card-head">
         <div>
-          <h3>${r.postTitle}</h3>
+          <h3>${escapeHtml(r.postTitle)}</h3>
           <p>${isSent?"내가 보냄":"내가 받음"} · ${r.sentAgo}</p>
         </div>
         <span class="badge ${badgeCls}">${r.status || (isOpenPending ? "바꿀 날 고르기" : isWaitingSent ? "상대가 고르는 중" : needsRequesterApproval ? "내 최종 승인 필요" : "진행 중")}</span>
@@ -4984,18 +4984,18 @@ function requestCard(r) {
         <h4>📅 내 일정과 상대 일정을 같은 화면에서 비교하세요</h4>
         <p class="cmp-legend">왼쪽(모바일에서는 위)은 내 일정, 오른쪽(아래)은 상대가 공개한 일정입니다.</p>
         ${renderCompareCalendar(r)}
-        <div class="roster-pick-msg" id="rosterMsg-${r.id}">상대 달력에서 받을 근무를 선택하면 교환 내용이 여기에 표시됩니다.</div>
+        <div class="roster-pick-msg" id="rosterMsg-${escapeHtml(r.id)}">상대 달력에서 받을 근무를 선택하면 교환 내용이 여기에 표시됩니다.</div>
       </div>` : ""}
       ${isWaitingSent ? `<div class="notice" style="margin-bottom:10px;">⏳ 내 스케줄을 열어 보냈습니다. 상대(글 작성자)가 바꿀 날을 고르는 중입니다.${(r.lockedDays && r.lockedDays.length) ? ` (🔒 ${r.lockedDays.length}일 잠금 제외)` : ""}</div>` : ""}
       ${needsRequesterApproval ? `<div class="approval-notice">🔔 글 작성자가 위 일정을 선택했습니다. 교환 내용을 확인하고 최종 승인해주세요.</div>` : ""}
       ${posterWaitingApproval ? `<div class="approval-notice waiting">⏳ 선택한 일정을 상대에게 보냈습니다. 상대의 최종 승인을 기다리는 중입니다.</div>` : ""}
       ${!r.declined ? `<div class="disclosed-info">
         <h4>공개 정보</h4>
-        <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"; })()}</strong></div>
-        <div class="info-row"><span>기종/자격</span><strong>${r.aircraft} / ${r.quals}</strong></div>
-        <div class="info-row"><span>베이스</span><strong>${r.base && r.base !== "비공개" ? r.base : "GMP"}</strong></div>
-        <div class="info-row"><span>닉네임</span><strong>${r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)"}</strong></div>
-        <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? `✓ ${contactLine}` : "🔒 상호 수락 후 공개"}</strong></div>
+        <div class="info-row"><span>직책/등급</span><strong>${(() => { const rc = r.postOwnerRole || r.requesterRole; return escapeHtml(ROLE_LABELS[rc] || CABIN_ROLE_LABELS[rc] || rc || "-"); })()}</strong></div>
+        <div class="info-row"><span>기종/자격</span><strong>${escapeHtml(r.aircraft)} / ${escapeHtml(r.quals)}</strong></div>
+        <div class="info-row"><span>베이스</span><strong>${escapeHtml(r.base && r.base !== "비공개" ? r.base : "GMP")}</strong></div>
+        <div class="info-row"><span>닉네임</span><strong>${escapeHtml(r.nickname && r.nickname !== "비공개" ? r.nickname : "(상대 닉네임)")}</strong></div>
+        <div class="info-row"><span>실명/사번/연락처</span><strong class="${!accepted?"locked":""}">${accepted ? `✓ ${escapeHtml(contactLine)}` : "🔒 상호 수락 후 공개"}</strong></div>
         ${!isAsk ? (() => {
           // 여기 공개 정보는 전부 '상대'의 정보다. 편조만 언제나 글 작성자(postCrewPublic)를
           // 가리키고 있어서, 받은 요청에서는 내 편조가 상대 것처럼 보였다.
@@ -5032,7 +5032,7 @@ function requestCard(r) {
           : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? escapeHtml(r.nickname) : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
         // 상신 반려 버튼 — 상신 전후 모두 필요하다. 상신하자마자 반려될 수도 있고,
         // 완료 표시를 한 뒤에 회사에서 반려 통보가 올 수도 있다.
-        const rejectBtn = `<button class="withdraw-button submit-rejected-btn" data-req-id="${r.id}">⛔ 회사에서 반려됨</button>`;
+        const rejectBtn = `<button class="withdraw-button submit-rejected-btn" data-req-id="${escapeHtml(r.id)}">⛔ 회사에서 반려됨</button>`;
         // 상신 진행 상태 + 독촉/완료/반려 버튼
         let submitAction = "";
         if (submitRejected) {
@@ -5052,11 +5052,11 @@ function requestCard(r) {
         } else if (iAmPoster) {
           const nudged = r.submitNudgeCount ? `<div class="submit-status nudged">🔔 상대가 회사 상신 여부를 확인하고 있습니다 (${r.submitNudgeCount}회).</div>` : "";
           submitAction = `${nudged}<div class="submit-actions" style="margin-top:8px;">
-            <button class="primary-button submit-done-btn" data-req-id="${r.id}">✅ 회사 상신 완료로 표시</button>
+            <button class="primary-button submit-done-btn" data-req-id="${escapeHtml(r.id)}">✅ 회사 상신 완료로 표시</button>
             ${rejectBtn}
           </div>`;
         } else {
-          submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${r.id}" style="width:100%;margin-top:8px;">📩 상신 확인 메세지 보내기</button>`;
+          submitAction = `<button class="secondary-button submit-nudge-btn" data-req-id="${escapeHtml(r.id)}" style="width:100%;margin-top:8px;">📩 상신 확인 메세지 보내기</button>`;
         }
         return `
         <div class="submit-guide">
@@ -5077,24 +5077,24 @@ function requestCard(r) {
       ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 휴식시간 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
       ${isOpenPending
         ? `<div class="req-respond-buttons">
-             <button class="secondary-button decline-req-btn" data-req-id="${r.id}"${fixedMogijiViolation ? ' data-decline-reason="MOGIJI_REST_CONFLICT"' : ""}>${fixedMogijiViolation ? "규정 불일치로 거절" : "거절"}</button>
-             <button class="primary-button poster-select-btn" data-req-id="${r.id}"${fixedMogijiViolation ? " disabled" : ""}>${fixedMogijiViolation ? "필수 휴무 충돌 · 교환 불가" : "이 일정으로 승인 요청"}</button>
+             <button class="secondary-button decline-req-btn" data-req-id="${escapeHtml(r.id)}"${fixedMogijiViolation ? ' data-decline-reason="MOGIJI_REST_CONFLICT"' : ""}>${fixedMogijiViolation ? "규정 불일치로 거절" : "거절"}</button>
+             <button class="primary-button poster-select-btn" data-req-id="${escapeHtml(r.id)}"${fixedMogijiViolation ? " disabled" : ""}>${fixedMogijiViolation ? "필수 휴무 충돌 · 교환 불가" : "이 일정으로 승인 요청"}</button>
            </div>`
         : ""}
       ${needsRequesterApproval
         ? `<div class="req-respond-buttons">
-             <button class="secondary-button requester-repick-btn" data-req-id="${r.id}">다른 날짜 요청</button>
-             <button class="primary-button requester-approve-btn" data-req-id="${r.id}">✓ 최종 승인</button>
+             <button class="secondary-button requester-repick-btn" data-req-id="${escapeHtml(r.id)}">다른 날짜 요청</button>
+             <button class="primary-button requester-approve-btn" data-req-id="${escapeHtml(r.id)}">✓ 최종 승인</button>
            </div>`
         : ""}
       ${needsResponse
         ? `<div class="req-respond-buttons">
-             <button class="secondary-button decline-req-btn" data-req-id="${r.id}">거절</button>
-             <button class="primary-button ${isAsk ? "ask-accept-btn" : "accept-req-btn"}" data-req-id="${r.id}"${restMsgReceived ? " disabled" : ""}>${isAsk ? "✓ 관심 수락" : "✓ 상호 수락하기"}</button>
+             <button class="secondary-button decline-req-btn" data-req-id="${escapeHtml(r.id)}">거절</button>
+             <button class="primary-button ${isAsk ? "ask-accept-btn" : "accept-req-btn"}" data-req-id="${escapeHtml(r.id)}"${restMsgReceived ? " disabled" : ""}>${isAsk ? "✓ 관심 수락" : "✓ 상호 수락하기"}</button>
            </div>`
         : ""}
-      ${isSent && isAsk && r.askAccepted ? `<button class="primary-button proceed-request-btn" data-req-id="${r.id}" style="width:100%;margin-top:10px;">➡ 바로 요청하기 (정식 스왑 요청)</button>` : ""}
-      <button class="link-button danger delete-req-btn" data-req-id="${r.id}">🗑 삭제</button>
+      ${isSent && isAsk && r.askAccepted ? `<button class="primary-button proceed-request-btn" data-req-id="${escapeHtml(r.id)}" style="width:100%;margin-top:10px;">➡ 바로 요청하기 (정식 스왑 요청)</button>` : ""}
+      <button class="link-button danger delete-req-btn" data-req-id="${escapeHtml(r.id)}">🗑 삭제</button>
     </article>
   `;
 }

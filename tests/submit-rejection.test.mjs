@@ -15,6 +15,7 @@ const worker = {
       email = body.email;
     }
     if (!email) throw new Error(`테스트 인증 이메일 누락: ${url.pathname}`);
+    if (!await env.POSTS.get(`user:${email}`)) await env.POSTS.put(`user:${email}`, JSON.stringify({ email }));
     const headers = new Headers(request.headers);
     headers.set('Authorization', `Bearer ${await issueSessionToken(env, email)}`);
     return rawWorker.fetch(new Request(request, { headers }), env, ctx);

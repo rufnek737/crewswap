@@ -15,6 +15,8 @@ function route(rawKey) {
   // 멱등 키가 post:/request: 접두사를 공유하므로 먼저 걸러낸다.
   if (/^(post|request):create(-reverse)?:/.test(key)) return { table: 'idempotency', column: 'key', id: key, valueColumn: 'value' };
   if (key.startsWith('iap:')) return { table: 'purchase_bindings', column: 'key', id: key };
+  if (key.startsWith('verify:')) return { table: 'verification_challenges', column: 'email', id: key.slice(7) };
+  if (key.startsWith('agrade:')) return { table: 'crew_grades', column: 'name', id: key.slice(7) };
   if (key.startsWith('user:')) return { table: 'users', column: 'email', id: key.slice(5) };
   if (key.startsWith('wallet:')) return { table: 'wallets', column: 'email', id: key.slice(7) };
   if (key.startsWith('schedule:')) return { table: 'schedules', column: 'email', id: key.slice(9) };
@@ -38,6 +40,25 @@ function columnsFor(table, id, rec) {
 export function createStore(db) {
   return {
     kind: 'd1',
+    async compareAndSwap(key, before, after) {
+      const r = route(key);
+      if (!r) throw new Error('Unsupported store key');
+      const valueColumn = r.valueColumn || 'data';
+      const rec = JSON.parse(after);
+      const extra = columnsFor(r.table, r.id, rec);
+      let statement;
+      if (before === null) {
+        const cols = [r.column, valueColumn, ...Object.keys(extra)];
+        statement = db.prepare(`INSERT OR IGNORE INTO ${r.table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+          .bind(r.id, after, ...Object.values(extra));
+      } else {
+        const assignments = [valueColumn, ...Object.keys(extra)].map(c => `${c} = ?`);
+        statement = db.prepare(`UPDATE ${r.table} SET ${assignments.join(', ')} WHERE ${r.column} = ? AND ${valueColumn} = ?`)
+          .bind(after, ...Object.values(extra), r.id, before);
+      }
+      const result = await statement.run();
+      return result.meta?.changes === 1;
+    },
     async get(key, options) {
       const r = route(key);
       if (!r) return null;
