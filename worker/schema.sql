@@ -87,14 +87,3 @@ CREATE INDEX IF NOT EXISTS idx_submit_rejections_at ON submit_rejections(at);
 -- 2026-09-25 security: opaque, limited-use email verification challenges.
 CREATE TABLE IF NOT EXISTS verification_challenges (email TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS crew_grades (name TEXT PRIMARY KEY, data TEXT NOT NULL);
-
--- 2026-09-25 차단·신고: Google·Apple 정책이 사용자 생성 콘텐츠와 1:1 상호작용에
--- 각각 신고와 차단 수단을 요구한다. 차단은 사용자당 1행(상대 목록을 통째로 보관),
--- 신고는 건당 1행이다.
-CREATE TABLE IF NOT EXISTS user_blocks (email TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS reports (
-  id         TEXT PRIMARY KEY,
-  data       TEXT NOT NULL,
-  created_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_reports_at ON reports(created_at);

@@ -2646,72 +2646,6 @@ function wantedSummary(w) {
   return parts.join(" · ") || "조건 없음";
 }
 
-/* ====== 차단·신고 ======
-   Google·Apple 정책이 사용자 생성 콘텐츠에는 신고를, 1:1 상호작용에는 차단을 요구한다.
-   차단은 서버에서 양방향으로 적용된다 — 내가 막은 사람도, 나를 막은 사람도 서로 안 보인다. */
-
-const REPORT_REASONS = [
-  ["harassment",    "괴롭힘·위협"],
-  ["privacy",       "개인정보 노출"],
-  ["spam",          "스팸·광고"],
-  ["impersonation", "사칭"],
-  ["false_post",    "허위 근무·이미 취소된 일정"],
-  ["other",         "기타"],
-];
-
-async function reportPost(postId) {
-  const post = state.posts.find(p => p.id === postId);
-  if (!post) return;
-  const menu = REPORT_REASONS.map(([, label], i) => `${i + 1}. ${label}`).join("\n");
-  const picked = prompt(`신고 사유를 번호로 골라주세요.\n\n${menu}`, "1");
-  if (picked === null) return;
-  const idx = Number(picked) - 1;
-  if (!Number.isInteger(idx) || !REPORT_REASONS[idx]) { showToast("사유를 번호로 골라주세요."); return; }
-  const detail = prompt("자세한 내용을 적어주세요 (선택)", "") || "";
-  try {
-    const res = await apiFetch(`${API_BASE}/api/report-create`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetType: "post", targetId: postId, reason: REPORT_REASONS[idx][0], detail }),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "신고 실패");
-    showToast("신고했습니다. 확인 후 조치하겠습니다.");
-  } catch (e) { showToast(e.message); }
-}
-
-async function blockPostOwner(postId) {
-  const post = state.posts.find(p => p.id === postId);
-  if (!post) return;
-  const nick = post.fromNick || post.ownerNick || "이 사용자";
-  if (!confirm(`${nick} 님을 차단할까요?\n\n차단하면 서로의 스왑 글이 보이지 않고 요청도 주고받을 수 없습니다. '내 정보'에서 해제할 수 있습니다.`)) return;
-  await setBlocked({ postId, nick }, true);
-}
-
-async function setBlocked(payload, blocked) {
-  try {
-    const res = await apiFetch(`${API_BASE}/api/blocks-set`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...payload, blocked }),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "처리 실패");
-    showToast(blocked ? "차단했습니다." : "차단을 해제했습니다.");
-    await fetchPosts();
-    await renderBlockList();
-  } catch (e) { showToast(e.message); }
-}
-
-async function renderBlockList() {
-  const el = $("#blockList");
-  if (!el) return;
-  try {
-    const res = await apiFetch(`${API_BASE}/api/blocks-get`);
-    const { blocked = [] } = await res.json();
-    el.innerHTML = blocked.length
-      ? blocked.map(b => `<li>${escapeHtml(b.nick)} <button type="button" class="link-button" data-unblock="${escapeHtml(b.id)}">해제</button></li>`).join("")
-      : `<li class="hint">차단한 사용자가 없습니다.</li>`;
-    el.querySelectorAll("[data-unblock]").forEach(b => b.onclick = () => setBlocked({ id: b.dataset.unblock }, false));
-  } catch { el.innerHTML = `<li class="hint">차단 목록을 불러오지 못했습니다.</li>`; }
-}
-
 function renderMyPosts() {
   const el = $("#myPostList");
   if (!el) return;
@@ -3053,11 +2987,6 @@ function renderMatches() {
 
       ${gradeWarnHtml}
 
-      <div class="card-moderation">
-        <button type="button" class="link-button card-report" data-action="report" data-post="${escapeHtml(post.id)}">🚩 신고</button>
-        <button type="button" class="link-button card-block" data-action="block" data-post="${escapeHtml(post.id)}">🚫 이 사용자 차단</button>
-      </div>
-
       <div class="card-actions">
         ${post.status === "submitting"
           ? `<div class="card-unavailable submitting">🔒 이미 스왑이 성사되어 <strong>회사 상신 중</strong>입니다 — 요청할 수 없습니다</div>`
@@ -3073,8 +3002,6 @@ function renderMatches() {
 
   list.querySelectorAll("[data-action='request']").forEach(b => b.onclick = () => requestSwap(b.dataset.post));
   list.querySelectorAll("[data-action='ask']").forEach(b => b.onclick = () => askAboutPost(b.dataset.post));
-  list.querySelectorAll("[data-action='report']").forEach(b => b.onclick = () => reportPost(b.dataset.post));
-  list.querySelectorAll("[data-action='block']").forEach(b => b.onclick = () => blockPostOwner(b.dataset.post));
 }
 
 /* ====== 공유 포스트 API 로드 (Cloudflare Worker + D1) ====== */
@@ -5435,7 +5362,6 @@ function switchTab(name, { preserveSelection = false } = {}) {
   if (name === "find") fetchPosts();
   if (name === "premiumAlerts") renderSavedSearches();
   if (name === "myPostsManager") fetchMyPosts();
-  if (name === "profile") renderBlockList();
   // 하단 탭 등으로 요청함을 직접 열면 전체 목록을 보여준다.
   // (알림에서 들어오는 경로는 switchTab 이후에 focusedRequestId를 세팅한다.)
   if (name === "requests") { state.focusedRequestId = null; fetchRequests(); }

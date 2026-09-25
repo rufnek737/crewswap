@@ -1364,11 +1364,3 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   font-size: 12px;
   line-height: 1.5;
 }
-
-/* 차단·신고 — 정책 요건이라 눈에 띄되 주 동작을 가리지 않는 위치에 둔다. */
-.card-moderation { display: flex; gap: 14px; margin: 6px 0 2px; }
-.card-moderation .link-button { font-size: 12px; opacity: .62; padding: 2px 0; }
-.card-moderation .link-button:hover { opacity: 1; }
-.block-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.block-list li { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-.block-list .link-button { font-size: 13px; }
