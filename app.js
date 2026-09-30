@@ -1310,6 +1310,7 @@ function applyImportedSchedules(schedules) {
   renderAll();
   if (state.guideFlow === "post") switchTab("schedule", { preserveSelection: true });
   showToast(`스케줄 ${finalSchedules.length}건 적용`);
+  reconcileMyPostsWithRoster();
 }
 
 // 분 → "HH:MM" (CrewConnex 형식)
@@ -2644,6 +2645,68 @@ function wantedSummary(w) {
   if (w.time && w.time.length) parts.push(w.time.join(", "));
   if (w.excludedAirports && w.excludedAirports.length) parts.push(w.excludedAirports.join("/") + " 제외");
   return parts.join(" · ") || "조건 없음";
+}
+
+/* 근무표를 다시 불러올 때마다, 올려둔 글이 아직 '내 근무'인지 대조한다.
+ *
+ * 앱 밖에서 스케줄이 바뀌면 — 동기와 직접 바꾸거나 회사가 바꾸거나 — 글에 적힌 근무는
+ * 이미 내 것이 아닌데 글은 그대로 남는다. 그걸 보고 요청을 보낸 사람은 성사될 수 없는
+ * 스왑에 크레딧을 쓴다. 서버는 회사 스케줄을 볼 수 없으므로 앱이 근무표를 다시 불러오는
+ * 이 순간이 유일한 관문이다.
+ *
+ * 내리는 건 서버 쪽 status 를 바꾸는 것이라, 누르지 않아도 다른 사람 목록에서 먼저
+ * 사라진다. 회사가 바꾼 것이지 본인이 마음을 바꾼 게 아니므로 크레딧은 전액 돌려준다. */
+async function reconcileMyPostsWithRoster() {
+  const sync = window.CrewSwapRosterSync;
+  if (!sync || !state.myPosts.length || !state.schedules.length) return;
+  const stale = sync.findStalePosts(state.myPosts, state.schedules, state.currentMonth);
+  if (!stale.length) return;
+
+  const withdrawn = [];
+  for (const { post, changes } of stale) {
+    // 구버전 글은 서버에서 내릴 수단이 없다. 지우지 말고 알리기만 한다.
+    if (!post.deleteToken) { post.rosterChanged = changes; continue; }
+    try {
+      const response = await apiFetch(`${API_BASE}/api/posts-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: post.id, deleteToken: post.deleteToken, reason: "roster-changed" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (result.wallet) applyCreditWallet(result.wallet);
+      if (!response.ok) continue;
+      _deletedPostIds.add(post.id);
+      withdrawn.push({ post, changes, refunded: Number(result.refunded) || 0,
+        couponRefunded: Number(result.couponRefunded) || 0 });
+    } catch (e) {
+      // 네트워크 실패면 그대로 둔다 — 다음 불러오기 때 다시 잡힌다.
+      console.warn("근무표 변경 자동 내림 실패:", e);
+    }
+  }
+  if (!withdrawn.length) { renderMyPosts(); return; }
+
+  const ids = new Set(withdrawn.map(w => w.post.id));
+  state.myPosts = state.myPosts.filter(p => !ids.has(p.id));
+  for (const { post, changes, refunded, couponRefunded } of withdrawn) {
+    const days = changes.map(c => `${Number(c.month.slice(5))}/${c.day} ${c.before} → ${c.after}`).join("\n");
+    const back = [
+      refunded > 0 ? `크레딧 ${refunded}개 전액 복원` : "",
+      couponRefunded > 0 ? `급구 쿠폰 ${couponRefunded}장 복구` : "",
+    ].filter(Boolean).join(" · ");
+    state.alerts.unshift({
+      kind: "urgent",
+      goTo: "myPostsManager",
+      title: "🔄 근무표가 바뀌어 스왑 글을 내렸습니다",
+      body: `'${post.offered?.patternName || "스왑"}'의 근무가 회사 근무표에서 바뀌어 목록에서 내렸습니다.\n${days}${back ? `\n\n${back}` : ""}`,
+      time: "방금",
+      createdAt: new Date().toISOString(),
+    });
+  }
+  saveState();
+  renderMyPosts();
+  renderCredits();
+  renderAlerts();
+  showToast(`근무표가 바뀐 스왑 글 ${withdrawn.length}건을 내렸습니다 — 알림을 확인해주세요`);
 }
 
 function renderMyPosts() {
@@ -4706,6 +4769,8 @@ async function posterSelectDays(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   const r = (state.requests.received || []).find(x => x.id === reqId);
   if (!r) return;
+  const blocked = rosterChangedBlock(r.postId);
+  if (blocked) { alert(blocked); reconcileMyPostsWithRoster(); return; }
   const { offered, msg, fixed } = posterPickRestCheck(reqId);
   if (fixed) { showToast("내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹쳐 이 요청자와는 교환할 수 없습니다."); return; }
   if (!offered) { showToast("바꿀 날을 하나 이상 선택하세요."); return; }
@@ -4725,6 +4790,8 @@ async function posterSelectDays(reqId) {
 
 async function approvePosterSelection(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  const r = (state.requests.sent || []).find(x => x.id === reqId);
+  if (!confirmScheduleStillMine(offeredText(r?.offered), r?.postTitle, r?.postTitle)) return;
   if (!confirm("상대가 선택한 일정으로 스왑을 최종 승인할까요? 승인 후 서로의 연락처가 공개됩니다.")) return;
   try {
     const res = await apiFetch(`${API_BASE}/api/requests-requester-accept`, {
@@ -5099,8 +5166,55 @@ function requestCard(r) {
   `;
 }
 
+/* 최종 승락 직전, 본인 근무표와 대조하라고 한 번 세운다.
+ *
+ * 앱이 아는 근무표는 마지막으로 불러온 시점의 것이다. 그 뒤에 회사가 바꿨으면 앱은
+ * 모른다 — rosterChangedBlock 도 불러온 근무표가 있어야 작동한다. 상호 수락은 되돌릴
+ * 수 없고 여기서부터 서로의 실명·연락처가 공개되므로, 마지막 판단은 사람이 한다.
+ * 막는 게 아니라 눈으로 확인하게 하는 것이다. */
+function confirmScheduleStillMine(give, get, postTitle) {
+  const lines = [
+    `[${postTitle || "스왑"}]`,
+    "",
+    give ? `내가 내주는 근무: ${give}` : "",
+    get ? `내가 받는 근무: ${get}` : "",
+    "",
+    "회사 근무표(CrewConnex)에서 위 근무가 지금도 내 근무가 맞는지 확인하셨습니까?",
+    "",
+    "앱은 마지막으로 불러온 근무표만 알고 있습니다. 그 뒤에 근무가 바뀌었다면 이 스왑은 회사에서 처리되지 않습니다.",
+  ].filter(v => v !== null).join("\n");
+  return confirm(lines);
+}
+
+function offeredText(offered) {
+  if (!offered) return "";
+  const days = (offered.days || []).map(d => `${d}일`).join(", ");
+  const what = offered.patternName || offered.summary || "";
+  return [days, what].filter(Boolean).join(" · ");
+}
+
+/* 수락 직전에 내 근무표와 한 번 더 대조한다.
+ * 불러오기 때 자동으로 내려가지만, 근무표를 안 불러온 채로 요청이 들어오면 그 관문을
+ * 지나친다. 여기서 막지 않으면 성사될 수 없는 스왑에 양쪽이 크레딧을 쓴다. */
+function rosterChangedBlock(postId) {
+  const sync = window.CrewSwapRosterSync;
+  const post = (state.myPosts || []).find(p => p.id === postId);
+  if (!sync || !post || !state.schedules.length) return null;
+  const result = sync.comparePostWithRoster(post, state.schedules, state.currentMonth);
+  if (result.status !== "changed") return null;
+  const lines = result.changes
+    .map(c => `${Number(c.month.slice(5))}/${c.day} ${c.before} → ${c.after}`)
+    .join("\n");
+  return `이 글의 근무가 회사 근무표에서 바뀌었습니다. 지금은 교환할 수 없습니다.\n${lines}`;
+}
+
 async function acceptRequest(reqId) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
+  const req = (state.requests.received || []).find(r => r.id === reqId);
+  const blocked = rosterChangedBlock(req?.postId);
+  if (blocked) { alert(blocked); reconcileMyPostsWithRoster(); return; }
+  const myPost = (state.myPosts || []).find(p => p.id === req?.postId);
+  if (!confirmScheduleStillMine(offeredText(myPost?.offered), offeredText(req?.offered), req?.postTitle)) return;
   // 객실 Swap 동의권은 월 1회다. 서버 요청 전에 막아야 상대에게 수락 알림이 가지 않는다.
   syncSwapCounters();
   const consent = window.CrewSwapUsage?.canConsent(state.user.crewType, state.user, currentRules());
@@ -7028,6 +7142,7 @@ if (quickBtn) {
       renderAll();
       const minfo = monthsAvail.length > 1 ? ` (${monthsAvail.length}개월)` : "";
       showToast(`✅ 클립보드에서 ${arr.length}건${minfo} 로드 + 저장. 새로고침해도 유지.`);
+      reconcileMyPostsWithRoster();
     } catch (e) {
       showToast("클립보드 읽기 실패: 브라우저 권한 필요 — F12 콘솔에서 loadRoster() 사용");
       console.error(e);
@@ -7050,6 +7165,7 @@ window.loadRoster = function(json) {
     saveState();
     renderAll();
     console.log(`✅ ${arr.length}건 로드 (월: ${monthsAvail.join(", ") || "단일/미지정"}) + localStorage 저장.`);
+    reconcileMyPostsWithRoster();
     return arr.length;
   } catch (e) {
     console.error('❌ 로드 실패:', e.message);

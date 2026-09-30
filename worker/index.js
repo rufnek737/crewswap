@@ -1951,25 +1951,33 @@ async function handlePostsDelete(request, env, authEmail) {
       const current = await walletStatus(env, authEmail);
       return json({ ok: true, alreadyClosed: true, status: post.status, refunded: post.refundGranted || 0, wallet: current.wallet });
     }
-    const expired = reason === 'expired' || (!reason && postDeadlinePassed(post));
-    const refundRequested = Number(post.creditSpent || 0) * (expired ? 0.5 : 1);
+    /* 회사가 근무표를 바꿔 글의 내용이 더 이상 내 근무가 아니게 된 경우다. 앱이
+       근무표를 다시 불러오면서 스스로 내린다. 본인이 마음을 바꾼 게 아니라 회사가
+       바꾼 것이므로 쓴 크레딧은 전액 돌려준다 — 월 상한(3)에도 묶지 않는다.
+       상한은 매달 나눠주는 무료분에 대한 것이고, 이건 이미 낸 값을 되돌리는 것이다. */
+    const rosterChanged = reason === 'roster-changed';
+    const expired = !rosterChanged && (reason === 'expired' || (!reason && postDeadlinePassed(post)));
+    const spent = Number(post.creditSpent || 0);
+    const refundRequested = rosterChanged ? spent : spent * (expired ? 0.5 : 1);
     const refund = await runWalletCommand(env, authEmail, {
-      type: 'refund',
-      operationId: `post:${expired ? 'expire' : 'cancel'}:${id}`,
+      type: rosterChanged ? 'reverse' : 'refund',
+      operationId: `post:${rosterChanged ? 'roster-changed' : expired ? 'expire' : 'cancel'}:${id}`,
       amount: refundRequested,
     });
-    // 급구 쿠폰은 마감까지 매칭되지 않았을 때만 되돌린다. 직접 취소는 되돌리지
-    // 않는다 — 등록하는 순간 등급이 맞는 전원에게 알림이 나가므로 쿠폰의 값어치는
-    // 이미 쓰인 것이고, 돌려주면 알림만 뿌리고 취소하는 짓을 반복할 수 있다.
+    // 급구 쿠폰은 마감까지 매칭되지 않았거나 회사가 근무표를 바꿨을 때 되돌린다.
+    // 직접 취소는 되돌리지 않는다 — 등록하는 순간 등급이 맞는 전원에게 알림이
+    // 나가므로 쿠폰의 값어치는 이미 쓰인 것이고, 돌려주면 알림만 뿌리고 취소하는
+    // 짓을 반복할 수 있다. 회사가 바꾼 건 본인이 벌인 일이 아니라 되돌려 준다.
     let couponRefunded = 0;
-    if (post.urgent && expired) {
+    if (post.urgent && (expired || rosterChanged)) {
       const back = await runWalletCommand(env, authEmail, {
         type: 'grant-coupon', operationId: `post:urgent-refund:${id}`, amount: 1,
       });
       couponRefunded = back.couponsGranted || 0;
       if (back.ok) refund.wallet = back.wallet;
     }
-    post.status = expired ? 'expired' : 'cancelled';
+    post.status = rosterChanged ? 'withdrawn' : expired ? 'expired' : 'cancelled';
+    if (rosterChanged) post.withdrawReason = 'roster-changed';
     post.refunded = true;
     post.refundGranted = refund.refunded || 0;
     post.urgentCouponRefunded = couponRefunded;
