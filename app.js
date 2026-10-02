@@ -3476,7 +3476,9 @@ function postMatchesSavedSearch(post, s) {
     if (b === null || !s.nights.includes(b)) return false;
   }
   if (s.keyword && s.keyword.trim()) {
-    const sourceText = `${o.patternName || ""} ${o.summary || ""} ${o.region || ""} ${o.type || ""} ${o.layoverAirport || ""}`;
+    // 편명(7C1551)도 찾을 수 있어야 한다 — 글에 실려 있는데 대조 대상에서 빠져 있었다.
+    const flightNumbers = (o.daySchedules || []).map(d => d?.title).filter(Boolean).join(" ");
+    const sourceText = `${o.patternName || ""} ${o.summary || ""} ${o.region || ""} ${o.type || ""} ${o.layoverAirport || ""} ${flightNumbers}`;
     if (!AIRPORT_ALIASES.airportKeywordMatches(sourceText, s.keyword)) return false;
   }
   return true;
@@ -4360,7 +4362,26 @@ function renderReqTabBadge() {
   else { badge.hidden = true; }
 }
 
-const SAVED_TYPE_OPTIONS = ["OFF", "국내선", "국제선", "LAYOV", "RSV", "STBY"];
+/* 근무유형 칩에서 LAYOV 를 뺐다. 글의 `offered.type` 은 패턴 첫날 유형인데 레이오버
+   패턴의 첫날은 아웃바운드라 늘 `국제선`이다. LAYOV 는 중간 체류일에만 붙어서, 이 칩은
+   처음부터 한 건도 잡은 적이 없다.
+   이미 저장해둔 조건은 지우지 않고 박수 1박 이상으로 옮긴다 — 자세한 이유는
+   worker/premium-alerts.mjs 의 migrateLayoverType 주석에 적었다. 두 곳의 규칙은 같아야
+   한다. 서버는 알림을 보내고 앱은 화면을 그리므로, 어긋나면 "목록엔 있는데 알림이 안 온다"가
+   된다. */
+const SAVED_TYPE_OPTIONS = ["OFF", "국내선", "국제선", "RSV", "STBY"];
+const LEGACY_LAYOVER_NIGHTS = ["1", "2plus"];
+
+function migrateSavedSearches(searches) {
+  const next = (searches || []).map(s => {
+    if (!s?.types?.includes("LAYOV")) return s;
+    const types = s.types.filter(t => t !== "LAYOV");
+    // 이미 박수를 직접 고른 사람은 그 선택이 우선이다 — 덮어쓰지 않는다.
+    const nights = s.nights?.length ? s.nights : [...LEGACY_LAYOVER_NIGHTS];
+    return { ...s, types, nights };
+  }).filter(s => s.keyword || s.types?.length || s.nights?.length);
+  return { searches: next };
+}
 function renderSavedSearches() {
   const listEl = document.getElementById("savedList");
   if (!listEl) return;
@@ -4408,7 +4429,8 @@ function renderSavedSearches() {
         <div class="chip-row" id="savedTypeChips">
           ${SAVED_TYPE_OPTIONS.map(t => `<button type="button" class="filter-chip" data-stype="${t}">${t}</button>`).join("")}
         </div>
-        <div class="saved-field-label">박수 (LAYOV)</div>
+        <div class="saved-field-label">박수</div>
+        <div class="saved-keyword-help">레이오버(밖에서 자고 오는 근무)만 받으려면 1박·2박+를 고르세요.</div>
         <div class="chip-row" id="savedNightChips">
           ${NIGHTS_OPTIONS.map(o => `<button type="button" class="filter-chip" data-snight="${o.v}">${o.label}</button>`).join("")}
         </div>
@@ -6622,7 +6644,9 @@ function loadStateFromStorage() {
     // 이전 일 단위 충전 데이터는 이번 월 단위 마이그레이션에서 폐기한다.
     if (typeof d.lastCreditAt === "number") state.lastCreditAt = d.lastCreditAt;
     if (d.requests) state.requests = d.requests;
-    if (d.savedSearches) state.savedSearches = d.savedSearches;
+    // 저장된 LAYOV 조건을 박수로 옮긴다. 서버도 읽을 때마다 같은 규칙으로 옮기므로
+    // (sanitizeSavedSearches) 따로 올려보내지 않아도 양쪽이 같은 값으로 수렴한다.
+    if (d.savedSearches) state.savedSearches = migrateSavedSearches(d.savedSearches).searches;
     if (d.currentMonth) state.currentMonth = d.currentMonth;
     if (Array.isArray(d.myPosts)) state.myPosts = d.myPosts;
     if (d.postDraft) state.postDraft = d.postDraft;

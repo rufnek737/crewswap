@@ -93,3 +93,59 @@ test('여러 날 중 하루라도 STBY면 제한이 걸린다', () => {
     offered: { type: '국내선', daySchedules: [{ type: '국내선' }, { type: 'STBY' }] } };
   assert.equal(subscriberCanUsePost({ crewType: 'CABIN', roleType: 'CC', hasBroadcastRating: true }, post), false);
 });
+
+/* ── LAYOV 유형칩 이전 + 편명 대조 (2026-10-02) ──────────────────────
+ * LAYOV 칩은 한 건도 잡은 적이 없다(offered.type 은 패턴 첫날 = 아웃바운드 = 국제선).
+ * 그냥 빼면 "KIX + LAYOV"가 키워드만 남아 퀵턴까지 받게 되므로, 제거가 아니라
+ * 박수 1박 이상으로 옮긴다. */
+
+const kixQuickTurn = { offered: { patternName: '10/16~10/16 · 국제선 패턴', type: '국제선',
+  days: [16], summary: 'ICN-KIX-ICN',
+  daySchedules: [{ day: 16, type: '국제선', title: '7C1151', routeSummary: 'ICN→KIX→ICN' }] } };
+
+const kixOneNight = { offered: { patternName: '10/15~10/16 · 국제선 패턴', type: '국제선',
+  days: [15, 16], summary: 'ICN-KIX · KIX-ICN',
+  daySchedules: [{ day: 15, type: '국제선', title: '7C1151', routeSummary: 'ICN→KIX' },
+                 { day: 16, type: '국제선', title: '7C1152', routeSummary: 'KIX→ICN' }] } };
+
+function only(search, posts) {
+  const [s] = sanitizeSavedSearches([{ id: 'x', ...search }]);
+  return posts.filter(p => postMatchesSavedSearch(p, s));
+}
+
+test('LAYOV 를 저장해둔 조건은 박수 1박 이상으로 옮겨진다', () => {
+  const [s] = sanitizeSavedSearches([{ id: 'x', keyword: 'KIX', types: ['LAYOV'] }]);
+  assert.deepEqual(s.types, []);
+  assert.deepEqual(s.nights, ['1', '2plus']);
+});
+
+test('옮긴 뒤 KIX 레이오버만 오고 퀵턴은 안 온다 — 원래 의도대로', () => {
+  const hit = only({ keyword: 'KIX', types: ['LAYOV'] }, [kixQuickTurn, kixOneNight]);
+  assert.deepEqual(hit, [kixOneNight]);
+});
+
+test('LAYOV 만 저장했어도 저장검색이 사라지지 않는다', () => {
+  const [s] = sanitizeSavedSearches([{ id: 'x', types: ['LAYOV'] }]);
+  assert.ok(s, '조건이 통째로 없어지면 안 된다');
+  assert.deepEqual(s.nights, ['1', '2plus']);
+});
+
+test('박수를 직접 고른 사람의 선택은 덮어쓰지 않는다', () => {
+  const [s] = sanitizeSavedSearches([{ id: 'x', types: ['LAYOV'], nights: ['quick'] }]);
+  assert.deepEqual(s.nights, ['quick']);
+});
+
+test('LAYOV 는 더 이상 유형으로 저장되지 않는다', () => {
+  const [s] = sanitizeSavedSearches([{ id: 'x', types: ['국제선', 'LAYOV', 'OFF'] }]);
+  assert.deepEqual(s.types, ['국제선', 'OFF']);
+});
+
+test('편명으로 찾을 수 있다', () => {
+  assert.deepEqual(only({ keyword: '7C1151' }, [kixQuickTurn, kixOneNight]),
+    [kixQuickTurn, kixOneNight]);
+  assert.deepEqual(only({ keyword: '7C1152' }, [kixQuickTurn, kixOneNight]), [kixOneNight]);
+});
+
+test('편명을 더해도 공항 키워드가 엉뚱한 글을 끌어오지 않는다', () => {
+  assert.deepEqual(only({ keyword: 'NRT' }, [kixQuickTurn, kixOneNight]), []);
+});

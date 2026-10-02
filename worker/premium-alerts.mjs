@@ -13,18 +13,44 @@ function cleanList(value, allowed) {
   return [...new Set(value.map(cleanText).filter(v => allowed.includes(v)))];
 }
 
-export function sanitizeSavedSearches(searches) {
-  const typeOptions = ["OFF", "국내선", "국제선", "LAYOV", "RSV", "STBY"];
-  const nightOptions = ["quick", "1", "2plus"];
+/* 근무유형 칩에서 LAYOV 를 뺐다.
+ *
+ * 글의 `offered.type` 은 패턴 **첫날**의 유형인데, 레이오버 패턴의 첫날은 아웃바운드라
+ * 언제나 `국제선`이다. LAYOV 는 중간 체류일에만 붙고 글에는 `layoverAirport` 도 안 실린다.
+ * 그래서 이 칩은 처음부터 한 건도 잡은 적이 없다 — 눌러도 알림이 0건이었다.
+ *
+ * 그렇다고 그냥 빼면 더 나빠진다. "KIX + LAYOV"를 저장해둔 사람은 지금 0건을 받는데, 칩만
+ * 없애면 키워드 KIX 만 남아 **퀵턴까지** 받게 된다. 원하던 것의 정반대다. LAYOV 만 저장한
+ * 사람은 조건이 통째로 사라져 저장검색이 없어진다.
+ *
+ * 그래서 제거가 아니라 **이전(migration)** 한다. LAYOV 는 "밖에서 자고 오는 근무"라는 뜻이고,
+ * 그건 박수 필터가 정확히 표현한다. 1박 이상(`1`,`2plus`)으로 옮기면 사용자가 원래 의도한
+ * 것이 그대로 살아난다. 박수 판정은 일수 기반이라 2일 패턴(1박)도 제대로 잡는다. */
+const SAVED_TYPE_OPTIONS = ["OFF", "국내선", "국제선", "RSV", "STBY"];
+const SAVED_NIGHT_OPTIONS = ["quick", "1", "2plus"];
+const LEGACY_LAYOVER_NIGHTS = ["1", "2plus"];
 
+function migrateLayoverType(rawTypes, nights) {
+  const hadLayover = Array.isArray(rawTypes)
+    && rawTypes.some(t => cleanText(t) === "LAYOV");
+  if (!hadLayover) return nights;
+  // 이미 박수를 직접 고른 사람은 그 선택이 우선이다 — 덮어쓰지 않는다.
+  if (nights.length) return nights;
+  return [...LEGACY_LAYOVER_NIGHTS];
+}
+
+export function sanitizeSavedSearches(searches) {
   if (!Array.isArray(searches)) return [];
-  return searches.slice(0, MAX_SEARCHES).map((search, index) => ({
-    id: cleanText(search?.id) || `SERVER-${Date.now()}-${index}`,
-    label: cleanText(search?.label),
-    keyword: cleanText(search?.keyword),
-    types: cleanList(search?.types, typeOptions),
-    nights: cleanList(search?.nights, nightOptions),
-  })).filter(search => search.keyword || search.types.length || search.nights.length);
+  return searches.slice(0, MAX_SEARCHES).map((search, index) => {
+    const nights = cleanList(search?.nights, SAVED_NIGHT_OPTIONS);
+    return {
+      id: cleanText(search?.id) || `SERVER-${Date.now()}-${index}`,
+      label: cleanText(search?.label),
+      keyword: cleanText(search?.keyword),
+      types: cleanList(search?.types, SAVED_TYPE_OPTIONS),
+      nights: migrateLayoverType(search?.types, nights),
+    };
+  }).filter(search => search.keyword || search.types.length || search.nights.length);
 }
 
 export function postNights(post) {
@@ -57,12 +83,15 @@ export function postMatchesSavedSearch(post, search) {
   }
 
   if (search.keyword) {
+    /* 편명(7C1551)으로도 찾을 수 있어야 한다. 편명은 글에 실려 있으나
+       (`daySchedules[].title`) 여기 대조 대상에서 빠져 있었다. */
     const sourceText = [
       offered.patternName,
       offered.summary,
       offered.region,
       offered.type,
       offered.layoverAirport,
+      ...(offered.daySchedules || []).map(day => day?.title),
     ].filter(Boolean).join(" ");
     if (!airportAliases.airportKeywordMatches(sourceText, search.keyword)) return false;
   }
