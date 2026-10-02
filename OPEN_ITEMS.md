@@ -378,3 +378,28 @@ A·C/BLH/CC/Pos` 다. 사번·방송등급이 CC 열 안에 같이 오는지, �
     - 1.2.1 을 심사에 올리면 이전이 막힌다. 이전 끝날 때까지 제출하지 않는다.
     - 이전 후: APNs 키 재발급 → 워커 시크릿 교체(푸시 끊김), 코드사이닝 팀 변경
     - 인앱 결제가 한 건도 없는 지금이 적기다.
+
+    **이전 전 정리는 2026-10-02 에 끝냈다:** 내부 테스트 그룹 삭제, 외부 그룹 테스터·빌드 0,
+    빌드별 whatsNew 비움, Xcode Cloud 워크플로·제품 삭제(ASC 화면에서 확인). Test
+    Information 은 필수 필드라 비울 수 없어 값만 교체했다(URL 을 rufnekcrew.com 으로,
+    설명의 「CrewSwap」→「듀티스왑」 — 이름 변경 때 놓친 곳이었다). 테스터 11명 명단은
+    공개 저장소 밖에 백업했다.
+
+46. **이전 직후에 할 일 — 2단계 인증 때문에 매번 배우자 폰이 필요하다** (2026-10-02)
+
+    개인 등록이라 Developer Program 팀원은 추가할 수 없다. 다만 애플 문서에 명시돼 있다:
+    "If you're enrolled as an individual and add users in App Store Connect, users receive
+    access only to your content in App Store Connect and are not considered part of your team."
+
+    → **App Store Connect 사용자로 추가**하면 본인 Apple ID·본인 2단계 인증으로 로그인한다.
+    App Manager 역할이면 버전 생성·제출, 스토어 정보 편집, TestFlight, 인앱 상품까지 된다.
+
+    Account Holder 만 할 수 있는 것(배우자 로그인 필요, 1년에 몇 번): 법적 계약 동의,
+    멤버십 갱신, **앱 이전**, **API 키 생성**, 은행·세금 정보.
+
+    보조로 배우자 Apple ID 의 **신뢰할 수 있는 전화번호에 Kay 번호를 추가**한다
+    (appleid.apple.com → 로그인 및 보안). 인증 코드가 Kay 폰으로도 온다.
+
+    ⚠️ **API 키는 당장 안 만들기로 했다(Kay, 2026-10-02).** 그러면 이전 직후부터
+    `scripts/review-status.mjs` 를 비롯한 ASC 자동화가 전부 멎는다 — 지금 키는 Kay 계정
+    것이라 앱이 넘어가면 접근 권한이 없어진다. 불편해지면 그때 배우자 계정에서 발급한다.
