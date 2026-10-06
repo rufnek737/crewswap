@@ -6586,7 +6586,18 @@ function renderListView() {
 }
 
 /* ====== 10. 초기화 ====== */
-state.schedules = createMockSchedules();
+/* 근무표는 빈 상태로 시작한다.
+ *
+ * 예전에는 여기서 데모 근무표 26건을 조건 없이 넣었다. 그런데 그 데모는 로그인 전
+ * 화면에 그대로 보인다 — 설치하고 로그인/회원가입 창을 닫으면 2026년 6월 가짜 비행이
+ * 「내 근무」 달력에 떠 있다(2026-10-06, Play 출시 직후 Kay 가 발견).
+ * 승무원 앱에서 가짜 스케줄이 본인 근무표처럼 보이는 건 단순 UI 문제가 아니다.
+ *
+ * 로그인하면 서버에서 진짜 근무표를 받고(applyLoggedInProfile → pullSchedulesFromServer),
+ * 그 전에는 CrewConnex 로 불러오면 된다. 둘 다 아니면 비어 있는 게 맞다.
+ *
+ * createMockSchedules() 는 심사자 계정 근무표를 콘솔에서 심을 때 쓰므로 남겨 둔다. */
+state.schedules = [];
 state.posts = [];
 state.requests = { sent: [], received: [] };
 state.alerts = createMockAlerts();

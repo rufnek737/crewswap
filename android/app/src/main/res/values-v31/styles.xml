@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 안드로이드 12(API 31)부터 시스템이 런치 테마의 android:background 를 무시하고
+     SplashScreen API 를 쓴다. values/styles.xml 의 @drawable/splash 가 안 보이는 대신
+     아무 설정이 없으면 기본 모양(앱 아이콘)이 나온다.
+
+     2026-10-06 Play 출시 직후, 폰에서 Capacitor 기본 로고가 그대로 떴다 —
+     drawable/splash.png 가 설치 때 그대로였고 v31 테마도 없었다. 이미지는 브랜드
+     화면으로 바꿨지만, 12+ 에서는 전체 이미지를 띄울 수 없어 배경색 + 아이콘으로 맞춘다.
+     그 뒤는 웹 스플래시(splash.mp4)가 이어받는다. -->
+<resources>
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>
