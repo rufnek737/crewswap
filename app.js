@@ -15,8 +15,8 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.1.9";
-const APP_RELEASE_DATE = "2026.09.05";
+const APP_VERSION = "1.2.1";
+const APP_RELEASE_DATE = "2026.10.06";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -336,6 +336,27 @@ function buildCrewPublic(crewComposition, ownerRole) {
     ? parts.filter(p => !p.startsWith("PIC"))
     : parts.filter(p => !/^FO\b/.test(p));
   return filtered.join(" · ");
+}
+
+/* 저장된 근무표가 데모인지 판정한다.
+ *
+ * 예전 버전은 시작할 때 데모 근무표(2026-06)를 넣었고, 그게 localStorage 에 저장됐다.
+ * 1.2.1 에서 주입은 멈췄지만, 안드로이드는 앱을 지웠다 다시 깔아도 자동 백업
+ * (allowBackup)으로 예전 localStorage 를 되살린다 — 데모 근무표와 로그인 세션까지.
+ * 그래서 새로 깐 폰에서 로그인 화면 없이 6월 가짜 근무표가 떴다(2026-10-06).
+ *
+ * 데모와 정확히 같을 때만 데모로 본다. 실제 근무표를 데모로 잘못 보고 지우면 그 사람의
+ * 스케줄이 사라진다 — 그쪽이 훨씬 나쁘다. 그래서 '전부 2026-06 이고, 모든 항목이 데모에
+ * 있는 (일·유형·제목) 이며, 개수도 데모와 같은' 경우로 좁힌다. 심사자 계정에 심은
+ * 근무표는 9월이라 여기 걸리지 않는다. */
+let _demoRosterKeys = null;
+function isDemoRoster(schedules) {
+  if (!Array.isArray(schedules) || !schedules.length) return false;
+  if (!_demoRosterKeys) {
+    _demoRosterKeys = new Set(createMockSchedules().map(e => `${e.month}|${e.day}|${e.type}|${e.title}`));
+  }
+  if (schedules.length !== _demoRosterKeys.size) return false;
+  return schedules.every(e => _demoRosterKeys.has(`${e?.month}|${e?.day}|${e?.type}|${e?.title}`));
 }
 
 function createMockPosts() {
@@ -6634,7 +6655,8 @@ function loadStateFromStorage() {
     if (!raw) return null;
     const d = JSON.parse(raw);
     if (d.v !== 4) return null;  // v3 이하는 서버 계정 도입 전 로컬-only 세션 — 무효화(재로그인 유도)
-    if (Array.isArray(d.schedules) && d.schedules.length) state.schedules = d.schedules;
+    const restoredDemo = isDemoRoster(d.schedules);
+    if (Array.isArray(d.schedules) && d.schedules.length && !restoredDemo) state.schedules = d.schedules;
     state.sessionToken = typeof d.sessionToken === "string" ? d.sessionToken : null;
     state.sessionExpiresAt = Number.isFinite(d.sessionExpiresAt) ? d.sessionExpiresAt : null;
     if (!state.sessionToken || (state.sessionExpiresAt && state.sessionExpiresAt <= Date.now())) {
@@ -6658,7 +6680,8 @@ function loadStateFromStorage() {
     // 저장된 LAYOV 조건을 박수로 옮긴다. 서버도 읽을 때마다 같은 규칙으로 옮기므로
     // (sanitizeSavedSearches) 따로 올려보내지 않아도 양쪽이 같은 값으로 수렴한다.
     if (d.savedSearches) state.savedSearches = migrateSavedSearches(d.savedSearches).searches;
-    if (d.currentMonth) state.currentMonth = d.currentMonth;
+    // 데모를 버렸으면 데모가 보던 달(2026-06)도 따라오지 않게 한다 — 빈 6월 달력이 뜬다.
+    if (d.currentMonth && !restoredDemo) state.currentMonth = d.currentMonth;
     if (Array.isArray(d.myPosts)) state.myPosts = d.myPosts;
     if (d.postDraft) state.postDraft = d.postDraft;
     if (Array.isArray(d.alerts)) {
@@ -6923,6 +6946,7 @@ function syncProfileToServer() {
 // 다른 기기·브라우저에서 같은 계정으로 로그인해도 동일하게 보이게 한다.
 function syncSchedulesToServer() {
   if (!state.user.email || !state.user.serverAuthed) return;
+  if (isDemoRoster(state.schedules)) return;   // 데모가 그 사람 근무표로 서버에 남으면 안 된다
   apiFetch(`${API_BASE}/api/schedules-sync`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ schedules: state.schedules }),
@@ -6938,7 +6962,8 @@ async function pullSchedulesFromServer() {
     const res = await apiFetch(`${API_BASE}/api/schedules-get`);
     if (!res.ok) return;
     const data = await res.json();
-    const serverSchedules = Array.isArray(data.schedules) ? data.schedules : [];
+    const received = Array.isArray(data.schedules) ? data.schedules : [];
+    const serverSchedules = isDemoRoster(received) ? [] : received;
     if (serverSchedules.length > 0 && state.schedules.length === 0) {
       state.schedules = serverSchedules;
       saveState();

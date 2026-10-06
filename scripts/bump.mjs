@@ -62,6 +62,14 @@ const retag = text => text
 stage('sw.js', retag(sw));
 stage('index.html', retag(read('index.html')));
 
+/* 앱 안 '내 정보'에 보이는 버전. 예전엔 여기를 안 건드려서 1.1.9 에 멈춰 있었다 —
+   스토어는 1.2.1 인데 앱은 1.1.9 라고 말했다(2026-10-06). 날짜는 한국 시각으로 찍는다. */
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' })
+  .format(new Date()).replaceAll('-', '.');
+stage('app.js', read('app.js')
+  .replace(/const APP_VERSION = "[\d.]+";/, `const APP_VERSION = "${version}";`)
+  .replace(/const APP_RELEASE_DATE = "[\d.]+";/, `const APP_RELEASE_DATE = "${today}";`));
+
 /* ── 보고 ─────────────────────────────────────────── */
 console.log(`표시 버전   ${marketing}${version !== marketing ? ` → ${version}` : '  (그대로)'}`);
 console.log(`iOS 빌드    ${iosBuild} → ${nextIos}`);

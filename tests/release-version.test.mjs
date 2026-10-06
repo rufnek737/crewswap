@@ -63,3 +63,12 @@ test('공지 팝업의 버전이 앱 표시 버전과 같다', () => {
   const noticeVersion = /version: "([\d.]+)"/.exec(notice)[1];
   assert.equal(noticeVersion, appVersion);
 });
+
+test('앱 안에 표시되는 버전이 스토어 표시 버전과 같다', () => {
+  // bump.mjs 가 APP_VERSION 을 안 건드려 1.1.9 에 멈춰 있었다(2026-10-06).
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const gradle = readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8');
+  const appVersion = /const APP_VERSION = "([\d.]+)";/.exec(app)[1];
+  const marketing = /versionName "([\d.]+)"/.exec(gradle)[1];
+  assert.equal(appVersion, marketing);
+});
