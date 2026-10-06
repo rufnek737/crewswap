@@ -7018,8 +7018,10 @@ if (!document.getElementById("splashScreen")) {
     if (buttons) buttons.hidden = true;
     splash.classList.add("is-intro");
     const done = () => hideSplash(() => { queueReleaseNotice(); queueBetaNotice(); });
-    // 영상이 짧으면 끝나는 시점에, 길면 INTRO_MS 후에 넘어간다. 재생 실패해도 멈추지 않도록 타이머를 둔다.
-    const INTRO_MS = 2200;
+    // 영상이 끝나면 넘어간다(약 8초). 예전엔 2.2초에 끊어 로고만 스치고 지나갔다 —
+    // Kay 가 끝까지 보여주기로 정했다(2026-10-06). 누르면 언제든 건너뛴다.
+    // 'ended' 가 안 오는 기기를 위해 영상 길이보다 조금 긴 안전 타이머를 둔다.
+    const INTRO_MS = 9000;
     const timer = setTimeout(done, INTRO_MS);
     // 기다리기 싫으면 아무 데나 눌러 바로 넘어갈 수 있게 한다.
     splash.addEventListener("click", () => { clearTimeout(timer); done(); }, { once: true });
