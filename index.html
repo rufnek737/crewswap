@@ -1004,6 +1004,31 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <!-- 오래된 WebView 안내. 이 블록은 일부러 옛 문법(ES5)으로만 쓴다.
+         앱 스크립트는 ?. ?? 같은 문법을 쓰는데, 크롬 80 미만 WebView 는 이걸 못 읽고
+         파일을 통째로 버린다. 그러면 HTML 뼈대만 남는다 — 「2026년 6월」(달력 기본 글자),
+         알림 배지 「3」(기본 숫자), 빈 달력, 눌러도 안 넘어가는 탭. 스플래시는 CSS inset 을
+         몰라 크기 0 으로 접혀 아예 안 보인다. 갤럭시 S8(안드로이드 9, 크롬 72)에서 실제로
+         이렇게 떴고, 데모 근무표로 잘못 진단해 하루를 썼다(2026-10-07).
+         깨진 화면 대신 무엇을 하면 되는지 알려준다. -->
+    <script>
+      (function () {
+        var modern = true;
+        try { new Function('var a = {}; return a?.b ?? 1;'); } catch (e) { modern = false; }
+        if (modern) return;
+        var box = document.createElement('div');
+        box.setAttribute('style', 'position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;' +
+          'background:#fff;color:#1d2433;display:block;padding:72px 28px;font-family:sans-serif;' +
+          'text-align:center;line-height:1.6;');
+        box.innerHTML = '<div style="font-size:44px;margin-bottom:12px">🔄</div>' +
+          '<h2 style="font-size:20px;margin:0 0 12px">Chrome 업데이트가 필요합니다</h2>' +
+          '<p style="font-size:15px;margin:0 0 8px">이 기기의 Chrome(웹 엔진)이 오래되어 듀티스왑을 실행할 수 없습니다.</p>' +
+          '<p style="font-size:15px;margin:0 0 24px">Play 스토어에서 <b>Chrome</b>과 <b>Android System WebView</b>를 업데이트한 뒤 다시 열어주세요.</p>' +
+          '<a href="market://details?id=com.android.chrome" style="display:inline-block;padding:12px 22px;' +
+          'background:#f07b1f;color:#fff;border-radius:10px;text-decoration:none;font-weight:bold">Chrome 업데이트</a>';
+        document.body.appendChild(box);
+      })();
+    </script>
     <script src="credit-policy.js?v=193"></script>
     <script src="post-dates.js?v=193"></script>
     <script src="schedule-continuity.js?v=193"></script>
