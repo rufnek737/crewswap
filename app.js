@@ -16,7 +16,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.2.1";
-const APP_RELEASE_DATE = "2026.10.06";
+const APP_RELEASE_DATE = "2026.10.12";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",

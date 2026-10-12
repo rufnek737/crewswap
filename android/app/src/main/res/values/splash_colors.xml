@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 안드로이드 12+ 스플래시 배경. 브랜드 화면(splash.png) 윗부분 하늘색과 맞춘다. -->
-    <color name="splashBackground">#EAF2FA</color>
+    <!-- 안드로이드 12+ 스플래시 배경. 웹 스플래시 바탕(#000)과 같게 — 둘 사이에 색이 번쩍이지 않게. -->
+    <color name="splashBackground">#000000</color>
 </resources>
