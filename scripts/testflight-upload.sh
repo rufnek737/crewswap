@@ -12,8 +12,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-KEY_ID="PD2TJSVAU4"
-ISSUER_ID="b355e8a8-97a7-4aa3-8823-ead588bc796a"
+KEY_ID="QS53NUHWUF"
+ISSUER_ID="7c1c9cef-f7ff-4f55-90c4-798b7753f6c5"
 KEY_FILE="$HOME/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8"
 
 if [ ! -f "$KEY_FILE" ]; then
@@ -50,7 +50,7 @@ mkdir -p build
 echo "▶ Archive 생성 중..."
 xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
-  -allowProvisioningUpdates archive > /dev/null
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration archive > /dev/null
 
 cat > build/ExportOptions.plist <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -59,7 +59,7 @@ cat > build/ExportOptions.plist <<PLIST
 <dict>
   <key>method</key><string>app-store-connect</string>
   <key>destination</key><string>export</string>
-  <key>teamID</key><string>V6TT3SA8H9</string>
+  <key>teamID</key><string>XV2TFVJUG3</string>
   <key>uploadSymbols</key><true/>
   <key>signingStyle</key><string>automatic</string>
 </dict>
