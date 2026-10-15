@@ -52,3 +52,9 @@ test('규칙 검사에 선택 범위를 넘긴다', () => {
   assert.match(src, /restWindowCheck\(ss\)/);
   assert.match(src, /focusEntries: withMonth\(ss\)/);
 });
+
+test('연속 24시간: 앞뒤까지 근무표가 있고 비행이 없으면 통과, 비어 있으면 판정 불가', () => {
+  const src = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('function consecutive24hCheck'), src.indexOf('function vacationCheck'));
+  assert.match(body, /result\.status === "NA" && covered && !hasFlight/);
+});

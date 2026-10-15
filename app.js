@@ -15,8 +15,8 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.1";
-const APP_RELEASE_DATE = "2026.10.12";
+const APP_VERSION = "1.2.2";
+const APP_RELEASE_DATE = "2026.10.16";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -1700,6 +1700,19 @@ function consecutive24hCheck(ss, rules) {
     augmentedLimitHours: rules?.consecutive24hAugmentedLimit || limitHours,
     fallbackMonth: state.currentMonth,
   });
+  // 앞뒤 날짜까지 근무표가 다 있는데 비행이 하나도 없으면(STBY·RSV·OFF 뿐) 합산할
+  // 승무시간이 없으니 통과다. 근무표가 비어 있는 날이 있을 때만 '판정 불가'로 둔다 —
+  // 모르는 것을 통과로 보이게 하지 않는다는 원칙은 그대로다(2026-10-16).
+  const covered = [...days].every(i => (state.schedules || []).some(s => dateIndex(s) === i));
+  const hasFlight = entries.some(s => ["국내선", "국제선"].includes(s.type));
+  if (result.status === "NA" && covered && !hasFlight) {
+    return {
+      label: result.label,
+      status: "PASS",
+      detail: "해당 없음 — 앞뒤 하루까지 비행이 없습니다",
+      ref: `연속 24시간 안의 승무시간은 2인 편조 ${limitHours}시간, 조종사 3인 이상 ${rules?.consecutive24hAugmentedLimit || limitHours}시간을 넘을 수 없습니다.`,
+    };
+  }
   return {
     label: result.label,
     status: result.status,
