@@ -1365,7 +1365,12 @@ function specialAirportCheck(ss, hasLocked) {
     ref: "특수공항은 기장이 최근 12개월 안에 해당 공항 자격 요건을 충족해야 운항할 수 있습니다." };
 }
 
-function cumulativeLimitChecks(rules) {
+// 월이 비어 있는 근무는 지금 보고 있는 달로 본다(누적·휴식 모듈은 월이 있어야 날짜를 잡는다).
+function withMonth(ss) {
+  return (ss || []).map(s => (s.month ? s : { ...s, month: state.currentMonth }));
+}
+
+function cumulativeLimitChecks(rules, ss) {
   const api = window.CrewSwapDutyLimits;
   if (!api) return [];
   const entries = state.schedules || [];
@@ -1394,7 +1399,8 @@ function cumulativeLimitChecks(rules) {
         ref: r.ref + " 불러온 근무표에 승무시간이 실려 있지 않아 합계를 낼 수 없습니다.",
       };
     }
-    const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key] });
+    // 선택한 날짜에 걸치는 창만 본다 — 다른 달의 한도 초과가 이번 스왑 문제로 뜨지 않게.
+    const res = api.check({ entries: entries, minutesOf: r.minutes, windowDays: r.windowDays, limitHours: rules[r.key], focusEntries: withMonth(ss) });
     const unknownNote = " 근무표가 해당 기간을 덮지 못해 확인하지 못했습니다.";
     return {
       label: r.label + " (" + rules[r.key] + "h 미만)",
@@ -1408,11 +1414,11 @@ function cumulativeLimitChecks(rules) {
 /* 연속 7일마다 30시간 연속 휴식 (FOM 비행근무시간 제한.
    예전에는 "연속 근무일 5일 미만"을 검사했는데, 항공안전법 시행규칙 별표18·JPU
    단체협약·FOM 어디에도 그런 조항이 없었다. 근거 없는 숫자로 "불가"를 띄우고 있었다. */
-function restWindowCheck() {
+function restWindowCheck(ss) {
   const api = window.CrewSwapRestWindow;
   const base = { label: "7일 내 30시간 연속 휴식" };
   if (!api) return { ...base, status: "UNKNOWN", detail: "확인 불가", ref: null };
-  const result = api.check(state.schedules || []);
+  const result = api.check(state.schedules || [], { focusEntries: withMonth(ss) });
   return {
     ...base,
     status: result.status,
@@ -1502,6 +1508,17 @@ function userQualOK(s) {
   return true;
 }
 
+// 근무 하나의 앞뒤 날짜에 있는 내 근무. 월 경계(10/31 → 11/1)를 넘어도 찾고, 지금 보고
+// 있는 달이 아니어도 그 근무의 달 기준으로 찾는다. getSchedule(day) 는 현재 달만 본다.
+function neighborSchedule(s, delta) {
+  const d = dayToDate(Number(s.day), s.month || state.currentMonth);
+  d.setDate(d.getDate() + delta);
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const day = d.getDate();
+  const schedule = (state.schedules || []).find(x => x.day === day && (x.month || state.currentMonth) === month);
+  return { schedule, key: dayKey(day, month) };
+}
+
 function checkRulesCabin(ss, rules) {
   const cum = calcCumulative();
   const firstDay = ss[0].day;
@@ -1509,9 +1526,11 @@ function checkRulesCabin(ss, rules) {
   const hasLocked = ss.some(s => s.lockReason);
   // 공휴일·주말 제한은 OFFMED 에만 걸린다. 예전에는 공휴일이기만 하면 걸었는데
   // 그런 일반 규정은 어디에도 없다.
-  const isWeekendDay = day => [0, 6].includes(dayToDate(day).getDay());
-  const blockedHoliday = ss.some(s =>
-    String(s.type || "").toUpperCase() === "OFFMED" && (isHoliday(s.day) || isWeekendDay(s.day)));
+  const blockedHoliday = ss.some(s => {
+    if (String(s.type || "").toUpperCase() !== "OFFMED") return false;
+    const date = dayToDate(s.day, s.month);
+    return HOLIDAYS.has(ymd(date)) || [0, 6].includes(date.getDay());
+  });
 
   // 연속 근무 7일 체크
   const consecLimit = rules.dutyConsecLimit || 7;
@@ -1522,7 +1541,7 @@ function checkRulesCabin(ss, rules) {
   let rsvNextOff = false;
   ss.forEach(s => {
     if (s.type !== "RSV") return;
-    const next = getSchedule(s.day + 1);
+    const next = neighborSchedule(s, 1).schedule;
     if (next && next.type === "OFF") rsvNextOff = true;
   });
 
@@ -1530,9 +1549,9 @@ function checkRulesCabin(ss, rules) {
   let partialRsvStby = false;
   ss.forEach(s => {
     if (s.type !== "RSV" && s.type !== "STBY") return;
-    [s.day - 1, s.day + 1].forEach(d => {
-      const adj = getSchedule(d);
-      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(dayKey(d))) {
+    [-1, 1].forEach(delta => {
+      const { schedule: adj, key } = neighborSchedule(s, delta);
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(key)) {
         partialRsvStby = true;
       }
     });
@@ -1659,9 +1678,15 @@ function consecutive24hCheck(ss, rules) {
   }
   // 선택한 날 + 앞뒤 1일까지의 내 근무를 함께 넘긴다. 24시간 창은 하루를 걸쳐 잡히므로
   // 인접 근무를 빼면 이번 반려와 같은 조합을 다시 놓친다.
+  // 날짜는 월까지 붙여 비교한다. 일(day)만 보면 10/26~28 을 골랐을 때 9/25~29 근무가
+  // 섞여 들어와 "9/26 + 9/27 = 7시간 40분"처럼 다른 달 비행으로 판정했다(2026-10-16).
+  const dateIndex = s => {
+    const t = dayToDate(Number(s.day), s.month || state.currentMonth).getTime();
+    return Number.isNaN(t) ? null : Math.round(t / 86400000);
+  };
   const days = new Set();
-  ss.forEach(s => { const d = Number(s.day); if (Number.isInteger(d)) { days.add(d - 1); days.add(d); days.add(d + 1); } });
-  const neighbors = (state.schedules || []).filter(s => days.has(Number(s.day)));
+  ss.forEach(s => { const i = dateIndex(s); if (i !== null) { days.add(i - 1); days.add(i); days.add(i + 1); } });
+  const neighbors = (state.schedules || []).filter(s => days.has(dateIndex(s)));
   // 선택분이 로스터에 없을 수도 있어(다른 월 등) 합쳐서 중복을 제거한다.
   const seen = new Set();
   const entries = [...neighbors, ...ss].filter(s => {
@@ -1719,15 +1744,15 @@ function checkRulesForSelection() {
   const hasLocked = ss.some(s => s.lockReason);
 
   // 특정 사유로 차단되는 패턴
-  const blockedHoliday = ss.some(s => isHoliday(s.day));
+  const blockedHoliday = ss.some(s => HOLIDAYS.has(ymd(dayToDate(s.day, s.month))));
   // 부분 RSV/STBY: 선택한 RSV/STBY 일자와 인접한 RSV/STBY가 미선택이면 partial
   // (OFF+RSV처럼 RSV가 단독이면 불가 아님 — 인접 RSV/STBY 미선택일 때만 불가)
   let partialRsvStby = false;
   ss.forEach(s => {
     if (s.type !== "RSV" && s.type !== "STBY") return;
-    [s.day - 1, s.day + 1].forEach(d => {
-      const adj = getSchedule(d);
-      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(dayKey(d))) {
+    [-1, 1].forEach(delta => {
+      const { schedule: adj, key } = neighborSchedule(s, delta);
+      if (adj && (adj.type === "RSV" || adj.type === "STBY") && !state.selectedDays.has(key)) {
         partialRsvStby = true;
       }
     });
@@ -1747,8 +1772,8 @@ function checkRulesForSelection() {
       detail: companyDeadlineText(firstDay, ss[0].month, dd),
       ref: "패턴 시작일 기준 영업일 2일 전 17시까지 결재 기안과 최종승인이 모두 끝나야 합니다. 신청만 해두면 늦습니다." },
     consecutive24hCheck(ss, rules),
-    ...cumulativeLimitChecks(rules),
-    restWindowCheck(),
+    ...cumulativeLimitChecks(rules, ss),
+    restWindowCheck(ss),
     specialAirportCheck(ss, hasLocked),
     { label:"공휴일/연휴 SWAP 제한", status: blockedHoliday ? "WARN" : "PASS",
       detail: blockedHoliday ? "공휴일 포함 — 회사 정책 추가 확인" : "해당 없음",

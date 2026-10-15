@@ -38,25 +38,34 @@
 
   /* 창 하나를 굴려 최대 합계를 찾는다. 창이 근무표 범위를 벗어나면 계산하지 않는다 —
      데이터가 없는 날을 0으로 치면 "여유 있다"는 틀린 답이 나온다. */
-  function rollingMax(byDay, windowDays) {
+  /* focus: 스왑으로 고른 날짜 범위({min, max}, dayKey). 주면 그 날짜에 걸치는 창만 본다.
+     안 주면 근무표 전체에서 가장 무거운 창을 찾는데, 그러면 9월에 걸린 한도가 10월
+     선택에도 그대로 떠서 "이 스왑이 문제"처럼 보였다(2026-10-16). */
+  function rollingMax(byDay, windowDays, focus = null) {
     const keys = [...byDay.keys()].sort((a, b) => a - b);
     if (!keys.length) return null;
     const first = keys[0], last = keys[keys.length - 1];
     const coveredDays = last - first + 1;
     if (coveredDays < windowDays) return { coveredDays, maxMinutes: null };
 
-    let maxMinutes = 0;
+    let maxMinutes = null;
     for (let start = first; start + windowDays - 1 <= last; start++) {
+      if (focus && (start > focus.max || start + windowDays - 1 < focus.min)) continue;
       let sum = 0;
       for (let d = start; d < start + windowDays; d++) sum += byDay.get(d) || 0;
-      if (sum > maxMinutes) maxMinutes = sum;
+      if (maxMinutes === null || sum > maxMinutes) maxMinutes = sum;
     }
     return { coveredDays, maxMinutes };
   }
 
+  function focusRange(focusEntries) {
+    const keys = (focusEntries || []).map(toDate).filter(Boolean).map(dayKey);
+    return keys.length ? { min: Math.min(...keys), max: Math.max(...keys) } : null;
+  }
+
   /* warnRatio: 한도의 몇 %부터 경고할지. 월 승무시간 검사가 80/90 = 0.89를 쓰므로 맞춘다. */
-  function check({ entries, minutesOf, windowDays, limitHours, warnRatio = 0.89 }) {
-    const result = rollingMax(dailyTotals(entries, minutesOf), windowDays);
+  function check({ entries, minutesOf, windowDays, limitHours, warnRatio = 0.89, focusEntries = null }) {
+    const result = rollingMax(dailyTotals(entries, minutesOf), windowDays, focusRange(focusEntries));
     if (!result) {
       return { status: "UNKNOWN", reason: "no-data", coveredDays: 0, hours: null, limitHours, windowDays };
     }

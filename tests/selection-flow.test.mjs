@@ -255,7 +255,7 @@ test("앱이 확인하지 못한 항목을 '모두 통과'에 섞지 않는다",
   assert.match(app, /c\.status === "UNKNOWN" \? "미확인"/);
 
   // 네 한도가 실제로 규정 목록에 붙어 있는지
-  assert.match(app, /\.\.\.cumulativeLimitChecks\(rules\)/);
+  assert.match(app, /\.\.\.cumulativeLimitChecks\(rules, ss\)/);
   assert.doesNotMatch(app, /key: "yearlyHoursLimit"/, "365일 항목은 화면에 두지 않는다");
   // 조항 번호는 개정되면 틀린 인용이 된다 — 조문 이름으로만 쓴다
 
@@ -294,7 +294,7 @@ test("근거 없던 '연속 근무일 5일' 검사를 규정 있는 것으로 �
 
   assert.doesNotMatch(app, /연속 근무일 \(5일 미만\)/);
   assert.doesNotMatch(app, /조종사 연속 근무 한도 5일/);
-  assert.match(app, /restWindowCheck\(\)/);
+  assert.match(app, /restWindowCheck\(ss\)/);
   assert.match(app, /7일 내 30시간 연속 휴식/);
   // 조항 번호는 FOM 이 개정되면 틀린 인용이 된다 — 조문 이름만 쓴다.
   assert.match(app, /FOM 비행근무시간 제한/);

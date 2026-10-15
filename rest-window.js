@@ -62,7 +62,19 @@
   /* 7일 창을 굴리며 30시간 연속 휴식이 들어 있는지 본다.
      창의 경계에 걸친 휴식은 창 안에 들어온 만큼만 인정한다 — 창 밖의 휴식으로
      창 안의 요건을 채울 수는 없다. */
-  function check(entries, { windowMin = WINDOW_MIN, requiredMin = REQUIRED_MIN } = {}) {
+  /* focusEntries: 스왑으로 고른 근무. 주면 그 날짜에 걸치는 7일 창만 본다 — 안 그러면
+     다른 달의 휴식 부족이 이번 선택의 문제처럼 뜬다(2026-10-16). */
+  function focusRange(focusEntries) {
+    const mins = [];
+    for (const e of focusEntries || []) {
+      const start = toMinutes(e, "00:00");
+      if (start !== null) mins.push(start);
+    }
+    return mins.length ? { start: Math.min(...mins), end: Math.max(...mins) + DAY } : null;
+  }
+
+  function check(entries, { windowMin = WINDOW_MIN, requiredMin = REQUIRED_MIN, focusEntries = null } = {}) {
+    const focus = focusRange(focusEntries);
     const intervals = dutyIntervals(entries);
     if (intervals.length < 2) {
       return { status: "PASS", reason: "no-duty", worstDay: null, worstRestMin: null, requiredMin };
@@ -77,12 +89,16 @@
     let worst = null;
     for (let start = first; start + windowMin <= last; start += DAY) {
       const end = start + windowMin;
+      if (focus && (start >= focus.end || end <= focus.start)) continue;
       let best = 0;
       for (const g of gaps) {
         const overlap = Math.min(g.end, end) - Math.max(g.start, start);
         if (overlap > best) best = overlap;
       }
       if (worst === null || best < worst.rest) worst = { rest: best, start };
+    }
+    if (worst === null) {
+      return { status: "UNKNOWN", reason: "short-range", coveredMin: last - first, worstRestMin: null, requiredMin };
     }
     const status = worst.rest >= requiredMin ? "PASS" : "FAIL";
     return {
