@@ -257,7 +257,7 @@ async function handleUserSignup(request, env) {
   await env.POSTS.put(`user:${email}`, JSON.stringify(rec));
   const sessionToken = await issueSessionToken(env, email);
   const wallet = await walletStatus(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: withFreeEra(env, getProStatus(rec)), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserLogin(request, env) {
@@ -274,7 +274,7 @@ async function handleUserLogin(request, env) {
   if (!ok) return json({ error: '비밀번호가 올바르지 않습니다.' }, 401);
   const sessionToken = await issueSessionToken(env, email);
   const wallet = await walletStatus(env, email);
-  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: getProStatus(rec), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
+  return json({ ok: true, email, username: rec.username, profile: rec.profile, premium: withFreeEra(env, getProStatus(rec)), wallet: wallet.wallet, sessionToken, sessionExpiresAt: Date.now() + SESSION_TTL_MS });
 }
 
 async function handleUserUpdate(request, env, authEmail) {

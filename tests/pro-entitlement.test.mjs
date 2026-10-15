@@ -55,3 +55,13 @@ test('a sandbox purchase is temporary and ignored by production requests', () =>
   assert.equal(sandbox.entitlement, 'sandbox');
   assert.equal(getProStatus(user, NOW + PRO_SANDBOX_DURATION_MS + 1, { allowSandbox:true }).active, false);
 });
+
+// 로그인 직후 응답에 무료 기간이 빠지면, 체험권을 쓴 사람은 앱을 다시 켤 때까지
+// 「무료 이용권 사용 완료」 화면에 갇힌다(2026-10-15 실기기에서 발견).
+test('login and signup responses carry the free-era status', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../worker/index.js', import.meta.url), 'utf8');
+  const loginReturns = src.split('\n').filter(l => l.includes('sessionToken, sessionExpiresAt') && l.includes('premium:'));
+  assert.ok(loginReturns.length >= 2);
+  for (const line of loginReturns) assert.match(line, /premium: withFreeEra\(env, getProStatus\(rec\)\)/);
+});
