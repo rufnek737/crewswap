@@ -3586,7 +3586,9 @@ async function initNativePushNotifications() {
         token: token.value,
         platform: window.Capacitor?.getPlatform?.() === 'android' ? 'android' : 'ios',
         environment: 'auto',
-        bundleId: 'com.rufnekcrewswap.app',
+        // iOS 는 2026-10 에 번들 ID 가 바뀌었다(계정 이전이 막혀 새 앱으로 다시 등록).
+        // 안드로이드 패키지명은 그대로다. 서버는 이 값을 APNs 토픽으로 쓴다.
+        bundleId: window.Capacitor?.getPlatform?.() === 'android' ? 'com.rufnekcrewswap.app' : 'com.rufnekcrew.dutyswap',
       };
       localStorage.setItem('crewswap_premium_push_enabled', '1');
       settleNativePushWaiters(null, _nativePushDevice);
