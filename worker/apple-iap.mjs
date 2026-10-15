@@ -1,5 +1,7 @@
 export const CREWSWAP_PRO_PRODUCT_ID = 'com.rufnekcrewswap.pro.lifetime';
-export const CREWSWAP_BUNDLE_ID = 'com.rufnekcrewswap.app';
+// iOS 앱은 2026-10 에 새 번들 ID 로 다시 등록했다(계정 이전 불가). 예전 앱에서는 구입이
+// 한 번도 없었으므로(무료 기간, 인앱 미제출) 예전 ID 를 받아줄 필요가 없다.
+export const CREWSWAP_BUNDLE_ID = 'com.rufnekcrew.dutyswap';
 
 // 급구 쿠폰 — 소모형(consumable). 상품 ID가 곧 지급 수량이라 서버가 클라이언트의
 // 수량 주장을 믿지 않는다. 상품을 늘릴 때는 이 표에만 한 줄 더하면 된다.

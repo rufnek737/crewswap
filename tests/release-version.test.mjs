@@ -72,3 +72,17 @@ test('앱 안에 표시되는 버전이 스토어 표시 버전과 같다', () =
   const marketing = /versionName "([\d.]+)"/.exec(gradle)[1];
   assert.equal(appVersion, marketing);
 });
+
+test('iOS 번들 ID 가 Xcode 프로젝트·앱·서버에서 같다', () => {
+  // 2026-10 에 iOS 앱을 새 번들 ID 로 다시 등록했다. 세 곳 중 하나라도 어긋나면
+  // 푸시(APNs 토픽)나 영수증 검증이 조용히 실패한다.
+  const pbx = readFileSync(new URL('../ios/App/App.xcodeproj/project.pbxproj', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const iap = readFileSync(new URL('../worker/apple-iap.mjs', import.meta.url), 'utf8');
+  const ids = [...new Set([...pbx.matchAll(/PRODUCT_BUNDLE_IDENTIFIER = ([\w.]+);/g)].map(m => m[1]))];
+  assert.equal(ids.length, 1, 'Debug·Release 번들 ID 가 다르다');
+  const appIos = /: '([\w.]+)',\s*$/m.exec(app.split('\n').find(l => l.includes("getPlatform?.() === 'android' ? 'com.rufnekcrewswap.app'")) || '')?.[1];
+  const server = /CREWSWAP_BUNDLE_ID = '([\w.]+)'/.exec(iap)[1];
+  assert.equal(appIos, ids[0]);
+  assert.equal(server, ids[0]);
+});
