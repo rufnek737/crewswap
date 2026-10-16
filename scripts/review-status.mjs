@@ -10,9 +10,9 @@
 import { readFileSync } from 'node:fs';
 import { createSign } from 'node:crypto';
 
-const KEY_ID = 'PD2TJSVAU4';
-const ISSUER = 'b355e8a8-97a7-4aa3-8823-ead588bc796a';
-const APP_ID = '6803906439';
+const KEY_ID = 'QS53NUHWUF';
+const ISSUER = '7c1c9cef-f7ff-4f55-90c4-798b7753f6c5';
+const APP_ID = '6823129998';
 
 const key = readFileSync(`${process.env.HOME}/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8`, 'utf8');
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
