@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="듀티스왑" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=195" />
+    <link rel="stylesheet" href="styles.css?v=196" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -990,20 +990,12 @@
     <div id="releaseNoticeOverlay" class="generic-modal-overlay" hidden></div>
     <div id="releaseNoticeDialog" class="generic-modal release-notice-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="releaseNoticeTitle">
       <div class="dialog-body">
-        <div class="release-notice-badge">업데이트</div>
-        <div class="release-notice-heading">
-          <div>
-            <h3 id="releaseNoticeTitle">듀티스왑이 새로워졌습니다</h3>
-            <p id="releaseNoticeSummary"></p>
-          </div>
-          <div class="release-notice-meta">
-            <strong id="releaseNoticeVersion"></strong>
-            <span id="releaseNoticeDate"></span>
-          </div>
+        <h3 id="releaseNoticeTitle" class="whats-new-title">What's New</h3>
+        <ul id="releaseNoticeChanges" class="whats-new-list"></ul>
+        <div class="whats-new-actions">
+          <button id="releaseNoticeHideAgain" class="whats-new-link" type="button">다시 보지 않기</button>
+          <button id="releaseNoticeConfirm" class="whats-new-close" type="button">닫기</button>
         </div>
-        <ul id="releaseNoticeChanges" class="release-notice-changes"></ul>
-        <label class="beta-notice-check"><input type="checkbox" id="releaseNoticeHideAgain" /> 다시 보지 않기</label>
-        <button id="releaseNoticeConfirm" class="primary-button" type="button">확인</button>
       </div>
     </div>
 
@@ -1033,26 +1025,26 @@
         document.body.appendChild(box);
       })();
     </script>
-    <script src="credit-policy.js?v=195"></script>
-    <script src="post-dates.js?v=195"></script>
-    <script src="schedule-continuity.js?v=195"></script>
-    <script src="request-disclosure.js?v=195"></script>
-    <script src="swap-usage.js?v=195"></script>
-    <script src="post-history.js?v=195"></script>
-    <script src="roster-sync.js?v=195"></script>
-    <script src="post-details.js?v=195"></script>
-    <script src="mogiji-policy.js?v=195"></script>
-    <script src="cabin-policy.js?v=195"></script>
-    <script src="release-notice.js?v=195"></script>
-    <script src="selection-flow.js?v=195"></script>
-    <script src="airport-aliases.js?v=195"></script>
-    <script src="grade-policy.js?v=195"></script>
-    <script src="crew-seniority.js?v=195"></script>
-    <script src="duty-window.js?v=195"></script>
-    <script src="activity-codes.js?v=195"></script>
-    <script src="duty-limits.js?v=195"></script>
-    <script src="rest-window.js?v=195"></script>
-    <script src="app.js?v=195"></script>
+    <script src="credit-policy.js?v=196"></script>
+    <script src="post-dates.js?v=196"></script>
+    <script src="schedule-continuity.js?v=196"></script>
+    <script src="request-disclosure.js?v=196"></script>
+    <script src="swap-usage.js?v=196"></script>
+    <script src="post-history.js?v=196"></script>
+    <script src="roster-sync.js?v=196"></script>
+    <script src="post-details.js?v=196"></script>
+    <script src="mogiji-policy.js?v=196"></script>
+    <script src="cabin-policy.js?v=196"></script>
+    <script src="release-notice.js?v=196"></script>
+    <script src="selection-flow.js?v=196"></script>
+    <script src="airport-aliases.js?v=196"></script>
+    <script src="grade-policy.js?v=196"></script>
+    <script src="crew-seniority.js?v=196"></script>
+    <script src="duty-window.js?v=196"></script>
+    <script src="activity-codes.js?v=196"></script>
+    <script src="duty-limits.js?v=196"></script>
+    <script src="rest-window.js?v=196"></script>
+    <script src="app.js?v=196"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {

@@ -15,8 +15,8 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.2";
-const APP_RELEASE_DATE = "2026.10.16";
+const APP_VERSION = "1.2.3";
+const APP_RELEASE_DATE = "2026.10.17";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -6590,7 +6590,8 @@ function bindEvents() {
     renderAlerts();      // 현재 미읽음 표시(점)를 보여준 뒤
     markAllAlertsRead(); // 확인한 것으로 처리해 배지를 지운다
   });
-  $("#releaseNoticeConfirm")?.addEventListener("click", acknowledgeReleaseNotice);
+  $("#releaseNoticeConfirm")?.addEventListener("click", () => acknowledgeReleaseNotice(false));
+  $("#releaseNoticeHideAgain")?.addEventListener("click", () => acknowledgeReleaseNotice(true));
   $("#betaNoticeConfirm")?.addEventListener("click", acknowledgeBetaNotice);
   // 알림창 좌측 배경(backdrop) 클릭 시 닫힘 (우측 상단 X 대체)
   $("#alertBackdrop")?.addEventListener("click", () => setAlertPanel(false));
@@ -6800,33 +6801,32 @@ function showReleaseNoticeIfNeeded() {
   const api = window.CrewSwapReleaseNotice;
   // 서버 세션 여부는 보지 않는다. 공지는 알림·크레딧과 달리 권한이 필요 없고,
   // 세션이 만료된 사이에 새 안내가 묻히면 그 뒤로는 영영 못 본다.
-  if (!state.user.hasSignedUp || !api?.current) return;
-  if (!api.shouldShow(localStorage)) return;
-  const hideAgain = document.getElementById("releaseNoticeHideAgain");
-  if (hideAgain) hideAgain.checked = false;
-  const release = api.current;
-  const version = document.getElementById("releaseNoticeVersion");
-  const date = document.getElementById("releaseNoticeDate");
-  const summary = document.getElementById("releaseNoticeSummary");
-  const changes = document.getElementById("releaseNoticeChanges");
-  if (version) version.textContent = `v${release.version}`;
-  if (date) date.textContent = release.date;
-  if (summary) summary.textContent = release.summary;
-  if (changes) {
-    changes.replaceChildren(...release.changes.map(change => {
+  if (!state.user.hasSignedUp || !api?.whatsNew) return;
+  if (!api.shouldShow(localStorage, api.whatsNew)) return;
+  const list = document.getElementById("releaseNoticeChanges");
+  if (list) {
+    list.replaceChildren(...api.whatsNew.items.map(entry => {
       const item = document.createElement("li");
-      item.textContent = change;
+      const icon = document.createElement("span");
+      icon.className = "whats-new-icon";
+      icon.textContent = entry.icon;
+      const text = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = `[${entry.version}] ${entry.title}`;
+      const body = document.createElement("p");
+      body.textContent = entry.body;
+      text.append(title, body);
+      item.append(icon, text);
       return item;
     }));
   }
   openGenericModal("releaseNoticeDialog", "releaseNoticeOverlay");
 }
 
-function acknowledgeReleaseNotice() {
-  // 체크하지 않으면 다음에 또 뜬다. 공지란에는 어느 쪽이든 그대로 남는다.
-  if (document.getElementById("releaseNoticeHideAgain")?.checked) {
-    window.CrewSwapReleaseNotice?.markSeen(localStorage);
-  }
+// 「닫기」는 이번만 닫는다 — 다음에 앱을 열면 또 뜬다. 「다시 보지 않기」를 눌러야
+// 이 버전 안내가 접힌다. 다음 버전이 나오면(id 가 바뀌면) 다시 뜬다.
+function acknowledgeReleaseNotice(hideAgain = false) {
+  if (hideAgain) window.CrewSwapReleaseNotice?.markSeen(localStorage, window.CrewSwapReleaseNotice.whatsNew);
   closeGenericModal("releaseNoticeDialog", "releaseNoticeOverlay");
 }
 

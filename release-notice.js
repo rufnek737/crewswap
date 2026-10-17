@@ -15,7 +15,7 @@
   // '다시 보지 않기' 체크박스를 붙인 뒤에도 공지가 뜨지 않았다. 한 번 초기화한다.
   const current = Object.freeze({
     id: "launch-free-20270930-r4",
-    version: "1.2.2",
+    version: "1.2.3",
     date: "2026.09.23",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
     summary: "정식 출시를 기념해 2027년 9월 30일까지 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
@@ -23,6 +23,25 @@
       "PRO 기능 전원 무료 — 조건 알림, 무제한 크레딧, 편조구성원 미리보기",
       "급구 쿠폰 매달 1장 자동 지급",
       "급구에 응한 승무원은 회사 상신 완료 시 쿠폰 0.5장 보상",
+    ]),
+  });
+
+  // 앱을 열 때 뜨는 「What's New」. 버전별 항목을 최신순으로 쌓는다(아이콘 + 제목 + 한두 줄).
+  // 새 버전을 낼 때 맨 위에 항목을 더하고 id 를 그 버전으로 바꾼다 — id 가 그대로면
+  // 「다시 보지 않기」를 누른 사람에게는 새 항목이 안 뜬다.
+  // 위의 current 는 공지함(알림 목록)에 남는 출시 기념 안내로, 이 팝업과는 따로 간다.
+  const whatsNew = Object.freeze({
+    id: "whatsnew-1.2.3",
+    version: "1.2.3",
+    items: Object.freeze([
+      Object.freeze({ version: "1.2.3", icon: "📱", title: "iPhone Duo 지원",
+        body: "펼친 화면에서 달력과 고른 근무·회사 룰 체크를 나란히 봅니다. 아이패드 가로 화면도 같습니다." }),
+      Object.freeze({ version: "1.2.2", icon: "🛠", title: "회사 룰 체크 정확도 개선",
+        body: "다른 달의 비행이 섞이지 않도록, 고른 날짜에 걸치는 구간만 확인합니다. 월이 바뀌는 날의 앞뒤 근무도 함께 봅니다." }),
+      Object.freeze({ version: "1.2.0", icon: "✈️", title: "듀티스왑으로 새 이름",
+        body: "앱 이름을 「듀티스왑 DutySwap」으로 바꾸고, 회사 규정 확인을 최신 규정과 대조해 바로잡았습니다." }),
+      Object.freeze({ version: "출시 기념", icon: "🎉", title: "2027년 9월 30일까지 모든 기능 무료",
+        body: "PRO 기능 전원 무료 — 조건 알림, 무제한 크레딧, 편조구성원 미리보기. 급구 쿠폰은 매달 1장 자동 지급됩니다." }),
     ]),
   });
 
@@ -79,6 +98,7 @@
   return {
     SEEN_RELEASE_KEY,
     current,
+    whatsNew,
     shouldShow,
     markSeen,
     announcement,

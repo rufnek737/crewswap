@@ -62,6 +62,8 @@ test('공지 팝업의 버전이 앱 표시 버전과 같다', () => {
   const appVersion = /MARKETING_VERSION = ([\d.]+);/.exec(pbx)[1];
   const noticeVersion = /version: "([\d.]+)"/.exec(notice)[1];
   assert.equal(noticeVersion, appVersion);
+  // What's New 팝업도 새 버전 항목을 달고 나가야 한다 — 안 그러면 업데이트해도 안 뜬다.
+  assert.match(notice, new RegExp(`id: "whatsnew-${appVersion.replace(/\./g, '\\.')}"`));
 });
 
 test('앱 안에 표시되는 버전이 스토어 표시 버전과 같다', () => {

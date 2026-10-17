@@ -923,28 +923,20 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .beta-notice-check input { width: 16px; height: 16px; }
 
 .release-notice-dialog { max-width: 460px; }
+/* What's New — 버전별 목록. 어두운 바탕에 아이콘 + 제목 + 설명 */
+.release-notice-dialog { background: linear-gradient(180deg, #0f1730 0%, #1d3557 100%); color: #fff; }
+.release-notice-dialog .dialog-body { max-height: min(78vh, 720px); overflow: hidden; display: flex; flex-direction: column; }
+.whats-new-title { margin: 4px 0 6px; text-align: center; font-size: 28px; font-weight: 900; color: #fff; }
+.whats-new-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.whats-new-list li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+.whats-new-icon { font-size: 26px; line-height: 1; text-align: center; }
+.whats-new-list strong { display: block; font-size: 15px; margin-bottom: 4px; color: #fff; }
+.whats-new-list p { margin: 0; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.78); }
+.whats-new-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; }
+.whats-new-link, .whats-new-close { background: none; border: 0; font-size: 15px; padding: 10px 4px; cursor: pointer; }
+.whats-new-link { color: rgba(255,255,255,0.7); }
+.whats-new-close { color: #f5a524; font-weight: 800; }
 .release-notice-dialog .dialog-body { gap: 16px; padding: 24px; }
-.release-notice-badge {
-  justify-self: start; padding: 5px 10px; border-radius: 999px;
-  background: var(--primary); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .04em;
-}
-.release-notice-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-.release-notice-heading h3 { margin: 0 0 7px; font-size: 20px; color: var(--text); }
-.release-notice-heading p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
-.release-notice-meta { flex: 0 0 auto; display: grid; justify-items: end; gap: 3px; color: var(--primary); }
-.release-notice-meta strong { font-size: 13px; }
-.release-notice-meta span { color: var(--muted); font-size: 11px; }
-.release-notice-changes {
-  display: grid; gap: 10px; margin: 0; padding: 16px 16px 16px 34px;
-  border: 1px solid #c8d6ef; border-radius: 10px; background: var(--blue-soft);
-  color: #1d3a7a; font-size: 13px; line-height: 1.55;
-}
-.release-notice-hint { margin: 0; color: var(--muted); font-size: 11px; text-align: center; }
-.release-notice-dialog .primary-button { width: 100%; min-height: 46px; }
-@media (max-width: 420px) {
-  .release-notice-heading { display: grid; }
-  .release-notice-meta { display: flex; justify-items: initial; gap: 8px; }
-}
 
 /* ===== 임포트 다이얼로그 (div 모달 내부 컨텐츠) ===== */
 .import-dialog { width: 100%; box-sizing: border-box; }
@@ -1238,6 +1230,19 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   .swap-arrow { transform: rotate(90deg); }
   .meta-grid { grid-template-columns: repeat(2, 1fr); }
   .preview-stats { grid-template-columns: 1fr; }
+}
+/* 넓은 가로 화면(iPhone Duo 를 펼쳤을 때·아이패드 가로) — 달력과 고른 근무·룰 체크를
+   나란히 둔다. 높이 조건은 일반 폰을 눕힌 화면(높이 430 안팎)을 빼기 위한 것이다. */
+@media (min-width: 700px) and (max-width: 1040px) and (min-height: 560px) and (orientation: landscape) {
+  .schedule-layout { grid-template-columns: minmax(0, 1fr) 300px; align-items: start; }
+  .schedule-layout > .side-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* 달력 칸이 좁아져 편명이 「7C / 10 / 1」로 끊겼다. AM/PM 표시를 편명 위로 올리고
+     편명은 한 줄로 둔다(넘치면 말줄임). (2leg) 표기는 오른쪽 상세에 나온다. */
+  .schedule-layout .pill-time-position { position: static; display: inline-block; margin-bottom: 2px; }
+  .schedule-layout .pill-time-position + strong { padding-right: 0; }
+  .schedule-layout .schedule-pill strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+  .schedule-layout .schedule-pill strong em { display: none; }
+  .schedule-layout .pill-route { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 /* 세로모드 — 가로 스크롤 (셀 최소 너비 고정으로 가독성 유지) */
 @media (max-width: 1040px) and (orientation: portrait) {

@@ -53,3 +53,23 @@ test("replaces old update notices while preserving all other alerts", () => {
     ["guide", "qna", "match-1", "urgent-1"],
   );
 });
+
+// 「What's New」 팝업 — 버전별 항목 목록. 새 버전마다 맨 위에 항목을 더하고 id 를 바꾼다.
+test("What's New lists the current version first and carries a fresh id", () => {
+  const wn = releaseNotice.whatsNew;
+  assert.ok(wn.items.length >= 2);
+  assert.equal(wn.items[0].version, wn.version);
+  assert.match(wn.id, new RegExp(wn.version.replace(/\./g, "\\.")));
+  for (const item of wn.items) {
+    assert.ok(item.icon && item.title && item.body);
+  }
+});
+
+test("What's New is hidden only after '다시 보지 않기' and returns for the next version", () => {
+  const storage = new MemoryStorage();
+  const wn = releaseNotice.whatsNew;
+  assert.equal(releaseNotice.shouldShow(storage, wn), true);
+  releaseNotice.markSeen(storage, wn);
+  assert.equal(releaseNotice.shouldShow(storage, wn), false);
+  assert.equal(releaseNotice.shouldShow(storage, { ...wn, id: "whatsnew-9.9.9" }), true);
+});
