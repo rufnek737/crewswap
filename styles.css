@@ -923,19 +923,16 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .beta-notice-check input { width: 16px; height: 16px; }
 
 .release-notice-dialog { max-width: 460px; }
-/* What's New — 버전별 목록. 어두운 바탕에 아이콘 + 제목 + 설명 */
-.release-notice-dialog { background: linear-gradient(180deg, #0f1730 0%, #1d3557 100%); color: #fff; }
+/* What's New — 버전별 목록. 앱의 다른 안내 창과 같은 흰 바탕·색을 쓴다 */
 .release-notice-dialog .dialog-body { max-height: min(78vh, 720px); overflow: hidden; display: flex; flex-direction: column; }
-.whats-new-title { margin: 4px 0 6px; text-align: center; font-size: 28px; font-weight: 900; color: #fff; }
-.whats-new-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.whats-new-list li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
-.whats-new-icon { font-size: 26px; line-height: 1; text-align: center; }
-.whats-new-list strong { display: block; font-size: 15px; margin-bottom: 4px; color: #fff; }
-.whats-new-list p { margin: 0; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.78); }
-.whats-new-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; }
-.whats-new-link, .whats-new-close { background: none; border: 0; font-size: 15px; padding: 10px 4px; cursor: pointer; }
-.whats-new-link { color: rgba(255,255,255,0.7); }
-.whats-new-close { color: #f5a524; font-weight: 800; }
+.whats-new-title { margin: 0; font-size: 20px; font-weight: 800; color: var(--text); }
+.whats-new-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.whats-new-list li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; }
+.whats-new-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--blue-soft); display: grid; place-items: center; font-size: 20px; }
+.whats-new-list strong { display: block; font-size: 14px; margin-bottom: 3px; color: var(--text); }
+.whats-new-list p { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.whats-new-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 4px; }
+.whats-new-actions button { min-height: 46px; }
 .release-notice-dialog .dialog-body { gap: 16px; padding: 24px; }
 
 /* ===== 임포트 다이얼로그 (div 모달 내부 컨텐츠) ===== */
