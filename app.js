@@ -2493,7 +2493,7 @@ function renderSelection() {
   $("#clearSelectionButton").disabled = !has;
   if (!has) {
     $("#selectedSummary").className = "empty-state";
-    $("#selectedSummary").textContent = "달력에서 패턴을 드래그하거나 클릭하세요.";
+    $("#selectedSummary").textContent = "달력에서 패턴을 눌러 선택하세요.";
     $("#ruleCheck").innerHTML = "";
     return;
   }
