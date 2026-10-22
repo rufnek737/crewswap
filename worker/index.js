@@ -2140,6 +2140,10 @@ function parseRosterToSchedules(html, userNameHint) {
     } else if (/\bSIM\d*\b|\bOPC\b|\bLPC\b|\bLOFT\b|\bSPT\b/i.test(actPair)) {
       // 시뮬레이터 훈련(SIM1 등) — GMP-GMP 형태지만 비행이 아님. SWAP 불가.
       type = 'GND'; ground = 'SIM'; title = 'SIM 훈련';
+    } else if (/\bMED\b/i.test(actPair)) {
+      // 신체검사(MED, Physical Examination) — 비행 아님. SWAP 불가.
+      // 예전에는 여기 걸리지 않아 「지상근무」로 저장됐다(2026-10-22).
+      type = 'GND'; ground = 'MED'; title = '신체검사';
     } else if (/\bJCRM\b|\bGND\b|GROUND/i.test(actPair)) {
       // 지상수업(JCRM 등) — 비행 아님. SWAP 불가.
       type = 'GND'; ground = '지상'; title = '지상근무';
@@ -2201,7 +2205,7 @@ function parseRosterToSchedules(html, userNameHint) {
       e.ground = ground;
       const frG = allRowsG.filter(r => r[cols.iFrom] && !/^\|$/.test(r[cols.iFrom]));
       if (frG.length) e.station = frG[0][cols.iFrom];
-      e.lockReason = (ground === 'SIM' ? 'SIM 훈련' : '지상근무') + ' — 비행 아님, SWAP 불가';
+      e.lockReason = `${title} — 비행 아님, SWAP 불가`;
       e.crewComposition = '비행 아님 · 회사 지정 근무';
     }
     if (ciR) e.reportTime = fmtTime(ciR[cols.iCI]);

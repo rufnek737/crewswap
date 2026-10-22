@@ -38,3 +38,9 @@ test('교환 불가 근무는 실제 사유를 보여준다 — 특수공항으�
   assert.equal(r.label, '교환할 수 없는 근무');
   assert.match(r.detail, /11\/7 신체검사/);
 });
+
+test('서버 근무표 파싱도 MED 를 신체검사로 저장한다', () => {
+  const worker = readFileSync(new URL('../worker/index.js', import.meta.url), 'utf8');
+  assert.match(worker, /\\bMED\\b\/i\.test\(actPair\)\) \{[\s\S]{0,200}title = '신체검사'/);
+  assert.match(worker, /e\.lockReason = `\$\{title\} — 비행 아님, SWAP 불가`/);
+});
