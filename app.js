@@ -16,7 +16,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.2.3";
-const APP_RELEASE_DATE = "2026.10.17";
+const APP_RELEASE_DATE = "2026.10.22";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -491,8 +491,8 @@ const $  = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 const SERVICE_LINKS = Object.freeze({
-  privacy: "https://rufnek737.github.io/crewswap/privacy.html",
-  terms: "https://rufnek737.github.io/crewswap/terms.html",
+  privacy: "https://rufnekcrew.com/crewswap/privacy",
+  terms: "https://rufnekcrew.com/crewswap/terms",
   contact: "mailto:info@rufnekcrew.com?subject=듀티스왑%20문의",
 });
 
