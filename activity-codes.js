@@ -41,6 +41,9 @@
     [/simulator|LOFT|UPRT|\bOPC\b|\bLPC\b/i, { type: "GND",  ground: "SIM", title: "SIM 훈련",
                                               crewComposition: "비행 아님 · 회사 지정 근무",
                                               lockReason: "SIM 훈련 — 비행 아님, SWAP 불가" }],
+    [/physical\s*exam|신체\s*검사/i,        { type: "GND",  ground: "MED", title: "신체검사",
+                                              crewComposition: "비행 아님 · 회사 지정 근무",
+                                              lockReason: "신체검사 — 비행 아님, SWAP 불가" }],
     [/training|훈련|\bCRM\b/i,               { type: "GND",  ground: "훈련", title: "훈련",
                                               crewComposition: "비행 아님 · 회사 지정 근무",
                                               lockReason: "훈련 — 비행 아님, SWAP 불가" }],
@@ -75,6 +78,7 @@
     [/^(S_|SIM|OPC|LPC)/i,   "Simulator"],
     [/^JCRM$/i,              "Joint CRM"],
     [/^OFC$/i,               "Office Duty"],
+    [/^MED$/i,               "Physical Examination"],
     [/^(TAXI|AIR)$/i,        "DH by"],
     [/^(SCHLD|SICKHD)$/i,    "Schedule Hold"],
   ];

@@ -221,7 +221,7 @@ test("swap restrictions are checked by rules without a calendar lock icon", () =
   assert.doesNotMatch(styles, /calendar-day\.is-locked|pill-locked/);
   assert.doesNotMatch(selectPattern, /if \(s\.lockReason\)/);
   assert.match(app, /const hasLocked = ss\.some\(s => s\.lockReason\)/);
-  assert.match(app, /자격 갱신 지정 비행 포함 — SWAP 불가/);
+  assert.match(app, /label: "교환할 수 없는 근무"/);
 });
 
 test("request cards disclose the counterpart's crew, and PRO sees it early", () => {

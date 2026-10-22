@@ -37,7 +37,7 @@ test('STBY — 활동코드가 SA1/SA2로만 와도 대기로 본다', () => {
 });
 
 test('SIM 훈련 — S_L+U(LOFT+UPRT)도 비행 아님으로 본다', () => {
-  const re = regexIn('const isSim =');
+  const re = regexIn('return { ground: "SIM"');
   assert.ok(re.test('S_L+U'), 'LOFT+UPRT 조합 코드');
   assert.ok(re.test('UPRT'));
   assert.ok(re.test('SIM'));
@@ -54,7 +54,7 @@ test('SIM 훈련 판정은 활동코드를 본다 — title만 보면 전부 지
   const fn = app.slice(app.indexOf('function reclassifyGroundDuty'));
 
   assert.match(fn, /s\.activityCode/, 'activityCode 를 보지 않으면 훈련 코드를 놓친다');
-  const re = regexIn('const isSim = /');
+  const re = regexIn('return { ground: "SIM"');
   assert.ok(re.test('S_L+U'), 'S_L+U = LOFT+UPRT');
   assert.ok(re.test('S_LPC'), '정기 심 코드는 S_ 로 시작한다');
   assert.ok(re.test('SIM'));
@@ -77,7 +77,7 @@ test('월·요일 약어를 공항으로 오인하지 않는다', () => {
 test('실제 코드표(2026-09 기준)대로 훈련과 지상근무가 갈린다', () => {
   // CrewConnex 근무표 하단 Activity Code Descriptions 를 그대로 옮겼다.
   // SIM1 이 \bSIM\b 에 안 걸려 지상근무로 떨어지던 것을 여기서 잡았다.
-  const re = regexIn('const isSim = /');
+  const re = regexIn('return { ground: "SIM"');
   const 훈련 = [['SIM1', 'Simulator'], ['S_L+U', 'LOFT+UPRT']];
   const 훈련아님 = [['TR_GRD', 'Ground Training'], ['JCRM', 'Joint CRM'],
                   ['RSV_F', '운항승무원 RSV'], ['SA1', 'Early standby'],

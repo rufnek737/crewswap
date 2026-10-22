@@ -50,5 +50,5 @@ test('목적지로 스왑을 막지 않는다', () => {
 
 test('자격 갱신 지정 비행은 그대로 막는다', () => {
   // 그 승무원이 직접 가야 하는 비행이다. 다만 근무표 표기를 아직 못 봐서 판정 경로가 없다.
-  assert.match(app, /label: "특수공항 자격 갱신 비행", status: "FAIL"/);
+  assert.match(app, /label: "교환할 수 없는 근무", status: "FAIL"/);
 });

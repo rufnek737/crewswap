@@ -1136,14 +1136,14 @@ function parseDayBlock(block, codeDescriptions) {
     if (uniqAir.length === 1) {
       // reclassifyGroundDuty() 와 같은 규칙을 쓴다 — 두 파싱 경로가 다르게 판정하면
       // 불러온 방법에 따라 같은 근무가 다르게 보인다.
-      const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(full);
-      return { ...base, type:"GND", ground: isSim ? "SIM" : "지상",
-        title: isSim ? "SIM 훈련" : "지상근무",
+      const kind = groundDutyKind(full);
+      return { ...base, type:"GND", ground: kind.ground,
+        title: kind.title,
         station: uniqAir[0],
         reportTime: times[0] || null,
         releaseTime: times[times.length-1] || times[0] || null,
         crewComposition: "비행 아님 · 회사 지정 근무",
-        lockReason: (isSim ? "SIM 훈련" : "지상근무") + " — 비행 아님, SWAP 불가" };
+        lockReason: `${kind.title} — 비행 아님, SWAP 불가` };
     }
   }
   if (route) {
@@ -1250,6 +1250,26 @@ function setImportBusy(busy) {
   if (form) form.classList.toggle("is-busy", busy);
 }
 
+// 비행이 아닌 회사 지정 근무의 이름. 근무표 코드로 가린다 — MED(신체검사)를 모르고
+// 「지상근무」로 뭉뚱그려 보여주고 있었다(2026-10-22, Kay 11/7 MED).
+function groundDutyKind(text) {
+  const t = String(text || "");
+  if (/\bMED\b|physical\s*exam|신체\s*검사/i.test(t)) return { ground: "MED", title: "신체검사" };
+  if (/\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(t)) return { ground: "SIM", title: "SIM 훈련" };
+  return { ground: "지상", title: "지상근무" };
+}
+
+// 이미 저장된 근무표에 남은 「지상근무」를 코드대로 다시 이름 붙인다.
+function relabelGroundDuty(s) {
+  if (!s || s.type !== "GND" || s.title !== "지상근무") return s;
+  const kind = groundDutyKind(`${s.activityCode || ""} ${s.pairingCode || ""} ${s.dutyCode || ""}`);
+  if (kind.ground === "지상") return s;
+  s.ground = kind.ground;
+  s.title = kind.title;
+  s.lockReason = `${kind.title} — 비행 아님, SWAP 불가`;
+  return s;
+}
+
 // CrewConnex 서버 파싱은 지상근무(JCRM)·SIM을 GMP-GMP 형태의 '비행'으로 내려준다.
 // 실제 여객편(7C 편명)이 없고 출·도착 공항이 동일하면 GND(지상/훈련)로 재분류해
 // 국내선 비행으로 오인·스왑되지 않게 한다. (parseDayBlock의 수동 파싱과 동일 기준)
@@ -1283,12 +1303,12 @@ function reclassifyGroundDuty(s) {
   const simText = `${s.activityCode || ""} ${s.pairingCode || ""} ${title} ${s.routeSummary || ""}`;
   // S_ 로 시작하는 활동코드는 시뮬레이터 훈련 계열이다(S_L+U = LOFT+UPRT).
   // 정기 심 코드가 더 있으므로 개별 나열 대신 접두사로 잡는다.
-  const isSim = /\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(simText);
+  const kind = groundDutyKind(simText);
   s.type = "GND";
-  s.ground = isSim ? "SIM" : "지상";
-  s.title = isSim ? "SIM 훈련" : "지상근무";
+  s.ground = kind.ground;
+  s.title = kind.title;
   s.station = air[0];
-  s.lockReason = (isSim ? "SIM 훈련" : "지상근무") + " — 비행 아님, SWAP 불가";
+  s.lockReason = `${kind.title} — 비행 아님, SWAP 불가`;
   s.crewComposition = "비행 아님 · 회사 지정 근무";
   delete s.dep; delete s.arr; delete s.routeSummary; delete s.legs; delete s.aircraft;
   return s;
@@ -1310,6 +1330,7 @@ function fillCrewComposition(s) {
 function applyImportedSchedules(schedules) {
   const finalSchedules = schedules
     .map(reclassifyGroundDuty)
+    .map(relabelGroundDuty)
     .map(fillCrewComposition)
     .filter(s => s.day >= 1 && s.day <= 31)
     .sort((a, b) => {
@@ -1352,9 +1373,12 @@ function formatHM(minutes) {
    어떻게 표시되는지는 아직 확인되지 않았다(OPEN_ITEMS 1번). */
 function specialAirportCheck(ss, hasLocked) {
   if (hasLocked) {
-    return { label: "특수공항 자격 갱신 비행", status: "FAIL",
-      detail: "자격 갱신 지정 비행 포함 — SWAP 불가",
-      ref: "자격 유지를 위해 지정된 비행은 그 승무원이 직접 수행해야 해 스왑할 수 없습니다." };
+    // 잠긴 근무는 신체검사·훈련·임시코드 등 사유가 제각각이다. 예전에는 무엇이든
+    // 「특수공항 자격 갱신 비행」으로 보여줘서 MED 를 고르면 엉뚱한 이유가 떴다.
+    const locked = (ss || []).filter(s => s.lockReason);
+    return { label: "교환할 수 없는 근무", status: "FAIL",
+      detail: locked.map(s => `${schedMonthNum(s)}/${s.day} ${s.lockReason}`).join(" · "),
+      ref: "신체검사·훈련처럼 회사가 지정한 근무나 자격 유지를 위해 지정된 비행은 본인이 직접 수행해야 해 스왑할 수 없습니다." };
   }
   const names = [...new Set((ss || []).flatMap(s => s.specialAirports || []))];
   if (!names.length) {
@@ -6705,6 +6729,7 @@ function loadStateFromStorage() {
       state.sessionExpiresAt = null;
       if (d.user) d.user.serverAuthed = false;
     }
+    state.schedules.forEach(relabelGroundDuty);
     const continuityFixes = window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(state.schedules) || 0;
     if (d.user) Object.assign(state.user, d.user);
     // 과거 전원 PRO 베타값은 신뢰하지 않고, 서버가 발급한 이용권 캐시만 임시 인정한다.
@@ -7006,6 +7031,7 @@ async function pullSchedulesFromServer() {
     const serverSchedules = isDemoRoster(received) ? [] : received;
     if (serverSchedules.length > 0 && state.schedules.length === 0) {
       state.schedules = serverSchedules;
+      state.schedules.forEach(relabelGroundDuty);
       saveState();
       renderAll();
     } else if (serverSchedules.length === 0 && state.schedules.length > 0) {
