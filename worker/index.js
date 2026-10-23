@@ -1665,8 +1665,8 @@ async function handleRequestsDecline(request, env, authEmail) {
       rec.status = '⚠️ 휴식 규정 불일치';
       rec.declineReason = 'REST_CONFLICT';
       rec.declineMsg = conflict?.kind === 'mogiji'
-        ? `요청하신 근무를 제가 받으면 제 ${date}근무가 모기지 필수 휴무와 겹쳐 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.`
-        : `요청하신 근무를 제가 받으면 제 ${date}근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.`;
+        ? `요청하신 근무를 제가 받으면 제 ${date}근무가 모기지 필수 휴무와 겹쳐 진행할 수 없습니다.`
+        : `요청하신 근무를 제가 받으면 제 ${date}근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다.`;
     } else {
       rec.status = '💔 거절됨';
       rec.declineReason = 'PERSONAL';

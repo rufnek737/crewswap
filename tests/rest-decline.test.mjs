@@ -27,7 +27,7 @@ test('휴식 부족 거절은 내 일정 날짜와 함께, 상대 일정 문제�
   assert.equal(r.status, 200);
   const rec = JSON.parse(store.get('req:1'));
   assert.equal(rec.declineReason, 'REST_CONFLICT');
-  assert.equal(rec.declineMsg, '요청하신 근무를 제가 받으면 제 11/14 근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.');
+  assert.equal(rec.declineMsg, '요청하신 근무를 제가 받으면 제 11/14 근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다.');
 });
 
 test('내 쪽 모기지 휴무 충돌', async () => {
