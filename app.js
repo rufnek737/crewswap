@@ -1599,6 +1599,51 @@ function neighborSchedule(s, delta) {
   return { schedule, key: dayKey(day, month) };
 }
 
+// 레이오버 트립은 패턴째로만 바꿀 수 있다 — 부산 레이오버 11/14~16 중 15·16일만 올리면
+// 14일에 부산에 간 사람을 15일에 남이 이어받을 수 없다. 규정 해석이 아니라 구조적으로
+// 불가능한 조합이라 등록을 막는다(2026-10-23). 트립 범위는 글 나누기와 같은 기준
+// (samePatternDayKeys)으로 앞뒤를 이어 붙여 계산한다.
+function dateKeyShift(key, delta) {
+  const { day, month } = parseDayKey(key);
+  const d = new Date(`${month}-${String(day).padStart(2, "0")}T00:00:00`);
+  d.setDate(d.getDate() + delta);
+  return dayKey(d.getDate(), `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+}
+function tripKeysOf(key) {
+  const find = k => { const { day, month } = parseDayKey(k);
+    return (state.schedules || []).find(s => s.day === day && (s.month || state.currentMonth) === month); };
+  const isTrip = s => s && ["국내선", "국제선", "LAYOV", "ARRIVAL"].includes(s.type);
+  if (!isTrip(find(key))) return [key];
+  const keys = [key];
+  for (let k = key; ; ) { const prev = dateKeyShift(k, -1);
+    if (!isTrip(find(prev)) || !samePatternDayKeys(prev, k)) break; keys.unshift(prev); k = prev; }
+  for (let k = key; ; ) { const next = dateKeyShift(k, 1);
+    if (!isTrip(find(next)) || !samePatternDayKeys(k, next)) break; keys.push(next); k = next; }
+  return keys;
+}
+function partialTripCheck() {
+  const selected = new Set(state.selectedDays || []);
+  const partial = [];
+  const seen = new Set();
+  for (const key of [...selected].sort()) {
+    const trip = tripKeysOf(key);
+    const id = trip.join(",");
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (trip.length > 1 && trip.some(k => !selected.has(k))) partial.push(trip);
+  }
+  const label = k => { const { day, month } = parseDayKey(k); return `${Number(month.slice(5))}/${day}`; };
+  return {
+    label: "레이오버 부분 SWAP 차단",
+    status: partial.length ? "FAIL" : "PASS",
+    detail: partial.length
+      ? partial.map(t => `${label(t[0])}~${label(t[t.length - 1])}`).join(", ") + " 패턴 전체를 함께 선택하세요"
+      : "해당 없음",
+    ref: "레이오버 트립은 일부 날짜만 바꿀 수 없습니다. 출발부터 베이스 복귀까지 패턴 전체를 함께 선택해주세요.",
+    blocking: partial.length > 0,
+  };
+}
+
 function checkRulesCabin(ss, rules) {
   const cum = calcCumulative();
   const firstDay = ss[0].day;
@@ -1702,6 +1747,7 @@ function checkRulesCabin(ss, rules) {
       status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
       ref: "객실 Swap Guide에 의거 — 연속된 RSV·STBY는 전체를 함께 변경해야 합니다." },
+    partialTripCheck(),
     vacationCheck(ss),
     { label:"방송등급 미보유 RSV/STBY 불가",
       status: broadcastFail ? "FAIL" : "PASS",
@@ -1874,6 +1920,7 @@ function checkRulesForSelection() {
     { label:"RSV/STBY 부분 SWAP 차단", status: partialRsvStby ? "FAIL" : "PASS",
       detail: partialRsvStby ? "부분 선택 불가 — 패턴 단위" : "해당 없음",
       ref: "연속된 RSV·STBY는 나눠서 바꿀 수 없습니다. 인접한 것을 모두 함께 선택해주세요." },
+    partialTripCheck(),
     vacationCheck(ss),
   ];
 }
@@ -2566,8 +2613,11 @@ function renderSelection() {
     /* 규정에 걸려도 등록은 막지 않는다. 앱의 판정은 사전 검토일 뿐이고 최종 판단은 회사가
        한다 — 앱이 잘못 걸러서 멀쩡한 스왑을 못 올리는 쪽이 더 나쁘다. 걸린 항목은 위
        목록에 그대로 보인다. 지난 근무는 규정이 아니라 사실의 문제라 그대로 막는다. */
-    regBtn.disabled = !has || hasPast;
+    // 레이오버 일부만 고른 것은 규정이 아니라 조합 자체가 불가능해 지난 근무처럼 막는다.
+    const partialTrip = checks.find(c => c.blocking);
+    regBtn.disabled = !has || hasPast || !!partialTrip;
     regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다"
+      : partialTrip ? partialTrip.detail
       : hasFail ? `규정 확인 필요: ${failItems.map(c => c.label).join(", ")}` : "";
   }
   $("#clearSelectionButton").disabled = !has;
@@ -3071,7 +3121,7 @@ function renderPostFooter() {
   const hasFail = checks.some(c => c.status === "FAIL");
   const hasWarn = checks.some(c => c.status === "WARN");
   // 규정 위반만으로는 막지 않는다(위 주석 참고). 크레딧이 없을 때만 막는다.
-  submitBtn.disabled = !hasOffered || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
+  submitBtn.disabled = !hasOffered || checks.some(c => c.blocking) || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
   $("#saveDraftButton").disabled = !hasOffered;
 
   const hasUnknown = checks.some(c => c.status === "UNKNOWN");
@@ -6403,6 +6453,8 @@ function bindEvents() {
   async function doSubmitPost() {
     // 선택된 날짜를 독립 패턴으로 분리 (비연속이거나 패턴이 다르면 따로 = 각 1크레딧)
     if (state.selectedDays.size === 0) return;
+    const tripBlock = partialTripCheck();
+    if (tripBlock.blocking) { showToast(`레이오버 일부만 선택했습니다 — ${tripBlock.detail}`); return; }
     const groups = groupConsecutiveDayKeys([...state.selectedDays]);
 
     const needed = groups.length;

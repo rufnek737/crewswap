@@ -11,7 +11,7 @@ const fn = name => { const i = app.indexOf(`function ${name}(`); let d = 0;
   for (let k = app.indexOf('{', i); k < app.length; k++) { if (app[k] === '{') d++; else if (app[k] === '}' && !--d) return app.slice(i, k + 1); } };
 const ctx = { state: { currentMonth: '2026-11', schedules: [], user: { base: 'GMP' } }, SEOUL_BASES: ['GMP', 'ICN'] };
 vm.createContext(ctx);
-vm.runInContext(['parseDayKey', 'areConsecCalendarDays', 'myBaseAirports', 'lastArrivalOf', 'samePatternDayKeys', 'groupConsecutiveDayKeys'].map(fn).join('\n'), ctx);
+vm.runInContext(['parseDayKey', 'dayKey', 'areConsecCalendarDays', 'myBaseAirports', 'lastArrivalOf', 'samePatternDayKeys', 'groupConsecutiveDayKeys', 'dateKeyShift', 'tripKeysOf', 'partialTripCheck'].map(fn).join('\n'), ctx);
 const M = '2026-11';
 const k = d => `${M}-${String(d).padStart(2, '0')}`;
 const groups = days => JSON.parse(JSON.stringify(ctx.groupConsecutiveDayKeys(days.map(k)))).map(g => g.map(x => Number(x.slice(8))));
@@ -69,4 +69,41 @@ test('퀵턴 다음날 RSV, 신체검사 다음날 레이오버 출발은 따로
     { month: M, day: 9, type: '국제선', routeSummary: 'DPS→ICN' }, { month: M, day: 10, type: 'ARRIVAL' },
   ];
   assert.deepEqual(groups([7, 8, 9, 10, 12, 13]), [[7], [8, 9, 10], [12], [13]]);
+});
+
+test('부산 레이오버 14~16 중 15·16만 고르면 막는다, 전체를 고르면 통과', () => {
+  ctx.state.user.base = 'GMP';
+  ctx.state.schedules = [
+    { month: M, day: 13, type: '국제선', routeSummary: 'ICN→HIJ→ICN' },
+    { month: M, day: 14, type: '국내선', routeSummary: 'GMP→CJU→CJJ→CJU→PUS→PUS' },
+    { month: M, day: 15, type: '국제선', routeSummary: 'PUS→NRT→PUS→PUS' },
+    { month: M, day: 16, type: '국내선', routeSummary: 'PUS→CJU→GMP' },
+    { month: M, day: 17, type: 'OFF' },
+  ];
+  ctx.state.selectedDays = new Set([k(15), k(16)]);
+  let r = ctx.partialTripCheck();
+  assert.equal(r.status, 'FAIL'); assert.equal(r.blocking, true);
+  assert.match(r.detail, /11\/14~11\/16 패턴 전체/);
+  ctx.state.selectedDays = new Set([k(14)]);
+  assert.equal(ctx.partialTripCheck().status, 'FAIL');
+  ctx.state.selectedDays = new Set([k(14), k(15), k(16)]);
+  assert.equal(ctx.partialTripCheck().status, 'PASS');
+  ctx.state.selectedDays = new Set([k(13)]);                 // 앞날 퀵턴은 트립에 안 붙는다
+  assert.equal(ctx.partialTripCheck().status, 'PASS');
+});
+
+test('해외 레이오버(발리) 일부만 고르면 막는다, 퀵턴 하루는 통과', () => {
+  ctx.state.schedules = [
+    { month: M, day: 8, type: '국제선', routeSummary: 'ICN→DPS→DPS' },
+    { month: M, day: 9, type: '국제선', title: 'DPS-ICN', dep: 'DPS', arr: 'ICN' },
+    { month: M, day: 10, type: 'ARRIVAL' },
+    { month: M, day: 11, type: '국제선', routeSummary: 'ICN→KIX→ICN' },
+    { month: M, day: 12, type: '국제선', routeSummary: 'ICN→NRT→ICN' },
+  ];
+  ctx.state.selectedDays = new Set([k(8), k(9)]);
+  assert.equal(ctx.partialTripCheck().status, 'FAIL');        // 도착일(10) 빠짐
+  ctx.state.selectedDays = new Set([k(8), k(9), k(10)]);
+  assert.equal(ctx.partialTripCheck().status, 'PASS');
+  ctx.state.selectedDays = new Set([k(12)]);                  // 퀵턴 하루
+  assert.equal(ctx.partialTripCheck().status, 'PASS');
 });

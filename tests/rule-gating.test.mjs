@@ -15,12 +15,13 @@ const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
 test('규정 위반으로 선택 버튼을 잠그지 않는다', () => {
-  assert.match(app, /regBtn\.disabled = !has \|\| hasPast;/);
+  assert.match(app, /regBtn\.disabled = !has \|\| hasPast;/);   // 요청 진행 버튼
+  assert.match(app, /regBtn\.disabled = !has \|\| hasPast \|\| !!partialTrip;/);
   assert.doesNotMatch(app, /regBtn\.disabled = !has \|\| hasFail/);
 });
 
-test('규정 위반으로 등록 버튼을 잠그지 않는다', () => {
-  assert.match(app, /submitBtn\.disabled = !hasOffered \|\| !CREDIT_POLICY\.canSpend/);
+test('규정 위반으로 등록 버튼을 잠그지 않는다 — 레이오버 일부 선택(조합 불가)만 막는다', () => {
+  assert.match(app, /submitBtn\.disabled = !hasOffered \|\| checks\.some\(c => c\.blocking\) \|\| !CREDIT_POLICY\.canSpend/);
   assert.doesNotMatch(app, /const canSubmit = hasOffered && !hasFail/);
 });
 
