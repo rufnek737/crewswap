@@ -1658,7 +1658,7 @@ async function handleRequestsDecline(request, env, authEmail) {
     } else if (reason === 'REST_CONFLICT') {
       // 휴식시간은 받는 사람 로스터 전체로 앱이 계산한다. 상대에게는 짧게 사유만 알린다(Kay 지시).
       // 문제는 받는 사람(글쓴이) 일정 쪽이다 — 상대는 보낼 때 자기 일정만 검사받았으니
-      // 「제 일정」「보내주신 일정에는 문제가 없습니다」를 밝힌다(2026-10-23 Kay 확정 문구).
+      // 「제 일정」과 날짜를 밝힌다(2026-10-23 Kay 확정 문구).
       // 날짜는 숫자만 받고 문구는 서버가 만든다(자유 문구를 상대에게 그대로 보내지 않는다).
       const m = Number(conflict?.month), d = Number(conflict?.day);
       const date = Number.isInteger(m) && m >= 1 && m <= 12 && Number.isInteger(d) && d >= 1 && d <= 31 ? `${m}/${d} ` : '';
