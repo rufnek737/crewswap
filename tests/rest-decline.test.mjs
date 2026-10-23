@@ -21,13 +21,25 @@ const env = { POSTS: {
   put: async (k, v) => store.set(k, v), delete: async k => store.delete(k) } };
 const call = body => ctx.handleRequestsDecline({ json: async () => body }, env, 'me@x');
 
-test('휴식 부족 거절은 짧은 규정 문구로 보낸다', async () => {
+test('휴식 부족 거절은 내 일정 날짜와 함께, 상대 일정 문제는 아니라고 보낸다', async () => {
   store.set('req:1', JSON.stringify({ id: '1', toEmail: 'me@x' }));
-  const r = await call({ id: '1', reason: 'REST_CONFLICT' });
+  const r = await call({ id: '1', reason: 'REST_CONFLICT', conflict: { kind: 'rest', month: 11, day: 14 } });
   assert.equal(r.status, 200);
   const rec = JSON.parse(store.get('req:1'));
   assert.equal(rec.declineReason, 'REST_CONFLICT');
-  assert.equal(rec.declineMsg, '휴식 규정에 따른 거절입니다.');
+  assert.equal(rec.declineMsg, '요청하신 근무를 제가 받으면 제 11/14 근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.');
+});
+
+test('내 쪽 모기지 휴무 충돌', async () => {
+  store.set('req:4', JSON.stringify({ id: '4', toEmail: 'me@x' }));
+  await call({ id: '4', reason: 'REST_CONFLICT', conflict: { kind: 'mogiji', month: 11, day: 24 } });
+  assert.match(JSON.parse(store.get('req:4')).declineMsg, /제 11\/24 근무가 모기지 필수 휴무와 겹쳐/);
+});
+
+test('날짜가 이상하면 날짜 없이 보낸다', async () => {
+  store.set('req:5', JSON.stringify({ id: '5', toEmail: 'me@x' }));
+  await call({ id: '5', reason: 'REST_CONFLICT', conflict: { kind: 'rest', month: 13, day: '<b>' } });
+  assert.match(JSON.parse(store.get('req:5')).declineMsg, /^요청하신 근무를 제가 받으면 제 근무와의/);
 });
 
 test('일반 거절은 그대로 개인 사정 문구', async () => {

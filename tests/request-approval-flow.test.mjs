@@ -302,7 +302,7 @@ test('mortgage-rest rejection tells the requester the verified rule reason', asy
   assert.equal(declined.declineReason, 'MOGIJI_REST_CONFLICT');
   assert.equal(declined.status, '⚠️ 모기지 휴무 규정 불일치');
   // 규정 거절은 종류와 상관없이 짧은 한 문구로 보낸다(2026-10-23 Kay 지시).
-  assert.equal(declined.declineMsg, '휴식 규정에 따른 거절입니다.');
+  assert.equal(declined.declineMsg, '요청하신 스왑은 보내주신 일정의 8/24 모기지 필수 휴무와 겹쳐 진행할 수 없습니다.');
 });
 
 test('a client cannot falsely label a normal rejection as a rule conflict', async () => {

@@ -4605,7 +4605,8 @@ function renderRequests() {
   $$("#requestList .accept-req-btn").forEach(b => b.onclick = () => acceptRequest(b.dataset.reqId));
   $$("#requestList .ask-accept-btn").forEach(b => b.onclick = () => acceptAsk(b.dataset.reqId));
   $$("#requestList .decline-req-btn").forEach(b => b.onclick = () =>
-    declineRequest(b.dataset.reqId, b.dataset.declineReason || null));
+    declineRequest(b.dataset.reqId, b.dataset.declineReason || null,
+      b.dataset.conflict ? JSON.parse(b.dataset.conflict) : null));
   $$("#requestList .delete-req-btn").forEach(b => b.onclick = () => deleteRequest(b.dataset.reqId));
   $$("#requestList .proceed-request-btn").forEach(b => b.onclick = () => proceedToRequestFromAsk(b.dataset.reqId));
   $$("#requestList .submit-nudge-btn").forEach(b => b.onclick = () => nudgeSubmit(b.dataset.reqId));
@@ -5048,21 +5049,21 @@ async function acceptAsk(reqId) {
 }
 
 // 거절 — 일반 개인 사유와 서버가 검증한 휴식 규정 불일치를 구분해 상대에게 전달한다.
-async function declineRequest(reqId, reason = null) {
+async function declineRequest(reqId, reason = null, conflict = null) {
   if (!state.user.email) { showToast("이메일 인증 정보가 없습니다."); return; }
   const isMogijiConflict = reason === "MOGIJI_REST_CONFLICT";
   const isRuleConflict = isMogijiConflict || reason === "REST_CONFLICT";
   const confirmMessage = isMogijiConflict
-    ? "휴식 규정 불일치로 거절할까요? 상대방에게 「휴식 규정에 따른 거절입니다」가 전달됩니다."
+    ? "휴식 규정 불일치로 거절할까요? 상대방에게 충돌 날짜와 사유가 전달됩니다."
     : reason === "REST_CONFLICT"
-      ? "휴식 규정 불일치로 거절할까요? 상대방에게 「휴식 규정에 따른 거절입니다」가 전달됩니다."
+      ? "휴식 규정 불일치로 거절할까요? 상대방에게 내 일정의 충돌 날짜와 사유가 전달됩니다."
       : "거절할까요? 상대방에게 개인 사정으로 인한 양해 메세지가 전송됩니다.";
   if (!confirm(confirmMessage)) return;
   try {
     const res = await apiFetch(`${API_BASE}/api/requests-decline`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email, reason }),
+      body: JSON.stringify({ id: reqId, email: state.user.email, reason, conflict }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { showToast(data.error || "거절 처리 실패"); return; }
@@ -5110,7 +5111,7 @@ function requestCard(r) {
   // 휴식시간(FOM) + 모기지 휴식일수(노조 협약) 검증 — 받은 정식 요청을 수락하면 내가 r.offered(요청자 근무)를 받게 됨.
   // 내가 내주는 날 = 내 포스트의 days. 상호수락(=내 로스터에 편입) 후 확인.
   let restMsgReceived = null;
-  let restDeclineInfo = false;
+  let restDeclineInfo = null;
   if (state.reqViewMode === "received" && !isAsk && needsResponse && r.offered) {
     const myPost = (state.myPosts || []).find(p => p.id === r.postId);
     const givenDays = myPost ? (myPost.offered.days || []) : [];
@@ -5119,7 +5120,15 @@ function requestCard(r) {
     restMsgReceived = restIssueMessage(rc) || mogijiIssueMessage(mc);
     // 휴식시간 부족이면 거절도 「규정 불일치」로 보낸다 — 일반 거절로 보내면 상대에게
     // 「개인적 사정」이라고 전해져 실제 이유를 모른다(2026-10-23).
-    restDeclineInfo = !!restMsgReceived;   // 휴식시간·모기지 휴무 어느 쪽이든
+    // 거절 문구에 넣을 「내 쪽」 충돌 날짜. 상대는 보낼 때 자기 일정만 검사받았으니,
+    // 문제가 받는 사람(나) 일정에 있다는 걸 날짜와 함께 알려야 오해가 없다(2026-10-23).
+    const monthNum = Number(String(state.currentMonth).split("-")[1]);
+    if (rc && !rc.ok && rc.issues?.[0]) {
+      const day = Number(String(rc.issues[0].label || "").match(/^(\d+)일/)?.[1]);
+      restDeclineInfo = { kind: "rest", month: monthNum, day: Number.isInteger(day) ? day : null };
+    } else if (mc && !mc.ok && mc.issues?.[0]) {
+      restDeclineInfo = { kind: "mogiji", month: monthNum, day: Number(mc.issues[0].nextStart) || null };
+    }
   }
 
   // 상호 수락 후 공개할 상대방 연락처
@@ -5284,7 +5293,7 @@ function requestCard(r) {
         : ""}
       ${needsResponse
         ? `<div class="req-respond-buttons">
-             <button class="secondary-button decline-req-btn" data-req-id="${escapeHtml(r.id)}"${restDeclineInfo ? ' data-decline-reason="REST_CONFLICT"' : ""}>${restDeclineInfo ? "규정 불일치로 거절" : "거절"}</button>
+             <button class="secondary-button decline-req-btn" data-req-id="${escapeHtml(r.id)}"${restDeclineInfo ? ` data-decline-reason="REST_CONFLICT" data-conflict="${escapeHtml(JSON.stringify(restDeclineInfo))}"` : ""}>${restDeclineInfo ? "규정 불일치로 거절" : "거절"}</button>
              <button class="primary-button ${isAsk ? "ask-accept-btn" : "accept-req-btn"}" data-req-id="${escapeHtml(r.id)}"${restMsgReceived ? " disabled" : ""}>${isAsk ? "✓ 관심 수락" : "✓ 상호 수락하기"}</button>
            </div>`
         : ""}

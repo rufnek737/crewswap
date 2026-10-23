@@ -1637,8 +1637,8 @@ async function handleRequestsAskAccept(request, env, authEmail) {
 /* ── requests-decline (받은 요청 거절 — 양해 메세지 상태로 저장) ─────── */
 
 async function handleRequestsDecline(request, env, authEmail) {
-  let id, email, reason;
-  try { ({ id, email, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, reason, conflict;
+  try { ({ id, email, reason, conflict } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
@@ -1652,12 +1652,21 @@ async function handleRequestsDecline(request, env, authEmail) {
         return json({ error: '모기지 휴무 규정 충돌을 확인할 수 없습니다' }, 409);
       rec.status = '⚠️ 모기지 휴무 규정 불일치';
       rec.declineReason = 'MOGIJI_REST_CONFLICT';
-      rec.declineMsg = '휴식 규정에 따른 거절입니다.';   // 규정 거절은 종류와 상관없이 한 문구(Kay 지시)
+      // 서버가 검증한 충돌은 요청자(상대) 일정 쪽이다 — 어느 쪽 일정인지 밝힌다.
+      const [, restMonth, restDay] = violation.issue.dayKey.split('-').map(Number);
+      rec.declineMsg = `요청하신 스왑은 보내주신 일정의 ${restMonth}/${restDay} 모기지 필수 휴무와 겹쳐 진행할 수 없습니다.`;
     } else if (reason === 'REST_CONFLICT') {
       // 휴식시간은 받는 사람 로스터 전체로 앱이 계산한다. 상대에게는 짧게 사유만 알린다(Kay 지시).
+      // 문제는 받는 사람(글쓴이) 일정 쪽이다 — 상대는 보낼 때 자기 일정만 검사받았으니
+      // 「제 일정」「보내주신 일정에는 문제가 없습니다」를 밝힌다(2026-10-23 Kay 확정 문구).
+      // 날짜는 숫자만 받고 문구는 서버가 만든다(자유 문구를 상대에게 그대로 보내지 않는다).
+      const m = Number(conflict?.month), d = Number(conflict?.day);
+      const date = Number.isInteger(m) && m >= 1 && m <= 12 && Number.isInteger(d) && d >= 1 && d <= 31 ? `${m}/${d} ` : '';
       rec.status = '⚠️ 휴식 규정 불일치';
       rec.declineReason = 'REST_CONFLICT';
-      rec.declineMsg = '휴식 규정에 따른 거절입니다.';
+      rec.declineMsg = conflict?.kind === 'mogiji'
+        ? `요청하신 근무를 제가 받으면 제 ${date}근무가 모기지 필수 휴무와 겹쳐 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.`
+        : `요청하신 근무를 제가 받으면 제 ${date}근무와의 휴식시간이 규정보다 짧아져 진행할 수 없습니다. 보내주신 일정에는 문제가 없습니다.`;
     } else {
       rec.status = '💔 거절됨';
       rec.declineReason = 'PERSONAL';
