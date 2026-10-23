@@ -15,7 +15,7 @@
   // '다시 보지 않기' 체크박스를 붙인 뒤에도 공지가 뜨지 않았다. 한 번 초기화한다.
   const current = Object.freeze({
     id: "launch-free-20270930-r4",
-    version: "1.2.3",
+    version: "1.2.4",
     date: "2026.09.23",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
     summary: "정식 출시를 기념해 2027년 9월 30일까지 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
@@ -31,9 +31,13 @@
   // 「다시 보지 않기」를 누른 사람에게는 새 항목이 안 뜬다.
   // 위의 current 는 공지함(알림 목록)에 남는 출시 기념 안내로, 이 팝업과는 따로 간다.
   const whatsNew = Object.freeze({
-    id: "whatsnew-1.2.3",
-    version: "1.2.3",
+    id: "whatsnew-1.2.4",
+    version: "1.2.4",
     items: Object.freeze([
+      Object.freeze({ version: "1.2.4", icon: "🗂", title: "퀵턴은 날마다 따로 올라갑니다",
+        body: "붙어 있는 퀵턴도 패턴마다 별개의 스왑으로 등록돼, 원하는 날만 골라 요청할 수 있습니다. 편조도 날짜별로 정확히 보입니다." }),
+      Object.freeze({ version: "1.2.4", icon: "🛠", title: "버그 수정",
+        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.3", icon: "📱", title: "iPhone Duo 지원",
         body: "펼친 화면에서 달력과 고른 근무·회사 룰 체크를 나란히 봅니다. 아이패드 가로 화면도 같습니다." }),
       Object.freeze({ version: "1.2.2", icon: "🛠", title: "회사 룰 체크 정확도 개선",

@@ -15,7 +15,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.3";
+const APP_VERSION = "1.2.4";
 const APP_RELEASE_DATE = "2026.10.23";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
