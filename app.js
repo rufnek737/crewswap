@@ -718,7 +718,23 @@ function cabinRestReqMin(arrAirport, nextDepAirport, fdtMin, nextType) {
 //            releaseTime(막날 C/O), lastReport(막날 C/I),
 //            lastArrival(막날 STA), lastArrAirport(막날 도착공항) }
 // givenAwayDays: 내가 내주는 날짜(이 날들의 내 근무는 사라지므로 인접 검사에서 제외)
+// 받은 근무의 실제 달. 휴식 검사는 「지금 달력에서 보는 달」의 날짜로 앞뒤 근무를 찾는데,
+// 달력을 10월에 둔 채 11월 요청을 열면 10월 근무와 비교하고 있었다(2026-10-23).
+function offeredMonthOf(offered) {
+  const key = (offered?.dateKeys || [])[0] || (offered?.daySchedules || [])[0]?.month;
+  const m = /^(\d{4}-\d{2})/.exec(String(key || ""));
+  return m ? m[1] : state.currentMonth;
+}
+function inOfferedMonth(offered, fn) {
+  const saved = state.currentMonth;
+  state.currentMonth = offeredMonthOf(offered);
+  try { return fn(); } finally { state.currentMonth = saved; }
+}
+
 function restCheckIncoming(offered, givenAwayDays) {
+  return inOfferedMonth(offered, () => restCheckIncomingInMonth(offered, givenAwayDays));
+}
+function restCheckIncomingInMonth(offered, givenAwayDays) {
   if (!offered || !offered.days || !offered.days.length) return { ok: true, issues: [] };
   const days = [...offered.days].sort((a, b) => a - b);
   const firstDay = days[0], lastDay = days[days.length - 1];
@@ -820,6 +836,9 @@ function nextLayoverTripStartAfter(day) {
 
 // offered: { days, hasLayover }. givenAwayDays: 내가 내주는 날짜(사라지는 근무라 다음 트립 판정에서 제외)
 function mogijiRestCheckIncoming(offered, givenAwayDays) {
+  return inOfferedMonth(offered, () => mogijiRestCheckIncomingInMonth(offered, givenAwayDays));
+}
+function mogijiRestCheckIncomingInMonth(offered, givenAwayDays) {
   if (state.user.crewType !== "PILOT") return { ok: true, issues: [] };
   if (!offered || !offered.hasLayover || !offered.days || !offered.days.length) return { ok: true, issues: [] };
   const tripDays = offered.days.length;
@@ -5122,7 +5141,7 @@ function requestCard(r) {
     // 「개인적 사정」이라고 전해져 실제 이유를 모른다(2026-10-23).
     // 거절 문구에 넣을 「내 쪽」 충돌 날짜. 상대는 보낼 때 자기 일정만 검사받았으니,
     // 문제가 받는 사람(나) 일정에 있다는 걸 날짜와 함께 알려야 오해가 없다(2026-10-23).
-    const monthNum = Number(String(state.currentMonth).split("-")[1]);
+    const monthNum = Number(offeredMonthOf(r.offered).split("-")[1]);
     if (rc && !rc.ok && rc.issues?.[0]) {
       const day = Number(String(rc.issues[0].label || "").match(/^(\d+)일/)?.[1]);
       restDeclineInfo = { kind: "rest", month: monthNum, day: Number.isInteger(day) ? day : null };

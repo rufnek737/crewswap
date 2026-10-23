@@ -53,3 +53,23 @@ test('앱은 휴식 부족일 때 「규정 불일치로 거절」 버튼을 띄
   assert.match(app, /data-decline-reason="REST_CONFLICT"/);
   assert.match(app, /restDeclineInfo \? "규정 불일치로 거절" : "거절"/);
 });
+
+test('받은 요청 휴식 검사는 달력에서 보는 달이 아니라 요청의 실제 달로 한다', () => {
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const fn = name => { const i = app.indexOf(`function ${name}(`); let d = 0;
+    for (let k = app.indexOf('{', i); k < app.length; k++) { if (app[k] === '{') d++; else if (app[k] === '}' && !--d) return app.slice(i, k + 1); } };
+  const c = { REST_START_BUMPER_MIN: 100 };
+  vm.createContext(c);
+  vm.runInContext(['scheduleInCurrentMonth', 'dutyMinutesOf', 'minRestMinForFDT', 'absMinAt', 'dutyOnDay',
+    'offeredMonthOf', 'inOfferedMonth', 'restCheckIncoming', 'restCheckIncomingInMonth'].map(fn).join('\n'), c);
+  // 11/14 05:35 출두 근무가 있고, 10/14 는 OFF. 달력은 10월에 둔 상태.
+  c.state = { currentMonth: '2026-10', user: { crewType: 'PILOT' }, schedules: [
+    { month: '2026-10', day: 14, type: 'OFF' },
+    { month: '2026-11', day: 14, type: '국내선', title: '7C107', reportTime: '05:35', releaseTime: '13:20' },
+  ] };
+  const offered = { days: [13], dateKeys: ['2026-11-13'], reportTime: '14:45', releaseTime: '22:45', lastReport: '14:45' };
+  const rc = c.restCheckIncoming(offered, []);
+  assert.equal(rc.ok, false, '11월 기준으로 11/14 근무와 휴식 부족을 잡아야 한다');
+  assert.equal(rc.issues[0].side, 'after');
+  assert.equal(c.state.currentMonth, '2026-10', '보고 있던 달은 그대로 돌려놓는다');
+});
