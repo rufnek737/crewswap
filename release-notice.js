@@ -36,8 +36,6 @@
     items: Object.freeze([
       Object.freeze({ version: "1.2.5", icon: "🛠", title: "퀵턴·레이오버 구분 오류 수정",
         body: "연속된 일정에서 퀵턴과 레이오버를 정확히 구분하도록 고쳐 안정성을 높였습니다." }),
-      Object.freeze({ version: "1.2.4", icon: "🗂", title: "퀵턴은 날마다 따로 올라갑니다",
-        body: "붙어 있는 퀵턴도 패턴마다 별개의 스왑으로 등록돼, 원하는 날만 골라 요청할 수 있습니다. 편조도 날짜별로 정확히 보입니다." }),
       Object.freeze({ version: "1.2.4", icon: "🛠", title: "버그 수정",
         body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.3", icon: "📱", title: "iPhone Duo 지원",
