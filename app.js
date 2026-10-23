@@ -16,7 +16,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.2.3";
-const APP_RELEASE_DATE = "2026.10.22";
+const APP_RELEASE_DATE = "2026.10.23";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -921,16 +921,28 @@ function areConsecCalendarDays(k1, k2) {
   return (new Date(k2) - new Date(k1)) === 86400000;
 }
 
-// 선택한 날짜들을 '연속된 날짜' 단위로 끊어 독립 패턴 목록을 만든다.
-// 예: 2, 11, 12, 26 → [[2], [11,12], [26]] — 각각 별개의 스왑 글이고 크레딧도 따로 든다.
+// 선택한 날짜들을 독립 패턴 단위로 끊는다. 날짜가 떨어져 있거나, 붙어 있어도 패턴이
+// 다르면 따로 간다. 예: 퀵턴 11/20·21·22 는 사흘이 붙어 있어도 날마다 독립 패턴이라
+// 글 3개·크레딧 3개다 — 예전에는 하나로 묶여 11/21 만 원하는 사람이 요청할 수 없었고,
+// 편조도 첫날 것만 붙었다(2026-10-23). 레이오버·연속 RSV 는 근무표가 같은 패턴으로
+// 묶어 주므로(patternId) 그대로 한 글이다.
 // 등록 시점과 화면 표시가 같은 기준을 쓰도록 여기 한 곳에서만 판단한다.
+function samePatternDayKeys(k1, k2) {
+  const find = key => {
+    const { day, month } = parseDayKey(key);
+    return (state.schedules || []).find(s => s.day === day && (s.month || state.currentMonth) === month);
+  };
+  const a = find(k1)?.patternId, b = find(k2)?.patternId;
+  return !a || !b || a === b;   // 패턴 정보가 없으면 예전처럼 날짜로만 묶는다
+}
+
 function groupConsecutiveDayKeys(dayKeys) {
   const sorted = [...dayKeys].sort();
   if (!sorted.length) return [];
   const groups = [];
   let cur = [sorted[0]];
   for (let i = 1; i < sorted.length; i++) {
-    if (areConsecCalendarDays(sorted[i - 1], sorted[i])) cur.push(sorted[i]);
+    if (areConsecCalendarDays(sorted[i - 1], sorted[i]) && samePatternDayKeys(sorted[i - 1], sorted[i])) cur.push(sorted[i]);
     else { groups.push(cur); cur = [sorted[i]]; }
   }
   groups.push(cur);
@@ -2543,7 +2555,7 @@ function renderSelection() {
 
   $("#selectedSummary").className = "";
   $("#selectedSummary").innerHTML = `
-    ${groups.length > 1 ? `<div class="split-notice">📌 날짜가 이어지지 않아 <strong>${groups.length}개의 별개 스왑</strong>으로 나뉘어 등록됩니다${isPremiumUser() ? "" : ` · <strong>${groups.length}크레딧</strong> 사용`}</div>` : ""}
+    ${groups.length > 1 ? `<div class="split-notice">📌 패턴마다 따로 올라가 <strong>${groups.length}개의 별개 스왑</strong>으로 나뉘어 등록됩니다${isPremiumUser() ? "" : ` · <strong>${groups.length}크레딧</strong> 사용`}</div>` : ""}
     ${patternHtml}
     <div class="selected-list">
       ${ss.map(s => {
@@ -2993,7 +3005,7 @@ function renderPostFooter() {
       ? (postCount > 1 ? `${postCount}건 · PRO 무제한` : "PRO 무제한")
       : (postCount > 1 ? `${postCount}건 · ${postCount}크레딧` : "무료 1크레딧");
     if (costNote) costNote.textContent = postCount > 1
-      ? "날짜가 이어지지 않아 글이 나뉩니다"
+      ? "패턴마다 글이 나뉩니다"
       : (isPremiumUser() ? "PRO 이용 중" : "PRO는 무제한");
     renderUrgentOption(postCount);
     if (existingBanner) existingBanner.remove();
@@ -6327,7 +6339,7 @@ function bindEvents() {
 
   // 실제 등록 실행 (WARN 확인 후 or 바로)
   async function doSubmitPost() {
-    // 선택된 날짜를 연속 그룹으로 분리 (비연속 = 독립 패턴 = 각 1크레딧)
+    // 선택된 날짜를 독립 패턴으로 분리 (비연속이거나 패턴이 다르면 따로 = 각 1크레딧)
     if (state.selectedDays.size === 0) return;
     const groups = groupConsecutiveDayKeys([...state.selectedDays]);
 
