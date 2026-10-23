@@ -15,7 +15,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.4";
+const APP_VERSION = "1.2.5";
 const APP_RELEASE_DATE = "2026.10.23";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
@@ -940,19 +940,44 @@ function areConsecCalendarDays(k1, k2) {
   return (new Date(k2) - new Date(k1)) === 86400000;
 }
 
-// 선택한 날짜들을 독립 패턴 단위로 끊는다. 날짜가 떨어져 있거나, 붙어 있어도 패턴이
-// 다르면 따로 간다. 예: 퀵턴 11/20·21·22 는 사흘이 붙어 있어도 날마다 독립 패턴이라
-// 글 3개·크레딧 3개다 — 예전에는 하나로 묶여 11/21 만 원하는 사람이 요청할 수 없었고,
-// 편조도 첫날 것만 붙었다(2026-10-23). 레이오버·연속 RSV 는 근무표가 같은 패턴으로
-// 묶어 주므로(patternId) 그대로 한 글이다.
+// 선택한 날짜들을 독립 패턴 단위로 끊는다. 기본은 연속된 날짜 = 한 글이다.
+// 예외는 하나: 전날 비행이 내 베이스로 돌아와 끝났으면(퀵턴) 다음날 비행은 새 글이다.
+//   퀵턴 11/20·21·22 → 글 3개 / 부산 레이오버(김포 베이스) 10/15·16·17 → 글 1개
+// 근무표의 patternId 는 쓰지 않는다 — 부산을 모두의 베이스로 보는 등 묶음을 잘못 잡아,
+// 예전에 자동 묶음을 끄고 날짜 기준으로 바꾼 것이다(1.2.4 에서 다시 써서 레이오버가
+// 쪼개졌다, 2026-10-23).
 // 등록 시점과 화면 표시가 같은 기준을 쓰도록 여기 한 곳에서만 판단한다.
+const SEOUL_BASES = ["GMP", "ICN"];
+function myBaseAirports() {
+  const base = String(state.user?.base || "").toUpperCase();
+  if (!base) return [];
+  return SEOUL_BASES.includes(base) ? SEOUL_BASES : [base];
+}
+function lastArrivalOf(s) {
+  const route = String(s?.routeSummary || "").split("→").map(x => x.trim()).filter(Boolean);
+  return (route[route.length - 1] || s?.arr || "").toUpperCase();
+}
 function samePatternDayKeys(k1, k2) {
   const find = key => {
     const { day, month } = parseDayKey(key);
     return (state.schedules || []).find(s => s.day === day && (s.month || state.currentMonth) === month);
   };
-  const a = find(k1)?.patternId, b = find(k2)?.patternId;
-  return !a || !b || a === b;   // 패턴 정보가 없으면 예전처럼 날짜로만 묶는다
+  const a = find(k1), b = find(k2);
+  if (!a || !b) return true;                  // 근무표에 없는 날은 예전처럼 날짜로만
+  const isFlight = s => s.type === "국내선" || s.type === "국제선";
+  const isStandby = s => s.type === "RSV" || s.type === "STBY";
+  // 이어지는 경우만 묶는다. 나머지(베이스 복귀 다음날, 도착일 다음날, 대기·지상근무와
+  // 비행 사이)는 다른 패턴이다 — 날짜만 보던 때는 퀵턴+다음날 RSV 도 한 글이 됐다.
+  if (a.type === "LAYOV") return true;                       // 체류 다음날은 이어지는 비행·도착
+  if (isStandby(a) && isStandby(b)) return true;              // 연속 RSV·STBY 는 패턴째로
+  if (isFlight(a)) {
+    if (b.type === "LAYOV" || b.type === "ARRIVAL") return true;
+    if (!isFlight(b)) return false;
+    const bases = myBaseAirports();
+    if (!bases.length) return true;           // 베이스를 모르면 비행끼리는 예전처럼 묶는다
+    return !bases.includes(lastArrivalOf(a)); // 전날 베이스 복귀로 끝났으면 다른 패턴(퀵턴)
+  }
+  return a.type === b.type && !isFlight(b) && a.type !== "ARRIVAL";  // 같은 종류의 비행 아닌 근무가 이어질 때만
 }
 
 function groupConsecutiveDayKeys(dayKeys) {
