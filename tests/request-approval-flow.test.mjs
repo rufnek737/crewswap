@@ -301,10 +301,8 @@ test('mortgage-rest rejection tells the requester the verified rule reason', asy
   const declined = await env.POSTS.get('req:REQ-1', { type: 'json' });
   assert.equal(declined.declineReason, 'MOGIJI_REST_CONFLICT');
   assert.equal(declined.status, '⚠️ 모기지 휴무 규정 불일치');
-  assert.match(declined.declineMsg, /8월 23일 모기지 도착/);
-  assert.match(declined.declineMsg, /8월 24일 필수 휴무/);
-  assert.match(declined.declineMsg, /7C129/);
-  assert.match(declined.declineMsg, /자동 판정/);
+  // 규정 거절은 종류와 상관없이 짧은 한 문구로 보낸다(2026-10-23 Kay 지시).
+  assert.equal(declined.declineMsg, '휴식 규정에 따른 거절입니다.');
 });
 
 test('a client cannot falsely label a normal rejection as a rule conflict', async () => {

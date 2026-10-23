@@ -21,20 +21,13 @@ const env = { POSTS: {
   put: async (k, v) => store.set(k, v), delete: async k => store.delete(k) } };
 const call = body => ctx.handleRequestsDecline({ json: async () => body }, env, 'me@x');
 
-test('휴식 부족 거절은 날짜와 시간을 담아 보낸다', async () => {
+test('휴식 부족 거절은 짧은 규정 문구로 보낸다', async () => {
   store.set('req:1', JSON.stringify({ id: '1', toEmail: 'me@x' }));
-  const r = await call({ id: '1', reason: 'REST_CONFLICT', restInfo: { side: 'after', label: '14일 7C107', gapMin: 365, needMin: 660 } });
+  const r = await call({ id: '1', reason: 'REST_CONFLICT' });
   assert.equal(r.status, 200);
   const rec = JSON.parse(store.get('req:1'));
   assert.equal(rec.declineReason, 'REST_CONFLICT');
-  assert.match(rec.declineMsg, /직후 근무\(14일 7C107\)까지 휴식이 6시간 5분뿐이라 최소 11시간에 못 미쳐/);
-  assert.match(rec.declineMsg, /개인적인 사유가 아닌 휴식시간 규정/);
-});
-
-test('부족하지 않은 값이나 이상한 값은 받지 않는다', async () => {
-  store.set('req:2', JSON.stringify({ id: '2', toEmail: 'me@x' }));
-  const r = await call({ id: '2', reason: 'REST_CONFLICT', restInfo: { side: 'after', label: '<b>x</b>', gapMin: 700, needMin: 660 } });
-  assert.equal(r.status, 400);
+  assert.equal(rec.declineMsg, '휴식 규정에 따른 거절입니다.');
 });
 
 test('일반 거절은 그대로 개인 사정 문구', async () => {

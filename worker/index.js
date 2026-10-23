@@ -1637,8 +1637,8 @@ async function handleRequestsAskAccept(request, env, authEmail) {
 /* ── requests-decline (받은 요청 거절 — 양해 메세지 상태로 저장) ─────── */
 
 async function handleRequestsDecline(request, env, authEmail) {
-  let id, email, reason, restInfo;
-  try { ({ id, email, reason, restInfo } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, reason;
+  try { ({ id, email, reason } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
@@ -1650,29 +1650,14 @@ async function handleRequestsDecline(request, env, authEmail) {
       const violation = validateMogijiExchange(rec, post, { days: [] });
       if (!violation || violation.side !== '상대 일정')
         return json({ error: '모기지 휴무 규정 충돌을 확인할 수 없습니다' }, 409);
-      const issue = violation.issue;
-      const [, arrivalMonth, arrivalDay] = issue.arrivalDate.split('-').map(Number);
-      const [, restMonth, restDay] = issue.dayKey.split('-').map(Number);
-      const incomingMonth = Number(String(issue.incoming?.month || issue.dayKey).split('-')[1]);
-      const incomingDay = Number(issue.incoming?.day || restDay);
-      const incomingDuty = issue.incoming?.title || issue.incoming?.type || '근무';
       rec.status = '⚠️ 모기지 휴무 규정 불일치';
       rec.declineReason = 'MOGIJI_REST_CONFLICT';
-      rec.declineMsg = `요청하신 스왑은 ${arrivalMonth}월 ${arrivalDay}일 모기지 도착 후 ${restMonth}월 ${restDay}일 필수 휴무와, 교환받을 ${incomingMonth}월 ${incomingDay}일 ${incomingDuty} 근무가 겹쳐 진행할 수 없습니다. 개인적인 사유가 아닌 휴식 규정 자동 판정에 따른 거절입니다.`;
+      rec.declineMsg = '휴식 규정에 따른 거절입니다.';   // 규정 거절은 종류와 상관없이 한 문구(Kay 지시)
     } else if (reason === 'REST_CONFLICT') {
-      // 휴식시간은 받는 사람(글쓴이) 로스터 전체로 앱이 계산한다 — 서버에는 그 로스터의 앞뒤
-      // 근무가 없어 다시 계산하지 못한다. 그래서 값만 좁게 받아 문구는 서버가 만든다
-      // (자유 문구를 그대로 상대에게 보내지 않는다). 모기지 거절과 달리 서버 검증은 없다.
-      const side = restInfo?.side === 'before' ? '직전' : '직후';
-      const label = String(restInfo?.label || '').replace(/[^0-9A-Za-z가-힣/ ·()-]/g, '').slice(0, 30);
-      const gap = Math.max(0, Math.min(10080, Math.round(Number(restInfo?.gapMin))));
-      const need = Math.max(0, Math.min(10080, Math.round(Number(restInfo?.needMin))));
-      if (!label || !Number.isFinite(gap) || !Number.isFinite(need) || !need || gap >= need)
-        return json({ error: '휴식시간 부족 정보를 확인할 수 없습니다' }, 400);
-      const dur = m => `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}`;
-      rec.status = '⚠️ 휴식시간 규정 불일치';
+      // 휴식시간은 받는 사람 로스터 전체로 앱이 계산한다. 상대에게는 짧게 사유만 알린다(Kay 지시).
+      rec.status = '⚠️ 휴식 규정 불일치';
       rec.declineReason = 'REST_CONFLICT';
-      rec.declineMsg = `요청하신 스왑을 받으면 ${side} 근무(${label})까지 휴식이 ${dur(gap)}뿐이라 최소 ${dur(need)}에 못 미쳐 진행할 수 없습니다. 개인적인 사유가 아닌 휴식시간 규정에 따른 거절입니다.`;
+      rec.declineMsg = '휴식 규정에 따른 거절입니다.';
     } else {
       rec.status = '💔 거절됨';
       rec.declineReason = 'PERSONAL';
