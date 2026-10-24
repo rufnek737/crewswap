@@ -36,10 +36,23 @@ export function normalizeWallet(input, now = Date.now(), { freeCouponsPerMonth =
   // 보상은 반 장씩 나가므로 소수를 그대로 둔다(0.1 단위). 다만 쓸 때는 1장이
   // 필요하므로, 반 장만 있는 사람은 한 번 더 도와야 급구를 올릴 수 있다.
   wallet.urgentCoupons = amount(wallet.urgentCoupons);
-  // 산 쿠폰은 그대로 두고 무료분만 더한다 — 초기화가 아니라 지급이다.
+  // 무료로 받은 쿠폰은 그달에만 쓴다 — 남으면 다음 달에 사라진다. 산 쿠폰과 보상 쿠폰은
+  // 쓸 때까지 남는다(2026-10-24 Kay 결정). urgentCoupons 는 전체 잔액, freeCoupons 는 그중
+  // 이번 달 무료분이다. 예전 지갑에는 freeCoupons 가 없다 — 유료 판매를 한 적이 없어
+  // 정수 장은 모두 무료로 받은 것이므로 이번 달 무료분으로 보고, 다음 달부터 정리된다.
+  if (wallet.freeCoupons === undefined) {
+    wallet.freeCoupons = wallet.freeCouponMonth ? Math.floor(wallet.urgentCoupons) : 0;
+  }
+  wallet.freeCoupons = Math.min(amount(wallet.freeCoupons), wallet.urgentCoupons);
   if (freeCouponsPerMonth > 0 && wallet.freeCouponMonth !== month) {
+    wallet.urgentCoupons = amount(wallet.urgentCoupons - wallet.freeCoupons);   // 지난달 무료분 소멸
     wallet.urgentCoupons += Math.floor(freeCouponsPerMonth);
+    wallet.freeCoupons = Math.floor(freeCouponsPerMonth);
     wallet.freeCouponMonth = month;
+  } else if (freeCouponsPerMonth <= 0 && wallet.freeCouponMonth && wallet.freeCouponMonth !== month && wallet.freeCoupons > 0) {
+    // 무료 기간이 끝난 뒤 첫 달 — 남은 무료분은 사라진다.
+    wallet.urgentCoupons = amount(wallet.urgentCoupons - wallet.freeCoupons);
+    wallet.freeCoupons = 0;
   }
   wallet.operations = wallet.operations && typeof wallet.operations === 'object' ? { ...wallet.operations } : {};
   return wallet;
@@ -78,7 +91,10 @@ export function applyWalletCommand(input, command = {}, now = Date.now(), option
       return { ok: false, code: 'URGENT_COUPON_REQUIRED', required: requested, wallet };
     }
     wallet.urgentCoupons = Math.round((wallet.urgentCoupons - requested) * 10) / 10;
-    const result = { couponsSpent: requested };
+    // 곧 사라질 무료분부터 쓴다.
+    const freeUsed = Math.min(wallet.freeCoupons || 0, requested);
+    wallet.freeCoupons = amount((wallet.freeCoupons || 0) - freeUsed);
+    const result = { couponsSpent: requested, freeUsed, month: creditMonthKey(now) };
     remember(wallet, operationId, result);
     return { ok: true, ...result, wallet };
   }
@@ -87,6 +103,13 @@ export function applyWalletCommand(input, command = {}, now = Date.now(), option
   if (command.type === 'grant-coupon') {
     const requested = amount(command.amount) || 1;   // 보상은 0.5장이라 내림하지 않는다
     wallet.urgentCoupons = Math.round((wallet.urgentCoupons + requested) * 10) / 10;
+    // 급구 취소·미매칭으로 돌려주는 쿠폰은 원래 무료분이었으면 무료분으로 되돌린다
+    // (같은 달일 때만 — 달이 바뀌었으면 어차피 사라졌을 쿠폰이라 산 쿠폰으로 만들지 않는다).
+    const spentOp = command.restoreOf ? wallet.operations[command.restoreOf] : null;
+    if (spentOp?.freeUsed) {
+      if (spentOp.month === creditMonthKey(now)) wallet.freeCoupons = amount((wallet.freeCoupons || 0) + Math.min(requested, spentOp.freeUsed));
+      else wallet.urgentCoupons = amount(wallet.urgentCoupons - Math.min(requested, spentOp.freeUsed));
+    }
     const result = { couponsGranted: requested };
     remember(wallet, operationId, result);
     return { ok: true, ...result, wallet };

@@ -180,12 +180,12 @@ test('소모형이므로 두 번째 구매는 막히지 않는다', () => {
 
 const FREE = { freeCouponsPerMonth: 1 };
 
-test('무료 기간에는 달이 바뀔 때마다 쿠폰 1장을 받는다', () => {
+test('무료 기간에는 달이 바뀔 때마다 쿠폰 1장을 받는다 — 안 쓴 무료분은 쌓이지 않는다', () => {
   const sep = normalizeWallet(null, SEP, FREE);
   assert.equal(sep.urgentCoupons, 1);
 
   const oct = normalizeWallet(sep, OCT, FREE);
-  assert.equal(oct.urgentCoupons, 2);   // 안 쓰면 쌓인다
+  assert.equal(oct.urgentCoupons, 1);   // 2026-10-24: 무료분은 그달에만(Kay 결정)
 });
 
 test('같은 달에 여러 번 조회해도 한 번만 지급한다', () => {
@@ -203,5 +203,5 @@ test('무료 지급은 산 쿠폰을 건드리지 않는다', () => {
 test('유료화가 시작되면(0장) 더 이상 지급하지 않는다', () => {
   const free = normalizeWallet(null, SEP, FREE);
   const paidEra = normalizeWallet(free, OCT);   // 옵션 없음 = 0장
-  assert.equal(paidEra.urgentCoupons, 1);
+  assert.equal(paidEra.urgentCoupons, 0);       // 남은 무료분도 그달까지만
 });

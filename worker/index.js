@@ -1158,7 +1158,7 @@ async function handlePostsCreate(request, env, ctx, authEmail, allowSandbox = fa
     });
     if (!debit.ok) {
       if (clean.urgent) await runWalletCommand(env, authEmail, {
-        type: 'grant-coupon', operationId: `post:urgent-reverse:${clean.id}`, amount: 1,
+        type: 'grant-coupon', operationId: `post:urgent-reverse:${clean.id}`, amount: 1, restoreOf: `post:urgent:${clean.id}`,
       }).catch(() => {});
       return json({ error: '크레딧이 부족합니다', code: debit.code, wallet: debit.wallet }, 402);
     }
@@ -1979,7 +1979,7 @@ async function handlePostsDelete(request, env, authEmail) {
     let couponRefunded = 0;
     if (post.urgent && (expired || rosterChanged)) {
       const back = await runWalletCommand(env, authEmail, {
-        type: 'grant-coupon', operationId: `post:urgent-refund:${id}`, amount: 1,
+        type: 'grant-coupon', operationId: `post:urgent-refund:${id}`, amount: 1, restoreOf: `post:urgent:${id}`,
       });
       couponRefunded = back.couponsGranted || 0;
       if (back.ok) refund.wallet = back.wallet;
