@@ -224,7 +224,7 @@ test("swap restrictions are checked by rules without a calendar lock icon", () =
   assert.match(app, /label: "교환할 수 없는 근무"/);
 });
 
-test("request cards disclose the counterpart's crew, and PRO sees it early", () => {
+test("request cards disclose the counterpart's crew only after mutual acceptance", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
 
@@ -233,11 +233,10 @@ test("request cards disclose the counterpart's crew, and PRO sees it early", () 
   assert.match(app, /const otherCrew = isSent \? r\.postCrewPublic : r\.offeredCrewPublic/);
   assert.match(app, /: "🔒 상호 수락 후 공개";/);
 
-  // 서버: PRO 미리보기는 꺼 둔다(PRO_CREW_PREVIEW) — 켜면 상호 수락 전에도 양쪽 편조를 본다.
-  assert.match(worker, /const PRO_CREW_PREVIEW = false;/);
+  // 서버: 편조는 상호 수락 후에만 공개된다(PRO 미리보기 없음).
+  assert.doesNotMatch(worker, /viewerIsPro/);
   assert.match(worker, /function offeredCrewPublicOf\(record, includeCrew\)/);
-  assert.match(worker, /const includeCrew = viewerIsPro \|\| !!record\.postCrewPublic/);
-  assert.match(worker, /const viewerIsPro = PRO_CREW_PREVIEW && await isPremiumAccount\(env, email\)/);
+  assert.match(worker, /const includeCrew = !!record\.postCrewPublic/);
 
   // 공개 로스터에 편조 원문이 실려 나가면 무료 사용자에게도 동료 실명이 새어 나간다.
   assert.match(worker, /const \{ crewComposition, \.\.\.rest \} = entry \|\| \{\}/);

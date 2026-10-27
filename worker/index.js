@@ -1094,18 +1094,12 @@ async function handleAvoidSet(request, env, authEmail) {
   return json({ ok: true, name });
 }
 
-// 편조구성원 미리보기(PRO)는 꺼 둔다 — 동료 실명은 누구에게나 상호 수락 후에만 공개(Kay, OPEN 70).
-const PRO_CREW_PREVIEW = false;
-
 /* ── posts-get ──────────────────────────────────────────────── */
 
-// PRO 구독 혜택: 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있다.
-// 무료 사용자에게는 이 글이 공개 목록에 뜨는 시점에 crewPublic을 아예 보내지
-// 않고, 상호 수락 완료 후(handleRequestsRequesterAccept)에만 별도로 공개한다.
+// 편조구성원(동료 이름)은 목록에 싣지 않고, 상호 수락 완료 후(handleRequestsRequesterAccept)에만 공개한다.
 async function handlePostsGet(request, env) {
   try {
     const auth = await authenticateRequest(request, env);
-    const viewerIsPro = PRO_CREW_PREVIEW && auth ? await isPremiumAccount(env, auth.email) : false;
     const idx = await getPostsIndex(env);
     // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
@@ -1124,7 +1118,7 @@ async function handlePostsGet(request, env) {
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
       if (avoidBlockedIds.has(p.id)) pub.avoidBlocked = true;
-      if (pub.offered && !viewerIsPro) {
+      if (pub.offered) {
         const { crewPublic, ...offeredPublic } = pub.offered;
         pub.offered = offeredPublic;
       }
@@ -1315,13 +1309,11 @@ function offeredCrewPublicOf(record, includeCrew) {
   return crewPublicFor(source?.crewComposition, record?.fromRole);
 }
 
-function requestWithPrivateDaysRemoved(record, viewerIsPro = false) {
+function requestWithPrivateDaysRemoved(record) {
   if (!record) return record;
-  // PRO 구독 혜택: 편조구성원을 상호 수락 전에도 미리 볼 수 있다.
-  // 상호 수락이 끝난 뒤에는(postCrewPublic이 채워짐) 무료 사용자에게도 공개된다.
-  const includeCrew = viewerIsPro || !!record.postCrewPublic;
+  // 편조구성원은 상호 수락이 끝난 뒤에만(postCrewPublic이 채워짐) 공개된다.
+  const includeCrew = !!record.postCrewPublic;
   const out = { ...record, offeredCrewPublic: offeredCrewPublicOf(record, includeCrew) };
-  // PRO may disclose crew names; it never authorizes personal contact details.
   if (!(record.stage >= 3)) {
     for (const field of ['fromRealName', 'fromEmployeeId', 'fromPhone', 'toRealName', 'toEmployeeId', 'toPhone', 'fromEmail', 'toEmail']) delete out[field];
   }
@@ -1484,8 +1476,7 @@ async function handleRequestsAccept(request, env, authEmail) {
     rec.toRealName = realName || '';
     rec.toEmployeeId = employeeId || '';
     rec.toPhone = phone || '';
-    // 편조구성원(동료 이름)은 PRO는 처음부터 보이지만, 무료 사용자는 상호
-    // 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
+    // 편조구성원(동료 이름)은 상호 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
     rec.postCrewPublic = post?.offered?.crewPublic || null;
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
@@ -1645,8 +1636,7 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     rec.fromRealName = realName || rec.fromRealName || '';
     rec.fromEmployeeId = employeeId || rec.fromEmployeeId || '';
     rec.fromPhone = phone || rec.fromPhone || '';
-    // 편조구성원(동료 이름)은 PRO는 처음부터 보이지만, 무료 사용자는 상호
-    // 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
+    // 편조구성원(동료 이름)은 상호 수락이 끝난 지금 시점에만 공개한다 — 요청 레코드에 함께 저장해 둔다.
     rec.postCrewPublic = post?.offered?.crewPublic || null;
     await env.POSTS.put(`req:${id}`, JSON.stringify(rec));
     await updateRequestsIndexEntry(env, rec);
@@ -1961,16 +1951,14 @@ async function handleRequestsDelete(request, env, authEmail) {
 
 async function handleRequestsGet(request, env, authEmail) {
   const email = authEmail;
-  const viewerIsPro = PRO_CREW_PREVIEW && await isPremiumAccount(env, email);
 
   try {
     const idx = env.DB ? await listRequestsForEmail(env.DB, email) : await getRequestsIndex(env);
     // 구버전 요청에는 대상 글의 상세 일정이 저장되지 않았다. 현재 글이 남아 있으면
     // 조회 시 보강해 요청 카드에서 양쪽 근무를 모두 확인할 수 있게 한다.
     const relevant = idx.filter(r => r.fromEmail === email || r.toEmail === email);
-    // PRO는 글 작성자의 편조도 미리 보므로, 상호 수락 전이라도 원본 글을 읽어와야 한다.
     const missingPostIds = [...new Set(relevant
-      .filter(r => r.postId && (!r.postOffered || (viewerIsPro && !r.postCrewPublic)))
+      .filter(r => r.postId && !r.postOffered)
       .map(r => r.postId))];
     const loadedPosts = await Promise.all(missingPostIds.map(async postId => [
       postId,
@@ -1982,14 +1970,8 @@ async function handleRequestsGet(request, env, authEmail) {
       const post = postById.get(record.postId);
       return post?.offered ? { ...record, postOffered: requestPostOfferSnapshot(post.offered) } : record;
     };
-    // 글 작성자의 편조 — 상호 수락 시 저장되지만, PRO는 그전에도 볼 수 있다.
-    const withPostCrew = record => {
-      if (record.postCrewPublic || !viewerIsPro) return record;
-      const crew = postById.get(record.postId)?.offered?.crewPublic;
-      return crew ? { ...record, postCrewPublic: crew } : record;
-    };
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
-    const forViewer = record => requestWithPrivateDaysRemoved(withPostCrew(withPostDetails(record)), viewerIsPro);
+    const forViewer = record => requestWithPrivateDaysRemoved(withPostDetails(record));
     // 나만의 편조 알림 — 받게 될 근무의 편조에 그 사람이 있으면 표시만 한다(이름은 안 싣는다).
     const avoidName = await avoidNameOf(env, email);
     const loadSchedules = scheduleLoader(env);
