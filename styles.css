@@ -131,10 +131,13 @@ button { cursor: pointer; }
 .bell-badge { position: absolute; top: -7px; right: -16px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 2px solid var(--bg); pointer-events: none; white-space: nowrap; }
 
 .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
-.schedule-head-actions { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: min(100%, 520px); }
+.schedule-head-actions { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(100%, 720px); }
 .schedule-head-actions > button { min-height: 52px; }
 .main-pro-button { display: grid; place-items: center; gap: 2px; padding: 8px 12px; border: 1px solid #efad58; border-radius: 8px; background: linear-gradient(145deg, #fff8ec, #ffead0); color: #a95608; }
 .main-pro-button strong { font-size: 13px; }
+.main-avoid-button { display: grid; place-items: center; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); }
+.main-avoid-button strong { font-size: 13px; }
+.main-avoid-button small { font-size: 10px; color: var(--muted); line-height: 1.25; }
 .main-pro-button small { font-size: 10px; color: #9a641f; line-height: 1.25; }
 .find-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 #refreshFindBtn { white-space: nowrap; }
@@ -1254,7 +1257,9 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
   body { overflow-x: hidden; }
   .app { padding: 16px 16px 16px; padding-top: calc(16px + env(safe-area-inset-top)); overflow-x: hidden; }
   .topbar, .section-head { flex-direction: column; align-items: stretch; }
-  .schedule-head-actions { width: 100%; }
+  .schedule-head-actions { width: 100%; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  /* 폰 폭에서는 세 칸이 좁다 — 불러오기를 윗줄 전체로, 알림·PRO를 아랫줄 두 칸으로 */
+  .schedule-head-actions > #importScheduleButton { grid-column: 1 / -1; }
   .status-strip { justify-content: flex-start; }
   .topbar.is-compact { flex-direction: row; align-items: center; }
   .topbar.is-compact .status-strip { width: auto; justify-content: flex-end; }

@@ -16,7 +16,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.2.5";
-const APP_RELEASE_DATE = "2026.10.25";
+const APP_RELEASE_DATE = "2026.10.27";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -2219,6 +2219,17 @@ async function openMyPostsManager() {
   switchTab("myPostsManager");
   await fetchMyPosts();
   renderMyPosts();
+}
+
+// 내 근무 상단 버튼 → 내 정보의 「나만의 편조 알림」 카드로 바로 간다.
+function openAvoidAlert() {
+  resetScheduleSelection(false);
+  state.guideFlow = null;
+  state.managingMyPosts = false;
+  renderFlowUi();
+  switchTab("profile");
+  renderAvoidBox();
+  document.getElementById("avoidPersonBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function openPremiumAlertManager() {
@@ -5878,6 +5889,7 @@ function bindEvents() {
   $("#openPremiumAlertManager")?.addEventListener("click", openPremiumAlertManager);
   $("#openProfilePro")?.addEventListener("click", openPremiumAlertManager);
   $("#openMainPro")?.addEventListener("click", openPremiumAlertManager);
+  $("#openAvoidAlert")?.addEventListener("click", openAvoidAlert);
   $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;
