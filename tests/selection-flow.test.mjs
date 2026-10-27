@@ -166,7 +166,7 @@ test("the usage guide describes the current guided swap flow", () => {
   assert.match(app, /4\. 요청과 의향 묻기/);
   assert.match(app, /8\. PRO 편의 기능/);
   assert.match(app, /스왑 등록·정식 요청 크레딧은 무제한/);
-  assert.match(app, /편조구성원 이름을 상호 수락 전에도 미리 확인/);
+  assert.match(app, /등록한 분과 같은 편조가 되는 스왑은 최종 확정 전에 알려드립니다/);
   assert.match(app, /실명·사번·연락처는 상호 수락 후에만 공개/);
 });
 
@@ -231,12 +231,13 @@ test("request cards disclose the counterpart's crew, and PRO sees it early", () 
   // 공개 정보는 전부 상대의 정보다. 받은 요청에서는 요청자(offered), 보낸 요청에서는
   // 글 작성자(post)의 편조여야 한다 — 예전에는 양쪽 다 글 작성자를 가리켰다.
   assert.match(app, /const otherCrew = isSent \? r\.postCrewPublic : r\.offeredCrewPublic/);
-  assert.match(app, /isPremiumUser\(\) \? "상대가 바꿀 날을 고르면 공개됩니다"/);
+  assert.match(app, /: "🔒 상호 수락 후 공개";/);
 
-  // 서버: PRO는 상호 수락 전에도 양쪽 편조를 본다.
+  // 서버: PRO 미리보기는 꺼 둔다(PRO_CREW_PREVIEW) — 켜면 상호 수락 전에도 양쪽 편조를 본다.
+  assert.match(worker, /const PRO_CREW_PREVIEW = false;/);
   assert.match(worker, /function offeredCrewPublicOf\(record, includeCrew\)/);
   assert.match(worker, /const includeCrew = viewerIsPro \|\| !!record\.postCrewPublic/);
-  assert.match(worker, /const viewerIsPro = await isPremiumAccount\(env, email\)/);
+  assert.match(worker, /const viewerIsPro = PRO_CREW_PREVIEW && await isPremiumAccount\(env, email\)/);
 
   // 공개 로스터에 편조 원문이 실려 나가면 무료 사용자에게도 동료 실명이 새어 나간다.
   assert.match(worker, /const \{ crewComposition, \.\.\.rest \} = entry \|\| \{\}/);

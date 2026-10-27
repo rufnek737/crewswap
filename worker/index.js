@@ -1094,6 +1094,9 @@ async function handleAvoidSet(request, env, authEmail) {
   return json({ ok: true, name });
 }
 
+// 편조구성원 미리보기(PRO)는 꺼 둔다 — 동료 실명은 누구에게나 상호 수락 후에만 공개(Kay, OPEN 70).
+const PRO_CREW_PREVIEW = false;
+
 /* ── posts-get ──────────────────────────────────────────────── */
 
 // PRO 구독 혜택: 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있다.
@@ -1102,7 +1105,7 @@ async function handleAvoidSet(request, env, authEmail) {
 async function handlePostsGet(request, env) {
   try {
     const auth = await authenticateRequest(request, env);
-    const viewerIsPro = auth ? await isPremiumAccount(env, auth.email) : false;
+    const viewerIsPro = PRO_CREW_PREVIEW && auth ? await isPremiumAccount(env, auth.email) : false;
     const idx = await getPostsIndex(env);
     // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
@@ -1958,7 +1961,7 @@ async function handleRequestsDelete(request, env, authEmail) {
 
 async function handleRequestsGet(request, env, authEmail) {
   const email = authEmail;
-  const viewerIsPro = await isPremiumAccount(env, email);
+  const viewerIsPro = PRO_CREW_PREVIEW && await isPremiumAccount(env, email);
 
   try {
     const idx = env.DB ? await listRequestsForEmail(env.DB, email) : await getRequestsIndex(env);
