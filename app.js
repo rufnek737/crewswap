@@ -3238,7 +3238,7 @@ function renderMatches() {
       ${matchPostDetailsHtml(post.offered)}
 
       ${gradeWarnHtml}
-      ${post.avoidBlocked ? `<div class="avoid-notice">🙅 <strong>그님에 등록된 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
+      ${post.avoidBlocked ? `<div class="avoid-notice">🔔 <strong>등록하신 분과 같은 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
 
       <div class="card-actions">
         ${post.status === "submitting"
@@ -4576,7 +4576,7 @@ function migrateSavedSearches(searches) {
   }).filter(s => s.keyword || s.types?.length || s.nights?.length);
   return { searches: next };
 }
-// PRO 「그님을 피하자」 — 한 명을 등록해 두면, 그분이 있는 비행을 받게 될 때 최종 단계 전에
+// PRO 「나만의 편조 알림」 — 한 명을 등록해 두면, 그분이 있는 비행을 받게 될 때 최종 단계 전에
 // 한 번 묻는다. 막지 않는다. 이름은 서버의 내 기록에만 있고 다른 사람에게는 보이지 않는다.
 let _avoidName = null;   // null = 아직 안 불러옴
 async function loadAvoidName() {
@@ -4593,8 +4593,8 @@ function renderAvoidBox() {
   if (!isPremiumUser()) { box.innerHTML = ""; return; }
   if (_avoidName === null) { box.innerHTML = ""; loadAvoidName(); return; }
   box.innerHTML = `
-    <strong>🙅 그님을 피하자 <span class="pro-badge">PRO</span></strong>
-    <p>그님을 등록하세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
+    <strong>🔔 나만의 편조 알림 <span class="pro-badge">PRO</span></strong>
+    <p>알림 받을 분 한 명을 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
     <div class="avoid-row">
       <input id="avoidNameInput" maxlength="20" placeholder="이름 (동명이인은 근무표 표기 그대로, 예: 김정민A)" value="${escapeHtml(_avoidName)}" />
       <button type="button" id="avoidSaveBtn" class="secondary-button">${_avoidName ? "변경" : "등록"}</button>
@@ -4608,7 +4608,7 @@ function renderAvoidBox() {
       if (!res.ok) { showToast(data.error || "저장하지 못했습니다."); return; }
       _avoidName = data.name || "";
       renderAvoidBox();
-      showToast(_avoidName ? "그님을 등록했습니다." : "그님 등록을 지웠습니다.");
+      showToast(_avoidName ? "등록했습니다." : "등록을 지웠습니다.");
       fetchPosts?.(); fetchRequests?.();
     } catch { showToast("저장 실패 — 네트워크 오류"); }
   };
@@ -4876,7 +4876,7 @@ function renderCompareCalendar(r) {
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
         ${req.aircraft ? `<span class="cmp-ac">✈ ${aircraftLabel(req.aircraft)}</span>` : ""}
-        ${(r.avoidDays || []).includes(d) ? `<span class="cmp-avoid" title="그님에 등록된 편조 비행">🙅</span>` : ""}
+        ${(r.avoidDays || []).includes(d) ? `<span class="cmp-avoid" title="등록하신 분과 같은 편조 비행">🔔</span>` : ""}
       </button>`;
     } else {
       const locked = lockedDays.has(d);
@@ -5046,14 +5046,14 @@ async function posterSelectDays(reqId) {
   fetchRequests();
 }
 
-// 그님을 피하자 — 최종 단계에서 서버가 「같은 비행에 그분이 있다」고 알려오면 한 번 묻고,
+// 나만의 편조 알림 — 최종 단계에서 서버가 「같은 비행에 그분이 있다」고 알려오면 한 번 묻고,
 // 사용자가 진행을 고르면 확인 표시(avoidAck)를 붙여 다시 보낸다. 막지는 않는다(Kay).
 async function postSwapStep(url, body) {
   const send = extra => apiFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, ...extra }) });
   let res = await send({});
   let data = await res.json().catch(() => ({}));
   if (res.status === 409 && data.code === "AVOID_PERSON") {
-    if (!confirm("🙅 그님에 등록된 편조 비행입니다. 진행할까요?")) return { res, data, canceled: true };
+    if (!confirm("🔔 등록하신 분과 같은 편조 비행입니다. 진행할까요?")) return { res, data, canceled: true };
     res = await send({ avoidAck: true });
     data = await res.json().catch(() => ({}));
   }
@@ -5425,8 +5425,8 @@ function requestCard(r) {
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
-      ${r.avoidBlocked ? `<div class="avoid-notice">🙅 <strong>그님에 등록된 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
-      ${Array.isArray(r.avoidDays) && r.avoidDays.length ? `<div class="avoid-notice">🙅 상대 일정 중 <strong>${r.avoidDays.map(d => `${d}일`).join(", ")}</strong>은 그님에 등록된 편조 비행입니다 — 고를 수는 있습니다.</div>` : ""}
+      ${r.avoidBlocked ? `<div class="avoid-notice">🔔 <strong>등록하신 분과 같은 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
+      ${Array.isArray(r.avoidDays) && r.avoidDays.length ? `<div class="avoid-notice">🔔 상대 일정 중 <strong>${r.avoidDays.map(d => `${d}일`).join(", ")}</strong>은 등록하신 분과 같은 편조 비행입니다 — 고를 수는 있습니다.</div>` : ""}
       ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 휴식시간 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
       ${isOpenPending
         ? `<div class="req-respond-buttons">

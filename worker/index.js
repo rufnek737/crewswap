@@ -1058,7 +1058,7 @@ async function notifyPremiumSubscribers(env, post) {
   if (changed) await savePremiumAlertIndex(env, records);
 }
 
-/* ── 그님을 피하자 (PRO) ──────────────────────────────────────
+/* ── 나만의 편조 알림 (PRO) ──────────────────────────────────────
    피할 이름은 avoid:<이메일> 에만 둔다. 응답에는 이름을 절대 싣지 않고, 걸리는지 여부만
    내려 보낸다. 무료 기간에는 모두 PRO 라 누구나 쓸 수 있다. */
 async function avoidNameOf(env, email) {
@@ -1107,7 +1107,7 @@ async function handlePostsGet(request, env) {
     // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
     // 보여주되 클라이언트에서 요청 버튼을 막는다.
-    // 그님을 피하자 — 내가 받게 될 근무(글 주인의 근무) 편조에 그 사람이 있으면 잠근다.
+    // 나만의 편조 알림 — 내가 받게 될 근무(글 주인의 근무) 편조에 그 사람이 있으면 잠근다.
     const avoidName = auth ? await avoidNameOf(env, auth.email) : '';
     const loadSchedules = scheduleLoader(env);
     const avoidBlockedIds = new Set();
@@ -1444,14 +1444,14 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
 
 /* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
 
-// 받게 될 근무 편조에 내 「그님」이 있는지. 막지는 않는다 — 본인에게 한 번 묻고, 진행은 본인이 고른다(Kay).
+// 받게 될 근무 편조에 내 등록한 분이 있는지. 막지는 않는다 — 본인에게 한 번 묻고, 진행은 본인이 고른다(Kay).
 async function avoidViolation(env, actorEmail, dutyOwnerEmail, keys) {
   const name = await avoidNameOf(env, actorEmail);
   if (!name) return false;
   const roster = (await env.POSTS.get(`schedule:${String(dutyOwnerEmail || '').toLowerCase()}`, { type: 'json' }))?.schedules || [];
   return dutyHasPerson(roster, keys, name);
 }
-const AVOID_RESPONSE = () => json({ error: '그님에 등록된 편조 비행입니다', code: 'AVOID_PERSON' }, 409);
+const AVOID_RESPONSE = () => json({ error: '등록하신 분과 같은 편조 비행입니다', code: 'AVOID_PERSON' }, 409);
 
 async function handleRequestsAccept(request, env, authEmail) {
   let id, email, realName, employeeId, phone, avoidAck;
@@ -1470,7 +1470,7 @@ async function handleRequestsAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
-    // 그님을 피하자 — 막지 않고 한 번 묻는다. 본인이 확인(avoidAck)하면 그대로 진행한다.
+    // 나만의 편조 알림 — 막지 않고 한 번 묻는다. 본인이 확인(avoidAck)하면 그대로 진행한다.
     if (!avoidAck && await avoidViolation(env, rec.toEmail, rec.fromEmail, dateKeysOf(rec.offered, rec.openRoster?.[0]?.month))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
       return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
@@ -1632,7 +1632,7 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
-    // 그님을 피하자 — 최종 단계에서 최신 근무표로 본다. 막지 않고 묻기만 한다.
+    // 나만의 편조 알림 — 최종 단계에서 최신 근무표로 본다. 막지 않고 묻기만 한다.
     if (!avoidAck && await avoidViolation(env, rec.fromEmail, rec.toEmail, dateKeysOf(post?.offered || rec.postOffered, post?.deadlineMonth))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
       return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
@@ -1987,7 +1987,7 @@ async function handleRequestsGet(request, env, authEmail) {
     };
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
     const forViewer = record => requestWithPrivateDaysRemoved(withPostCrew(withPostDetails(record)), viewerIsPro);
-    // 그님을 피하자 — 받게 될 근무의 편조에 그 사람이 있으면 표시만 한다(이름은 안 싣는다).
+    // 나만의 편조 알림 — 받게 될 근무의 편조에 그 사람이 있으면 표시만 한다(이름은 안 싣는다).
     const avoidName = await avoidNameOf(env, email);
     const loadSchedules = scheduleLoader(env);
     const withAvoid = async record => {

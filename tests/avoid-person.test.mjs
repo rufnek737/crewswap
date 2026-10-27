@@ -52,7 +52,7 @@ function api(path, body) {
 }
 
 
-// 그님을 피하자 (PRO) — 막지 않고 최종 단계 전에 한 번 묻는다. 이름은 응답에 실리지 않는다.
+// 나만의 편조 알림 (PRO) — 막지 않고 최종 단계 전에 한 번 묻는다. 이름은 응답에 실리지 않는다.
 
 const POSTER = 'poster@jejuair.net', REQUESTER = 'requester@jejuair.net';
 const postDuty = { id: 'POST-1', status: 'active', ownerEmail: POSTER, deadlineMonth: '2026-11',
@@ -74,7 +74,7 @@ test('이름은 입력한 그대로, 편조 문자열에서 이름만 뽑는다'
   assert.deepEqual(dateKeysOf({ days: [3], month: '2026-12' }), ['2026-12-03']);
 });
 
-test('글 목록: 그님이 있는 글은 표시만 하고 이름은 내려가지 않는다', async () => {
+test('글 목록: 등록한 분이 있는 글은 표시만 하고 이름은 내려가지 않는다', async () => {
   const env = baseEnv({ 'idx:posts': [postDuty], [`schedule:${POSTER}`]: posterSchedule, [`avoid:${REQUESTER}`]: { name: '강경태' } });
   const res = await authed(env, REQUESTER, '/api/posts-get');
   const text = await res.text();
@@ -86,7 +86,7 @@ test('글 목록: 그님이 있는 글은 표시만 하고 이름은 내려가�
   assert.equal(other.avoidBlocked, undefined);
 });
 
-test('최종 승인: 그님이 있으면 한 번 묻고(409), 확인하면 진행된다', async () => {
+test('최종 승인: 등록한 분이 있으면 한 번 묻고(409), 확인하면 진행된다', async () => {
   const rec = { id: 'REQ-9', postId: 'POST-1', fromEmail: REQUESTER, toEmail: POSTER, stage: 2, posterSelected: true,
     offered: { days: [21], dateKeys: ['2026-11-21'], type: 'OFF' }, openRoster: [{ month: '2026-11', day: 21, type: 'OFF' }] };
   const env = baseEnv({ 'post:POST-1': postDuty, 'req:REQ-9': rec, 'idx:requests': [rec], [`schedule:${POSTER}`]: posterSchedule, [`avoid:${REQUESTER}`]: { name: '강경태' } });
@@ -94,13 +94,13 @@ test('최종 승인: 그님이 있으면 한 번 묻고(409), 확인하면 진�
   assert.equal(first.status, 409);
   const body = await first.json();
   assert.equal(body.code, 'AVOID_PERSON');
-  assert.equal(body.error, '그님에 등록된 편조 비행입니다');
+  assert.equal(body.error, '등록하신 분과 같은 편조 비행입니다');
   const second = await authed(env, REQUESTER, '/api/requests-requester-accept', { id: 'REQ-9', avoidAck: true });
   assert.equal(second.status, 200);
   assert.equal((await env.POSTS.get('req:REQ-9', { type: 'json' })).stage, 3);
 });
 
-test('그님 등록·조회는 본인만, 삭제하면 사라진다', async () => {
+test('등록한 분 등록·조회는 본인만, 삭제하면 사라진다', async () => {
   const env = baseEnv({});
   assert.equal((await authed(env, REQUESTER, '/api/avoid-set', { name: '강경태' })).status, 200);
   assert.equal((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).name, '강경태');
