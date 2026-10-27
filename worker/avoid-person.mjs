@@ -1,4 +1,4 @@
-/* PRO 「나만의 편조 알림」 — 등록한 한 사람과 같은 비행을 하게 되는 스왑을 최종 단계 전에 알려준다.
+/* PRO 「나만의 편조 알림」 — 등록한 사람(최대 2명)과 같은 비행을 하게 되는 스왑을 최종 단계 전에 알려준다.
  * 막지는 않는다 — 진행할지는 본인이 고른다(2026-10-27 Kay).
  *
  * 누구를 피하고 싶은지는 아주 민감한 정보다. 이름은 `avoid:<이메일>` 에만 두고 응답·로그·
@@ -35,17 +35,26 @@ export function dateKeysOf(offered, fallbackMonth = '') {
   return month ? (offered?.days || []).map(d => `${month}-${String(d).padStart(2, '0')}`) : [];
 }
 
-// schedules: 근무 주인의 서버 근무표. 그 날짜들의 편조에 name 이 있으면 true.
-export function dutyHasPerson(schedules, keys, name) {
-  if (!name || !Array.isArray(schedules) || !keys?.length) return false;
+export const AVOID_MAX = 2;
+
+// 저장 기록 → 이름 목록. 예전 기록은 { name } 하나였다.
+export function avoidNamesOfRecord(rec) {
+  const list = Array.isArray(rec?.names) ? rec.names : rec?.name ? [rec.name] : [];
+  return list.map(normalizeAvoidName).filter(Boolean).slice(0, AVOID_MAX);
+}
+
+// schedules: 근무 주인의 서버 근무표. 그 날짜들의 편조에 names 중 누가 있으면 true.
+export function dutyHasPerson(schedules, keys, names) {
+  const list = [].concat(names || []).filter(Boolean);
+  if (!list.length || !Array.isArray(schedules) || !keys?.length) return false;
   const wanted = new Set(keys);
   return schedules.some(s => {
     const key = `${s?.month}-${String(s?.day).padStart(2, '0')}`;
-    return wanted.has(key) && crewNames(s?.crewComposition).includes(name);
+    return wanted.has(key) && crewNames(s?.crewComposition).some(n => list.includes(n));
   });
 }
 
 // 날짜별로 걸리는 날만 골라낸다(상대 공개 근무표에서 고를 수 없는 날 표시용).
-export function blockedKeys(schedules, keys, name) {
-  return (keys || []).filter(k => dutyHasPerson(schedules, [k], name));
+export function blockedKeys(schedules, keys, names) {
+  return (keys || []).filter(k => dutyHasPerson(schedules, [k], names));
 }

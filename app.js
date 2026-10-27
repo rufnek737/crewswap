@@ -4576,45 +4576,47 @@ function migrateSavedSearches(searches) {
   }).filter(s => s.keyword || s.types?.length || s.nights?.length);
   return { searches: next };
 }
-// PRO 「나만의 편조 알림」 — 한 명을 등록해 두면, 그분이 있는 비행을 받게 될 때 최종 단계 전에
+// PRO 「나만의 편조 알림」 — 최대 2명을 등록해 두면, 그분이 있는 비행을 받게 될 때 최종 단계 전에
 // 한 번 묻는다. 막지 않는다. 이름은 서버의 내 기록에만 있고 다른 사람에게는 보이지 않는다.
-let _avoidName = null;   // null = 아직 안 불러옴
+let _avoidNames = null;   // null = 아직 안 불러옴
 async function loadAvoidName() {
   if (!state.sessionToken) return;
   try {
     const res = await apiFetch(`${API_BASE}/api/avoid-get`);
     const data = await res.json().catch(() => ({}));
-    if (res.ok) { _avoidName = data.name || ""; renderAvoidBox(); }
+    if (res.ok) { _avoidNames = Array.isArray(data.names) ? data.names : []; renderAvoidBox(); }
   } catch {}
 }
 function renderAvoidBox() {
   const box = document.getElementById("avoidPersonBox");
   if (!box) return;
   if (!isPremiumUser()) { box.innerHTML = ""; return; }
-  if (_avoidName === null) { box.innerHTML = ""; loadAvoidName(); return; }
+  if (_avoidNames === null) { box.innerHTML = ""; loadAvoidName(); return; }
+  const input = i => `<input class="avoid-name-input" maxlength="20" placeholder="이름 ${i + 1} (동명이인은 근무표 표기 그대로, 예: 김정민A)" value="${escapeHtml(_avoidNames[i] || "")}" />`;
   box.innerHTML = `
     <strong>🔔 나만의 편조 알림 <span class="pro-badge">PRO</span></strong>
-    <p>알림 받을 분 한 명을 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
-    <div class="avoid-row">
-      <input id="avoidNameInput" maxlength="20" placeholder="이름 (동명이인은 근무표 표기 그대로, 예: 김정민A)" value="${escapeHtml(_avoidName)}" />
-      <button type="button" id="avoidSaveBtn" class="secondary-button">${_avoidName ? "변경" : "등록"}</button>
-      ${_avoidName ? `<button type="button" id="avoidClearBtn" class="secondary-button">삭제</button>` : ""}
+    <p>알림 받을 분을 최대 2명까지 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
+    <div class="avoid-row">${input(0)}</div>
+    <div class="avoid-row">${input(1)}
+      <button type="button" id="avoidSaveBtn" class="secondary-button">${_avoidNames.length ? "변경" : "등록"}</button>
+      ${_avoidNames.length ? `<button type="button" id="avoidClearBtn" class="secondary-button">삭제</button>` : ""}
     </div>
-    <small>등록한 이름은 나에게만 보이며, 상대방에게는 어떤 알림도 가지 않습니다. 1명까지 등록할 수 있습니다.</small>`;
-  const save = async name => {
+    <small>등록한 이름은 나에게만 보이며, 상대방에게는 어떤 알림도 가지 않습니다. 2명까지 등록할 수 있습니다.</small>`;
+  const save = async names => {
     try {
-      const res = await apiFetch(`${API_BASE}/api/avoid-set`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+      const res = await apiFetch(`${API_BASE}/api/avoid-set`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ names }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showToast(data.error || "저장하지 못했습니다."); return; }
-      _avoidName = data.name || "";
+      _avoidNames = Array.isArray(data.names) ? data.names : [];
       renderAvoidBox();
-      showToast(_avoidName ? "등록했습니다." : "등록을 지웠습니다.");
+      showToast(_avoidNames.length ? "등록했습니다." : "등록을 지웠습니다.");
       fetchPosts?.(); fetchRequests?.();
     } catch { showToast("저장 실패 — 네트워크 오류"); }
   };
-  document.getElementById("avoidSaveBtn").onclick = () => save(document.getElementById("avoidNameInput").value);
+  document.getElementById("avoidSaveBtn").onclick = () =>
+    save([...box.querySelectorAll(".avoid-name-input")].map(el => el.value.trim()).filter(Boolean));
   const clear = document.getElementById("avoidClearBtn");
-  if (clear) clear.onclick = () => save("");
+  if (clear) clear.onclick = () => save([]);
 }
 
 function renderSavedSearches() {

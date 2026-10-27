@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import rawWorker, { issueSessionToken } from '../worker/index.js';
-import { normalizeAvoidName, crewNames, dutyHasPerson, dateKeysOf } from '../worker/avoid-person.mjs';
+import { avoidNamesOfRecord, normalizeAvoidName, crewNames, dutyHasPerson, dateKeysOf } from '../worker/avoid-person.mjs';
 
 const TEST_AUTH_SECRET = 'test-auth-secret-at-least-32-characters';
 const worker = {
@@ -71,6 +71,8 @@ test('이름은 입력한 그대로, 편조 문자열에서 이름만 뽑는다'
   assert.deepEqual(crewNames('김제주(Capt), 이운항(FO), 김정민A(PUR)'), ['김제주', '이운항', '김정민A']);
   assert.equal(dutyHasPerson(posterSchedule.schedules, ['2026-11-20'], '강경태'), true);
   assert.equal(dutyHasPerson(posterSchedule.schedules, ['2026-11-21'], '강경태'), false);
+  assert.equal(dutyHasPerson(posterSchedule.schedules, ['2026-11-20'], ['홍길동', '김애경']), true, '2명 중 한 명만 있어도 알린다');
+  assert.deepEqual(avoidNamesOfRecord({ name: '강경태' }), ['강경태'], '예전 1명 기록도 읽는다');
   assert.deepEqual(dateKeysOf({ days: [3], month: '2026-12' }), ['2026-12-03']);
 });
 
@@ -100,8 +102,15 @@ test('최종 승인: 등록한 분이 있으면 한 번 묻고(409), 확인하�
   assert.equal((await env.POSTS.get('req:REQ-9', { type: 'json' })).stage, 3);
 });
 
-test('등록한 분 등록·조회는 본인만, 삭제하면 사라진다', async () => {
+test('등록은 최대 2명, 조회는 본인만, 삭제하면 사라진다', async () => {
   const env = baseEnv({});
+  assert.equal((await authed(env, REQUESTER, '/api/avoid-set', { names: ['강경태', '김애경'] })).status, 200);
+  assert.deepEqual((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).names, ['강경태', '김애경']);
+  assert.equal((await authed(env, REQUESTER, '/api/avoid-set', { names: ['가나', '다라', '마바'] })).status, 400);
+  assert.deepEqual((await (await authed(env, POSTER, '/api/avoid-get')).json()).names, []);
+  await authed(env, REQUESTER, '/api/avoid-set', { names: [] });
+  assert.deepEqual((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).names, []);
+});
   assert.equal((await authed(env, REQUESTER, '/api/avoid-set', { name: '강경태' })).status, 200);
   assert.equal((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).name, '강경태');
   assert.equal((await (await authed(env, POSTER, '/api/avoid-get')).json()).name, '');

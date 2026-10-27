@@ -21,7 +21,7 @@ import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-e
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
 import { fcmConfigured, sendFcmNotification } from './fcm.mjs';
-import { AVOID_KEY, normalizeAvoidName, dateKeysOf, dutyHasPerson, blockedKeys } from './avoid-person.mjs';
+import { AVOID_KEY, AVOID_MAX, avoidNamesOfRecord, normalizeAvoidName, dateKeysOf, dutyHasPerson, blockedKeys } from './avoid-person.mjs';
 import {
   CREWSWAP_BUNDLE_ID,
   CREWSWAP_PRO_PRODUCT_ID,
@@ -1061,11 +1061,11 @@ async function notifyPremiumSubscribers(env, post) {
 /* ── 나만의 편조 알림 (PRO) ──────────────────────────────────────
    피할 이름은 avoid:<이메일> 에만 둔다. 응답에는 이름을 절대 싣지 않고, 걸리는지 여부만
    내려 보낸다. 무료 기간에는 모두 PRO 라 누구나 쓸 수 있다. */
-async function avoidNameOf(env, email) {
-  if (!email) return '';
-  const rec = await env.POSTS.get(AVOID_KEY(email), { type: 'json' });
-  if (!rec?.name) return '';
-  return await isPremiumAccount(env, email) ? rec.name : '';
+async function avoidNamesOf(env, email) {
+  if (!email) return [];
+  const names = avoidNamesOfRecord(await env.POSTS.get(AVOID_KEY(email), { type: 'json' }));
+  if (!names.length) return [];
+  return await isPremiumAccount(env, email) ? names : [];
 }
 
 function scheduleLoader(env) {
@@ -1079,19 +1079,20 @@ function scheduleLoader(env) {
 
 async function handleAvoidGet(env, authEmail) {
   const rec = await env.POSTS.get(AVOID_KEY(authEmail), { type: 'json' });
-  return json({ ok: true, name: rec?.name || '' });   // 본인에게만 본인 목록을 돌려준다
+  return json({ ok: true, names: avoidNamesOfRecord(rec) });   // 본인에게만 본인 목록을 돌려준다
 }
 
 async function handleAvoidSet(request, env, authEmail) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!(await isPremiumAccount(env, authEmail))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
-  const raw = String(body?.name || '').trim();
-  if (!raw) { await env.POSTS.delete(AVOID_KEY(authEmail)); return json({ ok: true, name: '' }); }
-  const name = normalizeAvoidName(raw);
-  if (!name) return json({ error: '이름은 한글·영문 2~20자로 입력해 주세요 (동명이인 구분 글자 포함)' }, 400);
-  await env.POSTS.put(AVOID_KEY(authEmail), JSON.stringify({ name, updatedAt: new Date().toISOString() }));
-  return json({ ok: true, name });
+  const raw = (Array.isArray(body?.names) ? body.names : []).map(v => String(v || '').trim()).filter(Boolean);
+  if (raw.length > AVOID_MAX) return json({ error: `최대 ${AVOID_MAX}명까지 등록할 수 있습니다` }, 400);
+  if (!raw.length) { await env.POSTS.delete(AVOID_KEY(authEmail)); return json({ ok: true, names: [] }); }
+  const names = [...new Set(raw.map(normalizeAvoidName))];
+  if (names.some(n => !n)) return json({ error: '이름은 한글·영문 2~20자로 입력해 주세요 (동명이인 구분 글자 포함)' }, 400);
+  await env.POSTS.put(AVOID_KEY(authEmail), JSON.stringify({ names, updatedAt: new Date().toISOString() }));
+  return json({ ok: true, names });
 }
 
 /* ── posts-get ──────────────────────────────────────────────── */
@@ -1105,12 +1106,12 @@ async function handlePostsGet(request, env) {
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
     // 보여주되 클라이언트에서 요청 버튼을 막는다.
     // 나만의 편조 알림 — 내가 받게 될 근무(글 주인의 근무) 편조에 그 사람이 있으면 잠근다.
-    const avoidName = auth ? await avoidNameOf(env, auth.email) : '';
+    const avoidNames = auth ? await avoidNamesOf(env, auth.email) : [];
     const loadSchedules = scheduleLoader(env);
     const avoidBlockedIds = new Set();
-    if (avoidName) {
+    if (avoidNames.length) {
       await Promise.all(idx.filter(p => p && p.ownerEmail && (p.status === 'active' || p.status === 'submitting')).map(async p => {
-        if (dutyHasPerson(await loadSchedules(p.ownerEmail), dateKeysOf(p.offered, p.deadlineMonth), avoidName)) avoidBlockedIds.add(p.id);
+        if (dutyHasPerson(await loadSchedules(p.ownerEmail), dateKeysOf(p.offered, p.deadlineMonth), avoidNames)) avoidBlockedIds.add(p.id);
       }));
     }
     const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting')).map(p => {
@@ -1441,10 +1442,10 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
 
 // 받게 될 근무 편조에 내 등록한 분이 있는지. 막지는 않는다 — 본인에게 한 번 묻고, 진행은 본인이 고른다(Kay).
 async function avoidViolation(env, actorEmail, dutyOwnerEmail, keys) {
-  const name = await avoidNameOf(env, actorEmail);
-  if (!name) return false;
+  const names = await avoidNamesOf(env, actorEmail);
+  if (!names.length) return false;
   const roster = (await env.POSTS.get(`schedule:${String(dutyOwnerEmail || '').toLowerCase()}`, { type: 'json' }))?.schedules || [];
-  return dutyHasPerson(roster, keys, name);
+  return dutyHasPerson(roster, keys, names);
 }
 const AVOID_RESPONSE = () => json({ error: '등록하신 분과 같은 편조 비행입니다', code: 'AVOID_PERSON' }, 409);
 
@@ -1973,24 +1974,24 @@ async function handleRequestsGet(request, env, authEmail) {
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
     const forViewer = record => requestWithPrivateDaysRemoved(withPostDetails(record));
     // 나만의 편조 알림 — 받게 될 근무의 편조에 그 사람이 있으면 표시만 한다(이름은 안 싣는다).
-    const avoidName = await avoidNameOf(env, email);
+    const avoidNames = await avoidNamesOf(env, email);
     const loadSchedules = scheduleLoader(env);
     const withAvoid = async record => {
-      if (!avoidName || record.declined) return record;
+      if (!avoidNames.length || record.declined) return record;
       if (record.fromEmail === email) {
         // 내가 보낸 요청 — 내가 받는 건 글 주인의 근무
         const post = postById.get(record.postId) || await env.POSTS.get(`post:${record.postId}`, { type: 'json' });
         const keys = dateKeysOf(post?.offered || record.postOffered, post?.deadlineMonth);
-        return dutyHasPerson(await loadSchedules(record.toEmail), keys, avoidName) ? { ...record, avoidBlocked: true } : record;
+        return dutyHasPerson(await loadSchedules(record.toEmail), keys, avoidNames) ? { ...record, avoidBlocked: true } : record;
       }
       // 받은 요청 — 내가 받는 건 요청자의 근무
       const roster = await loadSchedules(record.fromEmail);
       if (record.offered) {
-        return dutyHasPerson(roster, dateKeysOf(record.offered, record.openRoster?.[0]?.month), avoidName) ? { ...record, avoidBlocked: true } : record;
+        return dutyHasPerson(roster, dateKeysOf(record.offered, record.openRoster?.[0]?.month), avoidNames) ? { ...record, avoidBlocked: true } : record;
       }
       if (Array.isArray(record.openRoster) && record.openRoster.length) {
         const keys = record.openRoster.map(x => `${x.month}-${String(x.day).padStart(2, '0')}`);
-        const days = blockedKeys(roster, keys, avoidName).map(k => Number(k.slice(8)));
+        const days = blockedKeys(roster, keys, avoidNames).map(k => Number(k.slice(8)));
         return days.length ? { ...record, avoidDays: days } : record;
       }
       return record;
