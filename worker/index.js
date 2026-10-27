@@ -21,6 +21,7 @@ import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-e
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
 import { fcmConfigured, sendFcmNotification } from './fcm.mjs';
+import { AVOID_KEY, normalizeAvoidName, dateKeysOf, dutyHasPerson, blockedKeys } from './avoid-person.mjs';
 import {
   CREWSWAP_BUNDLE_ID,
   CREWSWAP_PRO_PRODUCT_ID,
@@ -415,6 +416,7 @@ async function handleUserDelete(request, env, authEmail) {
       env.POSTS.delete(`user:${email}`),
       env.POSTS.delete(`wallet:${email}`),
       env.POSTS.delete(`schedule:${email}`),
+      env.POSTS.delete(AVOID_KEY(email)),
       ...(user?.proPurchase?.originalTransactionId
         ? [
             env.POSTS.delete(`iap:apple:${user.proPurchase.originalTransactionId}`),
@@ -1056,6 +1058,42 @@ async function notifyPremiumSubscribers(env, post) {
   if (changed) await savePremiumAlertIndex(env, records);
 }
 
+/* ── 그님을 피하자 (PRO) ──────────────────────────────────────
+   피할 이름은 avoid:<이메일> 에만 둔다. 응답에는 이름을 절대 싣지 않고, 걸리는지 여부만
+   내려 보낸다. 무료 기간에는 모두 PRO 라 누구나 쓸 수 있다. */
+async function avoidNameOf(env, email) {
+  if (!email) return '';
+  const rec = await env.POSTS.get(AVOID_KEY(email), { type: 'json' });
+  if (!rec?.name) return '';
+  return await isPremiumAccount(env, email) ? rec.name : '';
+}
+
+function scheduleLoader(env) {
+  const cache = new Map();
+  return email => {
+    const key = String(email || '').toLowerCase();
+    if (!cache.has(key)) cache.set(key, env.POSTS.get(`schedule:${key}`, { type: 'json' }).then(r => r?.schedules || []).catch(() => []));
+    return cache.get(key);
+  };
+}
+
+async function handleAvoidGet(env, authEmail) {
+  const rec = await env.POSTS.get(AVOID_KEY(authEmail), { type: 'json' });
+  return json({ ok: true, name: rec?.name || '' });   // 본인에게만 본인 목록을 돌려준다
+}
+
+async function handleAvoidSet(request, env, authEmail) {
+  let body;
+  try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
+  if (!(await isPremiumAccount(env, authEmail))) return json({ error: 'PRO 전용 기능입니다', code: 'PREMIUM_REQUIRED' }, 403);
+  const raw = String(body?.name || '').trim();
+  if (!raw) { await env.POSTS.delete(AVOID_KEY(authEmail)); return json({ ok: true, name: '' }); }
+  const name = normalizeAvoidName(raw);
+  if (!name) return json({ error: '이름은 한글·영문 2~20자로 입력해 주세요 (동명이인 구분 글자 포함)' }, 400);
+  await env.POSTS.put(AVOID_KEY(authEmail), JSON.stringify({ name, updatedAt: new Date().toISOString() }));
+  return json({ ok: true, name });
+}
+
 /* ── posts-get ──────────────────────────────────────────────── */
 
 // PRO 구독 혜택: 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있다.
@@ -1069,10 +1107,20 @@ async function handlePostsGet(request, env) {
     // 상호 수락돼 상신을 기다리는 글('submitting')도 함께 내려준다. 목록에서 사라지면
     // 왜 없어졌는지 알 수 없어 중복 요청을 반복하게 되므로, 진행 중이라는 사실을
     // 보여주되 클라이언트에서 요청 버튼을 막는다.
+    // 그님을 피하자 — 내가 받게 될 근무(글 주인의 근무) 편조에 그 사람이 있으면 잠근다.
+    const avoidName = auth ? await avoidNameOf(env, auth.email) : '';
+    const loadSchedules = scheduleLoader(env);
+    const avoidBlockedIds = new Set();
+    if (avoidName) {
+      await Promise.all(idx.filter(p => p && p.ownerEmail && (p.status === 'active' || p.status === 'submitting')).map(async p => {
+        if (dutyHasPerson(await loadSchedules(p.ownerEmail), dateKeysOf(p.offered, p.deadlineMonth), avoidName)) avoidBlockedIds.add(p.id);
+      }));
+    }
     const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting')).map(p => {
       const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
+      if (avoidBlockedIds.has(p.id)) pub.avoidBlocked = true;
       if (pub.offered && !viewerIsPro) {
         const { crewPublic, ...offeredPublic } = pub.offered;
         pub.offered = offeredPublic;
@@ -1396,9 +1444,18 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
 
 /* ── requests-accept (받은 요청 상호 수락) ───────────────────── */
 
+// 받게 될 근무 편조에 내 「그님」이 있는지. 막지는 않는다 — 본인에게 한 번 묻고, 진행은 본인이 고른다(Kay).
+async function avoidViolation(env, actorEmail, dutyOwnerEmail, keys) {
+  const name = await avoidNameOf(env, actorEmail);
+  if (!name) return false;
+  const roster = (await env.POSTS.get(`schedule:${String(dutyOwnerEmail || '').toLowerCase()}`, { type: 'json' }))?.schedules || [];
+  return dutyHasPerson(roster, keys, name);
+}
+const AVOID_RESPONSE = () => json({ error: '그님에 등록된 편조 비행입니다', code: 'AVOID_PERSON' }, 409);
+
 async function handleRequestsAccept(request, env, authEmail) {
-  let id, email, realName, employeeId, phone;
-  try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, realName, employeeId, phone, avoidAck;
+  try { ({ id, email, realName, employeeId, phone, avoidAck } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
@@ -1413,6 +1470,8 @@ async function handleRequestsAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    // 그님을 피하자 — 막지 않고 한 번 묻는다. 본인이 확인(avoidAck)하면 그대로 진행한다.
+    if (!avoidAck && await avoidViolation(env, rec.toEmail, rec.fromEmail, dateKeysOf(rec.offered, rec.openRoster?.[0]?.month))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
       return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
     rec.stage = 3;
@@ -1517,8 +1576,8 @@ function cabinRestViolationResponse(violation) {
 }
 
 async function handleRequestsPosterSelect(request, env, authEmail) {
-  let id, email, offered, realName, employeeId, phone;
-  try { ({ id, email, offered, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, offered, realName, employeeId, phone, avoidAck;
+  try { ({ id, email, offered, realName, employeeId, phone, avoidAck } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   if (!offered || !Array.isArray(offered.days) || !offered.days.length) return json({ error: '바꿀 날을 선택해주세요' }, 400);
@@ -1538,6 +1597,7 @@ async function handleRequestsPosterSelect(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    if (!avoidAck && await avoidViolation(env, rec.toEmail, rec.fromEmail, dateKeysOf(offered, rec.openRoster?.[0]?.month))) return AVOID_RESPONSE();
     rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
     rec.stage = 2;
     rec.status = '요청자 최종 승인 대기';
@@ -1556,8 +1616,8 @@ async function handleRequestsPosterSelect(request, env, authEmail) {
 /* ── requests-requester-accept (요청자가 글작성자의 날짜 선택을 최종 승인) ── */
 
 async function handleRequestsRequesterAccept(request, env, authEmail) {
-  let id, email, realName, employeeId, phone;
-  try { ({ id, email, realName, employeeId, phone } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+  let id, email, realName, employeeId, phone, avoidAck;
+  try { ({ id, email, realName, employeeId, phone, avoidAck } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   email = authEmail;
   if (!id || !email) return json({ error: '필수 필드 누락' }, 400);
   try {
@@ -1572,6 +1632,8 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    // 그님을 피하자 — 최종 단계에서 최신 근무표로 본다. 막지 않고 묻기만 한다.
+    if (!avoidAck && await avoidViolation(env, rec.fromEmail, rec.toEmail, dateKeysOf(post?.offered || rec.postOffered, post?.deadlineMonth))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
       return json({ error: '이미 다른 요청과 성사되었거나 종료된 글입니다' }, 409);
     rec.stage = 3;
@@ -1925,8 +1987,31 @@ async function handleRequestsGet(request, env, authEmail) {
     };
     // 예전 요청에 공개 목록과 비공개 날짜가 함께 저장됐어도 조회할 때 즉시 가린다.
     const forViewer = record => requestWithPrivateDaysRemoved(withPostCrew(withPostDetails(record)), viewerIsPro);
-    const sent = idx.filter(r => r.fromEmail === email).map(forViewer);
-    const received = idx.filter(r => r.toEmail === email).map(forViewer);
+    // 그님을 피하자 — 받게 될 근무의 편조에 그 사람이 있으면 표시만 한다(이름은 안 싣는다).
+    const avoidName = await avoidNameOf(env, email);
+    const loadSchedules = scheduleLoader(env);
+    const withAvoid = async record => {
+      if (!avoidName || record.declined) return record;
+      if (record.fromEmail === email) {
+        // 내가 보낸 요청 — 내가 받는 건 글 주인의 근무
+        const post = postById.get(record.postId) || await env.POSTS.get(`post:${record.postId}`, { type: 'json' });
+        const keys = dateKeysOf(post?.offered || record.postOffered, post?.deadlineMonth);
+        return dutyHasPerson(await loadSchedules(record.toEmail), keys, avoidName) ? { ...record, avoidBlocked: true } : record;
+      }
+      // 받은 요청 — 내가 받는 건 요청자의 근무
+      const roster = await loadSchedules(record.fromEmail);
+      if (record.offered) {
+        return dutyHasPerson(roster, dateKeysOf(record.offered, record.openRoster?.[0]?.month), avoidName) ? { ...record, avoidBlocked: true } : record;
+      }
+      if (Array.isArray(record.openRoster) && record.openRoster.length) {
+        const keys = record.openRoster.map(x => `${x.month}-${String(x.day).padStart(2, '0')}`);
+        const days = blockedKeys(roster, keys, avoidName).map(k => Number(k.slice(8)));
+        return days.length ? { ...record, avoidDays: days } : record;
+      }
+      return record;
+    };
+    const sent = await Promise.all(idx.filter(r => r.fromEmail === email).map(forViewer).map(withAvoid));
+    const received = await Promise.all(idx.filter(r => r.toEmail === email).map(forViewer).map(withAvoid));
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }
@@ -2536,6 +2621,8 @@ export default {
       else if (path === '/api/coupon-purchase-verify') response = await handleCouponPurchaseVerify(request, env, auth.email);
       else if (path === '/api/premium-alert-sync') response = await handlePremiumAlertSync(request, env, auth.email, allowSandboxPro);
       else if (path === '/api/premium-alert-test') response = await handlePremiumAlertTest(env, auth.email, allowSandboxPro);
+      else if (path === '/api/avoid-get') response = await handleAvoidGet(env, auth.email);
+      else if (path === '/api/avoid-set') response = await handleAvoidSet(request, env, auth.email);
       else if (path === '/api/crewconnex') response = await handleCrewConnex(request, env);
       else response = new Response('Not Found', { status: 404 });
     } catch (error) {

@@ -3238,6 +3238,7 @@ function renderMatches() {
       ${matchPostDetailsHtml(post.offered)}
 
       ${gradeWarnHtml}
+      ${post.avoidBlocked ? `<div class="avoid-notice">🙅 <strong>그님에 등록된 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
 
       <div class="card-actions">
         ${post.status === "submitting"
@@ -4575,9 +4576,51 @@ function migrateSavedSearches(searches) {
   }).filter(s => s.keyword || s.types?.length || s.nights?.length);
   return { searches: next };
 }
+// PRO 「그님을 피하자」 — 한 명을 등록해 두면, 그분이 있는 비행을 받게 될 때 최종 단계 전에
+// 한 번 묻는다. 막지 않는다. 이름은 서버의 내 기록에만 있고 다른 사람에게는 보이지 않는다.
+let _avoidName = null;   // null = 아직 안 불러옴
+async function loadAvoidName() {
+  if (!state.sessionToken) return;
+  try {
+    const res = await apiFetch(`${API_BASE}/api/avoid-get`);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) { _avoidName = data.name || ""; renderAvoidBox(); }
+  } catch {}
+}
+function renderAvoidBox() {
+  const box = document.getElementById("avoidPersonBox");
+  if (!box) return;
+  if (!isPremiumUser()) { box.innerHTML = ""; return; }
+  if (_avoidName === null) { box.innerHTML = ""; loadAvoidName(); return; }
+  box.innerHTML = `
+    <strong>🙅 그님을 피하자 <span class="pro-badge">PRO</span></strong>
+    <p>그님을 등록하세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
+    <div class="avoid-row">
+      <input id="avoidNameInput" maxlength="20" placeholder="이름 (동명이인은 근무표 표기 그대로, 예: 김정민A)" value="${escapeHtml(_avoidName)}" />
+      <button type="button" id="avoidSaveBtn" class="secondary-button">${_avoidName ? "변경" : "등록"}</button>
+      ${_avoidName ? `<button type="button" id="avoidClearBtn" class="secondary-button">삭제</button>` : ""}
+    </div>
+    <small>등록한 이름은 나에게만 보이며, 상대방에게는 어떤 알림도 가지 않습니다. 1명까지 등록할 수 있습니다.</small>`;
+  const save = async name => {
+    try {
+      const res = await apiFetch(`${API_BASE}/api/avoid-set`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || "저장하지 못했습니다."); return; }
+      _avoidName = data.name || "";
+      renderAvoidBox();
+      showToast(_avoidName ? "그님을 등록했습니다." : "그님 등록을 지웠습니다.");
+      fetchPosts?.(); fetchRequests?.();
+    } catch { showToast("저장 실패 — 네트워크 오류"); }
+  };
+  document.getElementById("avoidSaveBtn").onclick = () => save(document.getElementById("avoidNameInput").value);
+  const clear = document.getElementById("avoidClearBtn");
+  if (clear) clear.onclick = () => save("");
+}
+
 function renderSavedSearches() {
   const listEl = document.getElementById("savedList");
   if (!listEl) return;
+  renderAvoidBox();
   const searches = state.savedSearches || [];
   const premium = isPremiumUser();
   const nativeApp = isNativeCrewSwapApp();
@@ -4833,6 +4876,7 @@ function renderCompareCalendar(r) {
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
         ${req.aircraft ? `<span class="cmp-ac">✈ ${aircraftLabel(req.aircraft)}</span>` : ""}
+        ${(r.avoidDays || []).includes(d) ? `<span class="cmp-avoid" title="그님에 등록된 편조 비행">🙅</span>` : ""}
       </button>`;
     } else {
       const locked = lockedDays.has(d);
@@ -4992,16 +5036,28 @@ async function posterSelectDays(reqId) {
   if (!offered) { showToast("바꿀 날을 하나 이상 선택하세요."); return; }
   if (msg) { showToast("휴식 기준 위반 — 다른 날을 선택하세요."); return; }
   try {
-    const res = await apiFetch(`${API_BASE}/api/requests-poster-select`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email, offered, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data, canceled } = await postSwapStep(`${API_BASE}/api/requests-poster-select`,
+      { id: reqId, email: state.user.email, offered, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" });
+    if (canceled) return;
     if (!res.ok) { showToast(data.error || "확정 실패 — 다시 시도해주세요."); return; }
   } catch (e) { showToast("확정 실패 — 네트워크 오류"); return; }
   delete _posterPick[reqId];
   showToast("선택한 일정으로 최종 승인을 요청했습니다.");
   fetchRequests();
+}
+
+// 그님을 피하자 — 최종 단계에서 서버가 「같은 비행에 그분이 있다」고 알려오면 한 번 묻고,
+// 사용자가 진행을 고르면 확인 표시(avoidAck)를 붙여 다시 보낸다. 막지는 않는다(Kay).
+async function postSwapStep(url, body) {
+  const send = extra => apiFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, ...extra }) });
+  let res = await send({});
+  let data = await res.json().catch(() => ({}));
+  if (res.status === 409 && data.code === "AVOID_PERSON") {
+    if (!confirm("🙅 그님에 등록된 편조 비행입니다. 진행할까요?")) return { res, data, canceled: true };
+    res = await send({ avoidAck: true });
+    data = await res.json().catch(() => ({}));
+  }
+  return { res, data };
 }
 
 async function approvePosterSelection(reqId) {
@@ -5010,14 +5066,11 @@ async function approvePosterSelection(reqId) {
   if (!confirmScheduleStillMine(offeredText(r?.offered), r?.postTitle, r?.postTitle)) return;
   if (!confirm("상대가 선택한 일정으로 스왑을 최종 승인할까요? 승인 후 서로의 연락처가 공개됩니다.")) return;
   try {
-    const res = await apiFetch(`${API_BASE}/api/requests-requester-accept`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: reqId, email: state.user.email,
-        realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "",
-      }),
+    const { res, data, canceled } = await postSwapStep(`${API_BASE}/api/requests-requester-accept`, {
+      id: reqId, email: state.user.email,
+      realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "",
     });
-    const data = await res.json().catch(() => ({}));
+    if (canceled) return;
     if (!res.ok) { showToast(data.error || "최종 승인 실패 — 다시 시도해주세요."); return; }
   } catch (e) { showToast("최종 승인 실패 — 네트워크 오류"); return; }
   recordSwapMatch();
@@ -5372,6 +5425,8 @@ function requestCard(r) {
       })() : `
         <p class="hint">실제 SWAP 가능 여부는 상호 수락 후 회사 J-CREW 시스템 신청을 통해 최종 확정됩니다.</p>
       `}
+      ${r.avoidBlocked ? `<div class="avoid-notice">🙅 <strong>그님에 등록된 편조 비행입니다</strong> — 진행은 가능하고, 최종 단계에서 한 번 더 확인합니다.</div>` : ""}
+      ${Array.isArray(r.avoidDays) && r.avoidDays.length ? `<div class="avoid-notice">🙅 상대 일정 중 <strong>${r.avoidDays.map(d => `${d}일`).join(", ")}</strong>은 그님에 등록된 편조 비행입니다 — 고를 수는 있습니다.</div>` : ""}
       ${restMsgReceived ? `<div class="notice" style="margin-top:10px;border-color:#e53e3e;background:#fff5f5;color:#c53030;">${restMsgReceived}<br><small>수락 시 휴식시간 기준 위반 — 회사 신청이 반려될 수 있습니다.</small></div>` : ""}
       ${isOpenPending
         ? `<div class="req-respond-buttons">
@@ -5451,12 +5506,9 @@ async function acceptRequest(reqId) {
   const consent = window.CrewSwapUsage?.canConsent(state.user.crewType, state.user, currentRules());
   if (consent && !consent.ok) { showToast(consent.reason); return; }
   try {
-    const res = await apiFetch(`${API_BASE}/api/requests-accept`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data, canceled } = await postSwapStep(`${API_BASE}/api/requests-accept`,
+      { id: reqId, email: state.user.email, realName: state.user.realName || "", employeeId: state.user.employeeId || "", phone: state.user.phone || "" });
+    if (canceled) return;
     if (!res.ok) { showToast(data.error || "수락 실패 — 다시 시도해주세요."); return; }
   } catch (e) { showToast("수락 실패 — 네트워크 오류"); return; }
   recordSwapMatch();
