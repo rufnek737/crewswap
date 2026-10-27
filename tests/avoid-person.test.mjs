@@ -111,9 +111,3 @@ test('등록은 최대 2명, 조회는 본인만, 삭제하면 사라진다', as
   await authed(env, REQUESTER, '/api/avoid-set', { names: [] });
   assert.deepEqual((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).names, []);
 });
-  assert.equal((await authed(env, REQUESTER, '/api/avoid-set', { name: '강경태' })).status, 200);
-  assert.equal((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).name, '강경태');
-  assert.equal((await (await authed(env, POSTER, '/api/avoid-get')).json()).name, '');
-  await authed(env, REQUESTER, '/api/avoid-set', { name: '' });
-  assert.equal((await (await authed(env, REQUESTER, '/api/avoid-get')).json()).name, '');
-});
