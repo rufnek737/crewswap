@@ -1378,5 +1378,3 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 .avoid-box small { color: var(--muted); font-size: 11.5px; }
 .avoid-row { display: flex; gap: 8px; }
 .avoid-row input { flex: 1; min-width: 0; }
-
-.avoid-box:empty { display: none; }
