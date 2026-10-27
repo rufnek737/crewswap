@@ -4591,7 +4591,7 @@ function renderAvoidBox() {
   const box = document.getElementById("avoidPersonBox");
   if (!box) return;
   if (_avoidNames === null) { box.innerHTML = ""; loadAvoidName(); return; }
-  const input = i => `<input class="avoid-name-input" maxlength="20" placeholder="이름 ${i + 1} (동명이인은 근무표 표기 그대로, 예: 김정민A)" value="${escapeHtml(_avoidNames[i] || "")}" />`;
+  const input = i => `<input class="avoid-name-input" maxlength="20" placeholder="이름 ${i + 1} (동명이인은 근무표 표기 그대로, 예: 김제주)" value="${escapeHtml(_avoidNames[i] || "")}" />`;
   box.innerHTML = `
     <strong>🔔 나만의 편조 알림</strong>
     <p>알림 받을 분을 최대 2명까지 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
