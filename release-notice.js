@@ -15,7 +15,7 @@
   // '다시 보지 않기' 체크박스를 붙인 뒤에도 공지가 뜨지 않았다. 한 번 초기화한다.
   const current = Object.freeze({
     id: "launch-free-20270930-r4",
-    version: "1.2.5",
+    version: "1.2.6",
     date: "2026.09.23",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
     summary: "정식 출시를 기념해 2027년 9월 30일까지 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
@@ -31,9 +31,13 @@
   // 「다시 보지 않기」를 누른 사람에게는 새 항목이 안 뜬다.
   // 위의 current 는 공지함(알림 목록)에 남는 출시 기념 안내로, 이 팝업과는 따로 간다.
   const whatsNew = Object.freeze({
-    id: "whatsnew-1.2.5",
-    version: "1.2.5",
+    id: "whatsnew-1.2.6",
+    version: "1.2.6",
     items: Object.freeze([
+      Object.freeze({ version: "1.2.6", icon: "🔔", title: "새 기능 「나만의 편조 알림」",
+        body: "알림 받을 분을 최대 2명까지 등록해 두면, 그분과 같은 편조가 되는 스왑을 최종 확정 전에 알려드려요. 진행 여부는 직접 선택하실 수 있어요. 누구나 무료로 쓸 수 있어요." }),
+      Object.freeze({ version: "1.2.6", icon: "🛠", title: "버그 수정",
+        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.5", icon: "🛠", title: "퀵턴·레이오버 구분 오류 수정",
         body: "연속된 일정에서 퀵턴과 레이오버를 정확히 구분하도록 고쳐 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.4", icon: "🛠", title: "버그 수정",
