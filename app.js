@@ -7262,10 +7262,9 @@ if (!document.getElementById("splashScreen")) {
     if (buttons) buttons.hidden = true;
     splash.classList.add("is-intro");
     const done = () => hideSplash(() => { queueReleaseNotice(); queueBetaNotice(); });
-    // 영상이 끝나면 넘어간다(4.5초). 원본 8초 중 5초부터는 로고가 사라지고 빈 하늘만
-    // 남아 4.5초로 잘랐다(2026-10-25 Kay). 누르면 언제든 건너뛴다.
+    // 영상이 끝나면 넘어간다(3초, 2026-10-27 Kay). 누르면 언제든 건너뛴다.
     // 'ended' 가 안 오는 기기를 위해 영상 길이보다 조금 긴 안전 타이머를 둔다.
-    const INTRO_MS = 5500;
+    const INTRO_MS = 4000;
     const timer = setTimeout(done, INTRO_MS);
     // 기다리기 싫으면 아무 데나 눌러 바로 넘어갈 수 있게 한다.
     splash.addEventListener("click", () => { clearTimeout(timer); done(); }, { once: true });
