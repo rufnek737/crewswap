@@ -2221,15 +2221,13 @@ async function openMyPostsManager() {
   renderMyPosts();
 }
 
-// 내 근무 상단 버튼 → 내 정보의 「나만의 편조 알림」 카드로 바로 간다.
+// 내 근무 상단 버튼 → 「나만의 편조 알림」 전용 화면.
 function openAvoidAlert() {
   resetScheduleSelection(false);
   state.guideFlow = null;
   state.managingMyPosts = false;
   renderFlowUi();
-  switchTab("profile");
-  renderAvoidBox();
-  document.getElementById("avoidPersonBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  switchTab("crewAlert");
 }
 
 function openPremiumAlertManager() {
@@ -4604,8 +4602,6 @@ function renderAvoidBox() {
   if (_avoidNames === null) { box.innerHTML = ""; loadAvoidName(); return; }
   const input = i => `<input class="avoid-name-input" maxlength="20" placeholder="이름 ${i + 1} (동명이인은 근무표 표기 그대로, 예: 김제주)" value="${escapeHtml(_avoidNames[i] || "")}" />`;
   box.innerHTML = `
-    <strong>🔔 나만의 편조 알림</strong>
-    <p>알림 받을 분을 최대 2명까지 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
     <div class="avoid-row">${input(0)}</div>
     <div class="avoid-row">${input(1)}
       <button type="button" id="avoidSaveBtn" class="secondary-button">${_avoidNames.length ? "변경" : "등록"}</button>
@@ -5760,7 +5756,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   state.managingMyPosts = name === "myPostsManager";
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
   const SWAP_VIEWS = ["swapGuide", "find", "post", "myPostsManager", "premiumAlerts"];
-  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name;
+  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name === "crewAlert" ? "schedule" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   // 사용자·크레딧 헤더는 모든 메뉴에서 숨기고 알림종만 화면에 고정한다.
@@ -5769,6 +5765,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   $$(".swap-subtab").forEach(b => b.classList.toggle("is-active", b.dataset.swaptab === name));
   if (name === "find") fetchPosts();
   if (name === "premiumAlerts") renderSavedSearches();
+  if (name === "crewAlert") renderAvoidBox();
   if (name === "myPostsManager") fetchMyPosts();
   // 하단 탭 등으로 요청함을 직접 열면 전체 목록을 보여준다.
   // (알림에서 들어오는 경로는 switchTab 이후에 focusedRequestId를 세팅한다.)
@@ -5890,6 +5887,7 @@ function bindEvents() {
   $("#openProfilePro")?.addEventListener("click", openPremiumAlertManager);
   $("#openMainPro")?.addEventListener("click", openPremiumAlertManager);
   $("#openAvoidAlert")?.addEventListener("click", openAvoidAlert);
+  $("#crewAlertBack")?.addEventListener("click", () => switchTab("schedule"));
   $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;
@@ -7426,7 +7424,7 @@ initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 
 // URL 해시 기반 탭 복원 (F5 새로고침 시 현재 탭 유지)
 const _hashTab = location.hash.replace("#", "");
-const _validTabs = ["schedule", "swapGuide", "find", "myPostsManager", "premiumAlerts", "post", "requests", "profile"];
+const _validTabs = ["schedule", "crewAlert", "swapGuide", "find", "myPostsManager", "premiumAlerts", "post", "requests", "profile"];
 if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
 
 document.getElementById("langToggle")?.addEventListener("click", () => {

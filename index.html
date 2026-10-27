@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="듀티스왑" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=211" />
+    <link rel="stylesheet" href="styles.css?v=212" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -332,6 +332,18 @@
             </button>
           </div>
         </div>
+      </section>
+
+      <!-- ===================== 나만의 편조 알림 (무료) ===================== -->
+      <section id="crewAlert" class="view">
+        <div class="premium-alert-page-head">
+          <button type="button" id="crewAlertBack" class="secondary-button">← 내 근무</button>
+          <div>
+            <h2>🔔 나만의 편조 알림</h2>
+            <p>알림 받을 분을 최대 2명까지 등록해 두세요. 받게 될 비행에 그분이 있으면 최종 스왑 전에 알려드립니다. 진행할지는 직접 고르시면 됩니다.</p>
+          </div>
+        </div>
+        <div id="avoidPersonBox" class="avoid-box"></div>
       </section>
 
       <!-- ===================== 스왑하기: PRO 자동 알림 ===================== -->
@@ -666,7 +678,6 @@
             <h3>내 계정</h3>
             <div class="profile-email-display"><span>이메일</span><strong id="profileEmailDisplay">-</strong></div>
           </div>
-          <div id="avoidPersonBox" class="profile-card avoid-box"></div>
 
           <form id="profileForm" class="profile-form">
             <label>닉네임 <input id="nicknameInput" value="OrangeFlight" /></label>
@@ -1029,26 +1040,26 @@
         document.body.appendChild(box);
       })();
     </script>
-    <script src="credit-policy.js?v=211"></script>
-    <script src="post-dates.js?v=211"></script>
-    <script src="schedule-continuity.js?v=211"></script>
-    <script src="request-disclosure.js?v=211"></script>
-    <script src="swap-usage.js?v=211"></script>
-    <script src="post-history.js?v=211"></script>
-    <script src="roster-sync.js?v=211"></script>
-    <script src="post-details.js?v=211"></script>
-    <script src="mogiji-policy.js?v=211"></script>
-    <script src="cabin-policy.js?v=211"></script>
-    <script src="release-notice.js?v=211"></script>
-    <script src="selection-flow.js?v=211"></script>
-    <script src="airport-aliases.js?v=211"></script>
-    <script src="grade-policy.js?v=211"></script>
-    <script src="crew-seniority.js?v=211"></script>
-    <script src="duty-window.js?v=211"></script>
-    <script src="activity-codes.js?v=211"></script>
-    <script src="duty-limits.js?v=211"></script>
-    <script src="rest-window.js?v=211"></script>
-    <script src="app.js?v=211"></script>
+    <script src="credit-policy.js?v=212"></script>
+    <script src="post-dates.js?v=212"></script>
+    <script src="schedule-continuity.js?v=212"></script>
+    <script src="request-disclosure.js?v=212"></script>
+    <script src="swap-usage.js?v=212"></script>
+    <script src="post-history.js?v=212"></script>
+    <script src="roster-sync.js?v=212"></script>
+    <script src="post-details.js?v=212"></script>
+    <script src="mogiji-policy.js?v=212"></script>
+    <script src="cabin-policy.js?v=212"></script>
+    <script src="release-notice.js?v=212"></script>
+    <script src="selection-flow.js?v=212"></script>
+    <script src="airport-aliases.js?v=212"></script>
+    <script src="grade-policy.js?v=212"></script>
+    <script src="crew-seniority.js?v=212"></script>
+    <script src="duty-window.js?v=212"></script>
+    <script src="activity-codes.js?v=212"></script>
+    <script src="duty-limits.js?v=212"></script>
+    <script src="rest-window.js?v=212"></script>
+    <script src="app.js?v=212"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
