@@ -73,7 +73,7 @@ test("PRO benefits and purchase entry points are visible without opening Q&A", (
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(html, /맞춤 알림 · 크레딧 무제한 · 편조구성원 미리보기/);
+  assert.match(html, /맞춤 알림 · 크레딧 무제한<\/small>/);
   assert.match(html, /듀티스왑 PRO 혜택/);
   assert.match(html, /id="openPremiumAlertManager"/);
   assert.match(html, /id="openProfilePro"/);
@@ -178,7 +178,7 @@ test("the final Q&A matches the current privacy, credit, and PRO policies", () =
   assert.match(app, /매월 첫 실행 시 기본 3크레딧이 제공되며/);
   assert.match(app, /매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급/);
   assert.match(app, /PRO 영구 이용권은 최초 1회만 구매하는 상품/);
-  assert.match(app, /PRO 이용자는 스왑 목록을 볼 때부터 편조구성원을 확인/);
+  assert.match(app, /편조구성원은 상호 수락이 끝난 뒤에 확인할 수 있습니다/);
   assert.match(app, /월 2회, 연 12회 한도/);
   assert.match(app, /PRO 정보, 크레딧은 서버 계정에 연결/);
 
