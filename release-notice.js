@@ -33,6 +33,7 @@
   const whatsNew = Object.freeze({
     id: "whatsnew-1.2.6",
     version: "1.2.6",
+    date: "2026.11.02",
     items: Object.freeze([
       Object.freeze({ version: "1.2.6", icon: "🔔", title: "새 기능 「나만의 편조 알림」",
         body: "알림 받을 분을 최대 2명까지 등록해 두면, 그분과 같은 편조가 되는 스왑을 최종 확정 전에 알려드려요. 진행 여부는 직접 선택하실 수 있어요. 누구나 무료로 쓸 수 있어요." }),
@@ -86,6 +87,20 @@
     };
   }
 
+  // 「What's New」 팝업을 놓쳐도 공지 탭에서 다시 볼 수 있게 같은 내용을 공지로도 둔다.
+  // 제목에 '업데이트'를 넣지 않는다 — isReleaseAnnouncement 가 그 낱말로 업데이트 공지를 골라 지운다.
+  function whatsNewAnnouncement(notes = whatsNew) {
+    if (!notes?.id) return null;
+    return {
+      id: "whatsnew",
+      kind: "announce",
+      title: `🆕 새 기능 안내 (${notes.version})`,
+      date: notes.date,
+      body: notes.items.map(entry => `${entry.icon} [${entry.version}] ${entry.title}\n${entry.body}`).join("\n\n"),
+      time: "공지",
+    };
+  }
+
   function isReleaseAnnouncement(item) {
     if (!item || item.kind !== "announce") return false;
     return Boolean(
@@ -110,6 +125,7 @@
     shouldShow,
     markSeen,
     announcement,
+    whatsNewAnnouncement,
     isReleaseAnnouncement,
     keepLatestAnnouncement,
   };
