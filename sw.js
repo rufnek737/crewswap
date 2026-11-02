@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v214';
-const SHELL = ['./index.html', './styles.css?v=214', './credit-policy.js?v=214', './post-dates.js?v=214', './schedule-continuity.js?v=214', './request-disclosure.js?v=214', './swap-usage.js?v=214', './post-history.js?v=214', './roster-sync.js?v=214', './post-details.js?v=214', './mogiji-policy.js?v=214', './cabin-policy.js?v=214', './release-notice.js?v=214', './selection-flow.js?v=214', './airport-aliases.js?v=214', './grade-policy.js?v=214', './crew-seniority.js?v=214', './duty-window.js?v=214', './activity-codes.js?v=214', './duty-limits.js?v=214', './rest-window.js?v=214', './app.js?v=214', './manifest.json', './privacy.html', './terms.html', './support.html'];
+const CACHE = 'crewswap-v215';
+const SHELL = ['./index.html', './styles.css?v=215', './credit-policy.js?v=215', './post-dates.js?v=215', './schedule-continuity.js?v=215', './request-disclosure.js?v=215', './swap-usage.js?v=215', './post-history.js?v=215', './roster-sync.js?v=215', './post-details.js?v=215', './mogiji-policy.js?v=215', './cabin-policy.js?v=215', './release-notice.js?v=215', './selection-flow.js?v=215', './airport-aliases.js?v=215', './grade-policy.js?v=215', './crew-seniority.js?v=215', './duty-window.js?v=215', './activity-codes.js?v=215', './duty-limits.js?v=215', './rest-window.js?v=215', './app.js?v=215', './manifest.json', './privacy.html', './terms.html', './support.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {

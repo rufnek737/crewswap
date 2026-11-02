@@ -41,8 +41,6 @@
         body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.5", icon: "🛠", title: "퀵턴·레이오버 구분 오류 수정",
         body: "연속된 일정에서 퀵턴과 레이오버를 정확히 구분하도록 고쳐 안정성을 높였습니다." }),
-      Object.freeze({ version: "1.2.4", icon: "🛠", title: "버그 수정",
-        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.3", icon: "📱", title: "iPhone Duo 지원",
         body: "펼친 화면에서 달력과 고른 근무·회사 룰 체크를 나란히 봅니다. 아이패드 가로 화면도 같습니다." }),
       Object.freeze({ version: "1.2.2", icon: "🛠", title: "회사 룰 체크 정확도 개선",
@@ -87,6 +85,7 @@
     };
   }
 
+  // 같은 문구를 두 번 보이지 않는다(2026-11-03 Kay): 일반 「버그 수정」은 최신 버전 것 하나만 둔다.
   // 「What's New」 팝업을 놓쳐도 공지 탭에서 다시 볼 수 있게 같은 내용을 공지로도 둔다.
   // 제목에 '업데이트'를 넣지 않는다 — isReleaseAnnouncement 가 그 낱말로 업데이트 공지를 골라 지운다.
   function whatsNewAnnouncement(notes = whatsNew) {
@@ -96,7 +95,8 @@
       kind: "announce",
       title: `🆕 새 기능 안내 (${notes.version})`,
       date: notes.date,
-      body: notes.items.map(entry => `${entry.icon} [${entry.version}] ${entry.title}\n${entry.body}`).join("\n\n"),
+      // 출시 기념 무료 안내는 공지 탭에 따로 있으므로 여기서는 뺀다.
+      body: notes.items.filter(entry => entry.version !== "출시 기념").map(entry => `${entry.icon} [${entry.version}] ${entry.title}\n${entry.body}`).join("\n\n"),
       time: "공지",
     };
   }
