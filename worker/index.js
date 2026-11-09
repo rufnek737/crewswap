@@ -1230,11 +1230,11 @@ async function handlePostsCreate(request, env, ctx, authEmail, allowSandbox = fa
   }
 }
 
-/* ── posts-update (희망 조건만 수정, 오퍼/크레딧 변경 없음) ──── */
+/* ── posts-update (희망 조건 수정 + 일반 글의 급구 전환, 오퍼/크레딧 변경 없음) ──── */
 
-async function handlePostsUpdate(request, env, authEmail) {
-  let id, deleteToken, wanted;
-  try { ({ id, deleteToken, wanted } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
+async function handlePostsUpdate(request, env, authEmail, ctx) {
+  let id, deleteToken, wanted, urgent;
+  try { ({ id, deleteToken, wanted, urgent } = await request.json()); } catch { return json({ error: '잘못된 요청' }, 400); }
   if (!id || !deleteToken || !wanted) return json({ error: '필수 필드 누락' }, 400);
 
   try {
@@ -1243,13 +1243,27 @@ async function handlePostsUpdate(request, env, authEmail) {
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (post.ownerEmail !== authEmail || post.deleteToken !== deleteToken) return json({ error: '권한 없음' }, 403);
     post.wanted = wanted;
+    // 급구 전환: 등록 때와 같은 operationId 라 쿠폰은 글 하나당 한 번만 걷힌다.
+    // 저장 충돌(409) 후 다시 눌러도 이중 차감되지 않고, 환급 경로도 그대로 쓴다.
+    const toUrgent = !!urgent && !post.urgent;
+    let wallet;
+    if (toUrgent) {
+      if (post.status !== 'active' || postDeadlinePassed(post)) return json({ error: '마감된 글은 급구로 바꿀 수 없습니다' }, 409);
+      const coupon = await runWalletCommand(env, authEmail, {
+        type: 'spend-coupon', operationId: `post:urgent:${id}`, amount: 1,
+      });
+      if (!coupon.ok) return json({ error: '급구 쿠폰이 없습니다', code: coupon.code, wallet: coupon.wallet }, 402);
+      wallet = coupon.wallet;
+      post.urgent = true;
+    }
     if (!await compareAndSwap(env.POSTS, `post:${id}`, raw, JSON.stringify(post)))
       return json({ error: '글 상태가 변경되었습니다. 새로고침 후 다시 시도해주세요.' }, 409);
     const idx = await getPostsIndex(env);
     const i = idx.findIndex(p => p.id === id);
     if (i >= 0) idx[i] = post; else idx.push(post);
     await savePostsIndex(env, idx);
-    return json({ ok: true });
+    if (toUrgent && ctx?.waitUntil) ctx.waitUntil(notifyUrgentPost(env, post));
+    return json({ ok: true, urgent: !!post.urgent, wallet });
   } catch (e) { return json({ error: e.message }, 500); }
 }
 
@@ -2601,7 +2615,7 @@ export default {
       else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
       else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);
       else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);
-      else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email);
+      else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email, ctx);
       else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email, allowSandboxPro);
       else if (path === '/api/requests-get') response = await handleRequestsGet(request, env, auth.email);
       else if (path === '/api/requests-accept') response = await handleRequestsAccept(request, env, auth.email);
