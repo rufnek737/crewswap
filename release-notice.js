@@ -15,7 +15,7 @@
   // '다시 보지 않기' 체크박스를 붙인 뒤에도 공지가 뜨지 않았다. 한 번 초기화한다.
   const current = Object.freeze({
     id: "launch-free-20270930-r4",
-    version: "1.2.6",
+    version: "1.2.7",
     date: "2026.09.23",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
     summary: "정식 출시를 기념해 2027년 9월 30일까지 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
@@ -31,22 +31,24 @@
   // 「다시 보지 않기」를 누른 사람에게는 새 항목이 안 뜬다.
   // 위의 current 는 공지함(알림 목록)에 남는 출시 기념 안내로, 이 팝업과는 따로 간다.
   const whatsNew = Object.freeze({
-    id: "whatsnew-1.2.6",
-    version: "1.2.6",
-    date: "2026.11.02",
+    id: "whatsnew-1.2.7",
+    version: "1.2.7",
+    date: "2026.11.13",
     items: Object.freeze([
+      Object.freeze({ version: "1.2.7", icon: "🎨", title: "화면 색상 변경",
+        body: "눈이 편한 따뜻한 톤으로 화면 색상을 바꿨어요." }),
+      Object.freeze({ version: "1.2.7", icon: "📢", title: "공지 탭에서 새 기능 안내",
+        body: "이 안내를 놓쳐도 공지 탭에서 언제든 다시 볼 수 있어요." }),
+      Object.freeze({ version: "1.2.7", icon: "🛠", title: "버그 수정",
+        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.6", icon: "🔔", title: "새 기능 「나만의 편조 알림」",
         body: "알림 받을 분을 최대 2명까지 등록해 두면, 그분과 같은 편조가 되는 스왑을 최종 확정 전에 알려드려요. 진행 여부는 직접 선택하실 수 있어요. 누구나 무료로 쓸 수 있어요." }),
-      Object.freeze({ version: "1.2.6", icon: "🛠", title: "버그 수정",
-        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.5", icon: "🛠", title: "퀵턴·레이오버 구분 오류 수정",
         body: "연속된 일정에서 퀵턴과 레이오버를 정확히 구분하도록 고쳐 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.3", icon: "📱", title: "iPhone Duo 지원",
         body: "펼친 화면에서 달력과 고른 근무·회사 룰 체크를 나란히 봅니다. 아이패드 가로 화면도 같습니다." }),
       Object.freeze({ version: "1.2.2", icon: "🛠", title: "회사 룰 체크 정확도 개선",
         body: "다른 달의 비행이 섞이지 않도록, 고른 날짜에 걸치는 구간만 확인합니다. 월이 바뀌는 날의 앞뒤 근무도 함께 봅니다." }),
-      Object.freeze({ version: "1.2.0", icon: "✈️", title: "듀티스왑으로 새 이름",
-        body: "앱 이름을 「듀티스왑 DutySwap」으로 바꾸고, 회사 규정 확인을 최신 규정과 대조해 바로잡았습니다." }),
       Object.freeze({ version: "출시 기념", icon: "🎉", title: "2027년 9월 30일까지 모든 기능 무료",
         body: "PRO 기능 전원 무료 — 조건 알림, 무제한 크레딧. 급구 쿠폰은 매달 1장 자동 지급됩니다." }),
     ]),

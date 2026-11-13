@@ -15,8 +15,8 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.6";
-const APP_RELEASE_DATE = "2026.11.03";
+const APP_VERSION = "1.2.7";
+const APP_RELEASE_DATE = "2026.11.13";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
@@ -217,6 +217,7 @@ const state = {
   myPosts: [],      // 내가 등록한 글
   postDraft: null,  // 임시 저장된 등록 폼
   editingPostId: null, // 수정 중인 내 글 id (희망 조건만 수정)
+  editingMemo: null,   // 수정 중 입력한 문구 — 앱이 다시 로드돼도 잃지 않게 저장
   pendingRequestPostId: null, // 줄 근무 고르러 간 동안 보류된 요청 대상 글 id
   pendingRequestType: null,   // "request" | "ask"
   guideFlow: null,       // null | "post" | "find" — 단계별 스왑 진행
@@ -3054,11 +3055,21 @@ function enterEditPostMode(postId) {
   const memo = document.getElementById("postMemo");
   // 새 글은 memo, 구버전 글은 구조화 필드를 텍스트로 변환해서 채움
   if (memo) memo.value = post.wanted.memo || wantedSummary(post.wanted).replace("조건 없음", "");
+  const urgentBox = document.getElementById("postUrgent");
+  if (urgentBox) urgentBox.checked = false;
+  saveState();
   renderPostFooter();
 }
 
 function exitEditPostMode() {
   state.editingPostId = null;
+  state.editingMemo = null;
+  // 수정하던 문구와 급구 체크가 새 글 화면에 남으면 저장된 것처럼 보인다.
+  const memo = document.getElementById("postMemo");
+  if (memo) memo.value = "";
+  const urgentBox = document.getElementById("postUrgent");
+  if (urgentBox) urgentBox.checked = false;
+  saveState();
   syncOfferedSlot();
   renderPostFooter();
 }
@@ -3086,14 +3097,20 @@ function renderPostFooter() {
 
   const submitBtn = $("#submitPostButton");
   const existingBanner = document.getElementById("editPostBanner");
+  const urgentBlock = document.querySelector(".urgent-block");
+  if (urgentBlock) urgentBlock.hidden = false;
   if (editing) {
-    submitBtn.textContent = "희망 조건 수정 완료";
+    // 이미 급구인 글은 다시 쿠폰을 쓸 일이 없으므로 체크칸을 감춘다.
+    const editingPost = state.myPosts.find(p => p.id === state.editingPostId);
+    if (urgentBlock) urgentBlock.hidden = !!editingPost?.urgent;
+    if (!editingPost?.urgent) renderUrgentOption(1);
+    submitBtn.textContent = $("#postUrgent")?.checked ? "수정 완료 · 급구 전환 (쿠폰 1장)" : "희망 조건 수정 완료";
     if (!existingBanner) {
       const banner = document.createElement("div");
       banner.id = "editPostBanner";
       banner.className = "notice";
       banner.style.marginBottom = "10px";
-      banner.innerHTML = `✏️ 기존 글의 희망 조건을 수정 중입니다 (오퍼/크레딧 변경 없음). <button type="button" id="cancelEditPostButton" class="secondary-button" style="margin-left:8px;">취소</button>`;
+      banner.innerHTML = `✏️ 기존 글의 희망 조건을 수정 중입니다 (오퍼/크레딧 변경 없음, 급구 전환 시 쿠폰 1장). <button type="button" id="cancelEditPostButton" class="secondary-button" style="margin-left:8px;">취소</button>`;
       submitBtn.parentElement.insertBefore(banner, submitBtn);
       document.getElementById("cancelEditPostButton").onclick = exitEditPostMode;
     }
@@ -3117,7 +3134,7 @@ function renderPostFooter() {
   }
 
   if (!hasOffered) {
-    $("#postRuleCheck").innerHTML = `<h4>회사 룰 사전 체크</h4><p class="hint">달력에서 패턴을 선택하면 룰 체크가 표시됩니다.</p>`;
+    $("#postRuleCheck").innerHTML = `<h4>회사 룰 사전 체크</h4><p class="hint">달력에서 패턴을 선택하면 룰 체크가 표시됩니다.</p><p class="hint">이미 올린 글을 고치려면 내 스왑 글의 「희망 조건 수정」을 눌러 주세요.</p>`;
     submitBtn.disabled = true;
     $("#saveDraftButton").disabled = !hasOffered;
     return;
@@ -6671,22 +6688,31 @@ function bindEvents() {
     const post = state.myPosts.find(p => p.id === state.editingPostId);
     if (!post) { exitEditPostMode(); return; }
     const wanted = { memo: ($("#postMemo").value || "").trim() };
+    const toUrgent = !post.urgent && !!$("#postUrgent")?.checked;
+    let result = {};
     try {
       const res = await apiFetch(`${API_BASE}/api/posts-update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: post.id, deleteToken: post.deleteToken, wanted }),
+        body: JSON.stringify({ id: post.id, deleteToken: post.deleteToken, wanted, urgent: toUrgent }),
       });
-      if (!res.ok) { showToast("수정 실패 — 다시 시도해주세요."); return; }
+      result = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(result.error || "수정 실패 — 다시 시도해주세요."); return; }
     } catch (e) { showToast("수정 실패 — 네트워크 오류"); return; }
     post.wanted = wanted;
+    if (toUrgent) post.urgent = true;
+    if (result.wallet) applyCreditWallet(result.wallet, false);
     saveState();
     exitEditPostMode();
     renderAll();
-    showToast("희망 조건 수정 완료");
+    showToast(toUrgent ? "급구로 전환했습니다 — 등급이 맞는 승무원에게 알림이 갑니다" : "희망 조건 수정 완료");
   }
 
   // 등록 버튼 — WARN 항목 있으면 확인 팝업, 없으면 바로 등록
+  $("#postUrgent")?.addEventListener("change", () => { if (state.editingPostId) renderPostFooter(); });
+  $("#postMemo")?.addEventListener("input", e => {
+    if (state.editingPostId) { state.editingMemo = e.target.value; saveState(); }
+  });
   $("#submitPostButton").addEventListener("click", () => {
     if (state.editingPostId) { doUpdatePost(); return; }
     if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧 부족"); return; }
@@ -6899,6 +6925,8 @@ function saveState() {
       currentMonth: state.currentMonth,
       myPosts: state.myPosts,
       postDraft: state.postDraft,
+      editingPostId: state.editingPostId,
+      editingMemo: state.editingMemo,
       alerts: state.alerts,
     }));
   } catch (e) { console.warn("저장 실패:", e); }
@@ -6940,6 +6968,7 @@ function loadStateFromStorage() {
     if (d.currentMonth && !restoredDemo) state.currentMonth = d.currentMonth;
     if (Array.isArray(d.myPosts)) state.myPosts = d.myPosts;
     if (d.postDraft) state.postDraft = d.postDraft;
+    if (d.editingPostId) { state.editingPostId = d.editingPostId; state.editingMemo = d.editingMemo ?? null; }
     if (Array.isArray(d.alerts)) {
       state.alerts = d.alerts;
       // 구버전 목업 알림이면 새 공지로 교체
@@ -7429,6 +7458,16 @@ initAppBadge();          // 앱 아이콘 배지 권한 요청 + 초기 표시
 const _hashTab = location.hash.replace("#", "");
 const _validTabs = ["schedule", "crewAlert", "swapGuide", "find", "myPostsManager", "premiumAlerts", "post", "requests", "profile"];
 if (_validTabs.includes(_hashTab)) switchTab(_hashTab);
+// 앱이 다시 로드돼도 하던 글 수정을 이어간다. 다른 화면에서 다시 켰으면 끝난 것으로 본다.
+if (state.editingPostId) {
+  const _memo = state.editingMemo;
+  if (_hashTab === "post" && state.myPosts.some(p => p.id === state.editingPostId)) {
+    enterEditPostMode(state.editingPostId);
+    if (_memo != null) { $("#postMemo").value = _memo; state.editingMemo = _memo; saveState(); }
+  } else {
+    exitEditPostMode();
+  }
+}
 
 document.getElementById("langToggle")?.addEventListener("click", () => {
   state.lang = state.lang === "KO" ? "EN" : "KO";
