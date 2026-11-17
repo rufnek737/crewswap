@@ -58,3 +58,7 @@ namespace_id = "737002"
 #   SUBMIT_REJECTION_VIEWERS=you@jejuair.net,ops@jejuair.net
 #     └ 회사 상신 반려 사유 로그(/api/submit-rejections)를 조회할 수 있는 계정.
 #       비워 두면 아무도 조회할 수 없다(기본 잠금).
+
+# 매일 오전 10시(한국) — 2일 넘게 답이 없는 요청을 받은 사람에게 한 번 더 알린다.
+[triggers]
+crons = ["0 1 * * *"]

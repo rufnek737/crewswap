@@ -991,6 +991,77 @@ async function sendNativeNotification(env, device, payload) {
   }
 }
 
+/* 한 사람에게 알림 한 건 — 받은 요청·의향 알림. 기기 등록은 PRO 알림과 같은 목록을 쓴다.
+   끊긴 기기는 목록에서 지운다. 보냈으면 true. */
+async function notifyUser(env, email, { title, body, tag, route = 'requests' }) {
+  const canWebPush = webPushConfigured(env);
+  const canNativePush = nativePushConfigured(env);
+  if (!email || (!canWebPush && !canNativePush)) return false;
+  const records = await getPremiumAlertIndex(env);
+  const record = records.find(r => r?.email === email);
+  if (!record) return false;
+  if (canWebPush) webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+  const url = `./#${route}`;
+  const payload = JSON.stringify({ title, body, tag, data: { url } });
+  let delivered = false, changed = false;
+  const alive = [];
+  for (const subscription of canWebPush ? (record.subscriptions || []) : []) {
+    try { await webpush.sendNotification(subscription, payload, { TTL: 86400, urgency: 'high' }); alive.push(subscription); delivered = true; }
+    catch (error) { const s = error?.statusCode || error?.status || 0; if (s !== 404 && s !== 410) alive.push(subscription); else changed = true; }
+  }
+  const aliveNative = [];
+  for (const device of canNativePush ? (record.nativeDevices || []) : []) {
+    const result = await sendNativeNotification(env, device, { title, body, tag, route, data: { url } });
+    if (result.ok) delivered = true;
+    if (!result.gone) aliveNative.push(device); else changed = true;
+  }
+  if (changed) {
+    if (canWebPush) record.subscriptions = alive;
+    if (canNativePush) record.nativeDevices = aliveNative;
+    await savePremiumAlertIndex(env, records);
+  }
+  return delivered;
+}
+
+const AWAITING_RECIPIENT = new Set(['상대가 바꿀 날 고르는 중', '의향 문의', '요청 대기']);
+const REMIND_AFTER_MS = 2 * 24 * 3600e3;
+
+function requestArrivalMessage(rec) {
+  const ask = rec.type === 'ask';
+  return {
+    title: ask ? '💬 양도 의향이 도착했어요' : '📩 스왑 요청이 도착했어요',
+    body: `${rec.fromNick || '동료'} 님 · ${rec.postTitle || '내 스왑 글'} — 요청 탭에서 확인해 주세요`,
+    tag: `crewswap-request-${rec.id}`,
+  };
+}
+
+/* 받은 쪽이 2일 넘게 답하지 않은 요청에 한 번 더 알린다. 글이 끝났으면 건너뛴다.
+   remindedAt 을 남겨 한 요청에 한 번만 보낸다. */
+async function remindStalledRequests(env, now = Date.now()) {
+  const idx = await getRequestsIndex(env);
+  let sent = 0;
+  for (const item of idx) {
+    if (!item || !AWAITING_RECIPIENT.has(item.status) || item.remindedAt) continue;
+    if (now - Date.parse(item.createdAt || 0) < REMIND_AFTER_MS) continue;
+    const rec = await env.POSTS.get(`req:${item.id}`, { type: 'json' });
+    if (!rec || !AWAITING_RECIPIENT.has(rec.status) || rec.remindedAt) continue;
+    const post = await env.POSTS.get(`post:${rec.postId}`, { type: 'json' });
+    rec.remindedAt = new Date(now).toISOString();
+    if (post && post.status === 'active' && !postDeadlinePassed(post, now)) {
+      const days = Math.floor((now - Date.parse(rec.createdAt)) / 864e5);
+      const msg = requestArrivalMessage(rec);
+      if (await notifyUser(env, rec.toEmail, {
+        title: '⏰ 답을 기다리는 요청이 있어요',
+        body: `${rec.fromNick || '동료'} 님이 ${days}일째 기다리고 있어요 · ${rec.postTitle || ''}`,
+        tag: msg.tag,
+      })) sent++;
+    }
+    await env.POSTS.put(`req:${rec.id}`, JSON.stringify(rec));
+    await updateRequestsIndexEntry(env, rec);
+  }
+  return sent;
+}
+
 async function notifyPremiumSubscribers(env, post) {
   const canWebPush = webPushConfigured(env);
   const canNativePush = nativePushConfigured(env);
@@ -1406,7 +1477,7 @@ function requestPostOfferSnapshot(offered) {
   };
 }
 
-async function handleRequestsCreate(request, env, authEmail, allowSandbox = false) {
+async function handleRequestsCreate(request, env, authEmail, allowSandbox = false, ctx) {
   let body;
   try { body = await request.json(); } catch { return json({ error: '잘못된 요청' }, 400); }
   const {
@@ -1477,6 +1548,7 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
     const idx = await getRequestsIndex(env);
     idx.push(rec);
     await saveRequestsIndex(env, idx);
+    if (ctx?.waitUntil) ctx.waitUntil(notifyUser(env, rec.toEmail, requestArrivalMessage(rec)).catch(() => {}));
     return json({ id, creditSpent: debitSpent, wallet: debit.wallet });
   } catch (e) {
     if (debitSpent && requestKey) await runWalletCommand(env, authEmail, {
@@ -2611,6 +2683,7 @@ async function handleCrewConnex(request) {
 
 /* ── 메인 라우터 ─────────────────────────────────────────────── */
 
+export { remindStalledRequests, requestArrivalMessage };
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -2645,7 +2718,7 @@ export default {
       else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);
       else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);
       else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email, ctx);
-      else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email, allowSandboxPro);
+      else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email, allowSandboxPro, ctx);
       else if (path === '/api/requests-get') response = await handleRequestsGet(request, env, auth.email);
       else if (path === '/api/requests-accept') response = await handleRequestsAccept(request, env, auth.email);
       else if (path === '/api/requests-poster-select') response = await handleRequestsPosterSelect(request, env, auth.email);
@@ -2675,5 +2748,10 @@ export default {
       response = json({ error: '서버 설정 또는 처리 중 오류가 발생했습니다' }, 500);
     }
     return withCors(response, request);
+  },
+  // 매일 한 번 — 답이 없는 요청 다시 알림 (wrangler.toml [triggers] crons)
+  async scheduled(event, env, ctx) {
+    if (env.DB) env = { ...env, rawKv: env.POSTS, POSTS: createStore(env.DB) };
+    ctx.waitUntil(remindStalledRequests(env).catch(e => console.error('remind failed', e)));
   },
 };
