@@ -15,11 +15,11 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.7";
-const APP_RELEASE_DATE = "2026.11.13";
+const APP_VERSION = "1.2.8";
+const APP_RELEASE_DATE = "2026.11.17";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
-  "/api/user-reset-password", "/api/posts-get", "/api/premium-alert-config",
+  "/api/user-reset-password", "/api/posts-public", "/api/premium-alert-config",
 ]);
 let _storeEnvironment = 'production';
 
@@ -3761,8 +3761,9 @@ function settleNativePushWaiters(error, device = null) {
 }
 
 async function handleNativePushRoute(data = {}) {
-  const route = data.route === 'myPostsManager' ? 'myPostsManager' : 'find';
+  const route = ['myPostsManager', 'requests'].includes(data.route) ? data.route : 'find';
   if (route === 'myPostsManager') await openMyPostsManager();
+  else if (route === 'requests') switchTab('requests');
   else {
     switchTab('find');
     await fetchPosts();
@@ -4860,6 +4861,45 @@ function updateCompareRequestDetail(reqId) {
   panel.hidden = schedules.length === 0;
 }
 
+// 추천일 — 상대의 근무 묶음(연속된 근무일) 중, 받아도 되는 것만 고른다.
+//  · 묶음 전체를 받는다(레이오버·연속 비행을 중간에서 자르지 않는다).
+//  · 그날 내 일정이 비어 있거나(OFF·근무 없음) 내가 글로 내놓은 날이어야 한다.
+//  · 실제 선택과 같은 휴식·모기지 검사(posterPickRestCheckFor)를 통과해야 한다.
+//  · 나만의 편조 알림 대상이 있는 날, 오늘 이전 날짜는 뺀다.
+// 추천은 표시일 뿐이다. 고른 뒤에는 기존 검사와 서버 검증이 그대로 다시 돈다.
+function recommendedPickDays(r) {
+  const roster = r.openRoster || [];
+  const myPost = (state.myPosts || []).find(p => p.id === r.postId);
+  if (!myPost || requesterFixedMogijiViolation(r, myPost)) return new Set();
+  const month = (roster[0] && roster[0].month) || state.currentMonth;
+  const postedDays = new Set(myPost.offered?.days || []);
+  const avoid = new Set(r.avoidDays || []);
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const isDuty = s => s && s.type && s.type !== "OFF";
+  const byDay = {}; roster.forEach(s => { byDay[s.day] = s; });
+  const days = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+  const groups = [];
+  for (const d of days) {
+    if (!isDuty(byDay[d])) continue;
+    const last = groups[groups.length - 1];
+    if (last && last[last.length - 1] === d - 1) last.push(d); else groups.push([d]);
+  }
+  const out = new Set();
+  for (const g of groups) {
+    const ok = g.every(d => {
+      const key = `${month}-${String(d).padStart(2, "0")}`;
+      if (key < todayKey || avoid.has(d)) return false;
+      const mine = state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
+      return postedDays.has(d) || !mine || mine.type === "OFF";
+    });
+    if (!ok) continue;
+    const check = posterPickRestCheckFor(r.id, g);
+    if (check.offered && !check.msg && !check.fixed) g.forEach(d => out.add(d));
+  }
+  return out;
+}
+
 // 같은 달을 기준으로 내 로스터와 상대의 공개 로스터를 나란히 렌더한다.
 function renderCompareCalendar(r) {
   const roster = r.openRoster || [];
@@ -4875,6 +4915,7 @@ function renderCompareCalendar(r) {
   const fixedMogijiViolation = requesterFixedMogijiViolation(r, myPost);
   if (fixedMogijiViolation && picked.size) picked.clear();
   const postedDays = new Set(myPost?.offered?.days || []);
+  const recommended = fixedMogijiViolation ? new Set() : recommendedPickDays(r);
   const inspectedOwnDay = _compareOwnInspect[r.id];
   const dutyShort = t => t === "OFF" ? "OFF" : t === "국내선" ? "국내" : t === "국제선" ? "국제" : t === "GND" ? "지상/훈련" : t;
   const weekday = `<div class="cmp-weekdays"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>`;
@@ -4899,11 +4940,12 @@ function renderCompareCalendar(r) {
     if (req) {
       const on = picked.has(d) ? " is-picked" : "";
       const route = req.routeSummary && req.routeSummary !== req.type ? `<em>${escapeHtml(req.routeSummary)}</em>` : "";
-      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}${fixedMogijiViolation ? " is-swap-blocked" : ""}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}"${fixedMogijiViolation ? ' disabled aria-disabled="true" title="내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹칩니다."' : ""}>
+      requestCells += `<button type="button" class="cmp-cell cmp-request-cell has-req${on}${recommended.has(d) ? " is-recommended" : ""}${fixedMogijiViolation ? " is-swap-blocked" : ""}" data-req="${r.id}" data-day="${d}" aria-pressed="${picked.has(d)}"${fixedMogijiViolation ? ' disabled aria-disabled="true" title="내가 내놓은 근무가 상대방의 필수 모기지 휴무와 겹칩니다."' : ""}>
         <span class="cmp-day">${d}</span>
         <span class="cmp-take">${escapeHtml(dutyShort(req.type))}${route}</span>
         ${req.aircraft ? `<span class="cmp-ac">✈ ${aircraftLabel(req.aircraft)}</span>` : ""}
         ${(r.avoidDays || []).includes(d) ? `<span class="cmp-avoid" title="등록하신 분과 같은 편조 비행">🔔</span>` : ""}
+        ${recommended.has(d) ? `<span class="cmp-reco">추천</span>` : ""}
       </button>`;
     } else {
       const locked = lockedDays.has(d);
@@ -4923,7 +4965,7 @@ function renderCompareCalendar(r) {
     </section>
     <section class="cmp-cal cmp-request-cal">
       <h5><span class="cmp-owner-dot take"></span> 상대가 공개한 스케줄</h5>
-      <p>${fixedMogijiViolation ? "내가 내놓은 근무가 상대방의 필수 휴무와 겹쳐 선택할 수 없습니다." : "교환받고 싶은 날짜를 누르세요."}</p>
+      <p>${fixedMogijiViolation ? "내가 내놓은 근무가 상대방의 필수 휴무와 겹쳐 선택할 수 없습니다." : recommended.size ? "⭐ 「추천」은 내 일정이 비어 있고 휴식·모기지 기준을 통과하는 근무입니다. 다른 날도 고를 수 있어요." : "교환받고 싶은 날짜를 누르세요."}</p>
       ${weekday}
       <div class="cmp-grid">${requestCells}</div>
       <div id="cmpRequestDetail-${r.id}" class="cmp-detail-panel" ${picked.size ? "" : "hidden"}>
@@ -4986,6 +5028,10 @@ function cabinRestIssueMessage(issue, ownerLabel) {
 }
 
 function posterPickRestCheck(reqId) {
+  return posterPickRestCheckFor(reqId, [...(_posterPick[reqId] || [])]);
+}
+
+function posterPickRestCheckFor(reqId, days) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
   if (!r) return { offered: null, msg: null, fixed: false };
   const myPost = (state.myPosts || []).find(p => p.id === r.postId);
@@ -4993,7 +5039,6 @@ function posterPickRestCheck(reqId) {
   if (fixedViolation) {
     return { offered: null, msg: requesterFixedMogijiMessage(fixedViolation), fixed: true };
   }
-  const days = [...(_posterPick[reqId] || [])];
   if (!days.length) return { offered: null, msg: null, fixed: false };
   const entries = (r.openRoster || []).filter(s => days.includes(s.day));
   const offered = offeredFromRosterDays(entries, r.requesterRole || r.fromRole);
@@ -6207,6 +6252,10 @@ function bindEvents() {
     }
   });
   $("#goToLoginBtn")?.addEventListener("click", () => openLoginModal($("#signupEmail")?.value || ""));
+  $$("#publicBoardPanel [data-board-crew]").forEach(b => b.addEventListener("click", () => { publicBoard.crewType = b.dataset.boardCrew; renderPublicBoard(false); }));
+  $("#publicBoardSignupBtn")?.addEventListener("click", () => { closePublicBoard(); openSignupModal(); });
+  $("#publicBoardLoginBtn")?.addEventListener("click", () => { closePublicBoard(); openLoginModal(state.user.email || ""); });
+  $("#goToBoardBtn")?.addEventListener("click", openPublicBoard);
   $("#goToSignupBtn")?.addEventListener("click", () => { closeLoginModal(); openSignupModal(); });
   $("#goToResetBtn")?.addEventListener("click", () => openResetModal());
   $("#resetBackBtn")?.addEventListener("click", () => { closeResetModal(); openLoginModal(); });
@@ -7123,6 +7172,37 @@ function queueBetaNotice() {
   setTimeout(showBetaNoticeIfNeeded, 700);
 }
 
+// 가입 전 둘러보기 — 회사 게시판 수준(운항/객실·날짜·편명·체크인/아웃)만 보여주고
+// 누가 올렸는지와 요청하기는 가입 후에 연다.
+const publicBoard = { crewType: "PILOT", posts: [] };
+async function openPublicBoard() {
+  closeSignupModal();
+  closeLoginModal();
+  toggleModal("publicBoardPanel", "publicBoardOverlay", true);
+  renderPublicBoard(true);
+  try {
+    const res = await apiFetch(`${API_BASE}/api/posts-public`);
+    publicBoard.posts = res.ok ? (await res.json()).posts || [] : [];
+  } catch { publicBoard.posts = []; }
+  renderPublicBoard(false);
+}
+function closePublicBoard() { toggleModal("publicBoardPanel", "publicBoardOverlay", false); }
+function renderPublicBoard(loading) {
+  $$("#publicBoardPanel [data-board-crew]").forEach(b => b.classList.toggle("is-active", b.dataset.boardCrew === publicBoard.crewType));
+  const list = document.getElementById("publicBoardList");
+  if (!list) return;
+  if (loading) { list.innerHTML = `<p class="hint">불러오는 중…</p>`; return; }
+  const posts = publicBoard.posts.filter(p => p.crewType === publicBoard.crewType);
+  const fmt = d => { const [, m, day] = String(d || "").split("-"); return m ? `${Number(m)}/${Number(day)}` : "-"; };
+  list.innerHTML = posts.length ? posts.map(p => `
+    <div class="public-board-card">
+      ${p.days.map(d => `<div class="public-board-day"><strong>${escapeHtml(fmt(d.date))}</strong>
+        <span>${escapeHtml(d.flight || "")}</span>
+        ${d.checkIn || d.checkOut ? `<span>체크인 ${escapeHtml(d.checkIn || "-")} → 체크아웃 ${escapeHtml(d.checkOut || "-")}</span>` : ""}</div>`).join("")}
+      <div class="public-board-lock">🔒 노선·올린 사람·희망 조건은 가입 후 볼 수 있어요</div>
+    </div>`).join("") : `<p class="hint">지금 올라온 ${publicBoard.crewType === "CABIN" ? "객실" : "운항"} 글이 없습니다.</p>`;
+}
+
 function openSignupModal() {
   const sp = document.getElementById("signupPanel");
   const ov = document.getElementById("signupOverlay");
@@ -7321,6 +7401,10 @@ if (!document.getElementById("splashScreen")) {
   const loginBtn = document.getElementById("splashLoginBtn");
   if (loginBtn) loginBtn.addEventListener("click", () => {
     hideSplash(() => openLoginModal(state.user.email || ""));
+  });
+
+  document.getElementById("splashBrowseBtn")?.addEventListener("click", () => {
+    hideSplash(() => openPublicBoard());
   });
 
   const signupBtn = document.getElementById("splashSignupBtn");

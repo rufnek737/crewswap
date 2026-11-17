@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="듀티스왑" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=219" />
+    <link rel="stylesheet" href="styles.css?v=221" />
   </head>
   <body>
     <!-- ===================== 스플래시 화면 ===================== -->
@@ -25,6 +25,7 @@
       <div class="splash-buttons">
         <button id="splashLoginBtn" type="button" class="splash-login-btn">로그인</button>
         <button id="splashSignupBtn" type="button" class="splash-signup-btn">회원가입</button>
+        <button id="splashBrowseBtn" type="button" class="splash-browse-btn">가입 없이 올라온 근무 둘러보기</button>
       </div>
     </div>
 
@@ -177,7 +178,25 @@
           </label>
           <button class="primary-button" type="submit">가입 완료 / Sign up</button>
           <button type="button" id="goToLoginBtn" class="link-button" style="width:100%;margin-top:4px;">이미 가입했어요 · 로그인 →</button>
+          <button type="button" id="goToBoardBtn" class="link-button" style="width:100%;">가입 전에 올라온 근무 둘러보기</button>
         </form>
+      </div>
+
+      <!-- ===================== 가입 전 둘러보기 (모달) ===================== -->
+      <div id="publicBoardOverlay" class="signup-overlay" hidden></div>
+      <div id="publicBoardPanel" class="signup-dialog" hidden>
+        <div class="signup-head">
+          <p class="eyebrow">스왑 게시판</p>
+          <h2>올라온 근무 둘러보기</h2>
+          <p>날짜·편명·체크인/아웃까지 볼 수 있어요. 자세히 보고 요청하려면 가입해 주세요.</p>
+        </div>
+        <div class="public-board-tabs">
+          <button type="button" class="secondary-button" data-board-crew="PILOT">운항</button>
+          <button type="button" class="secondary-button" data-board-crew="CABIN">객실</button>
+        </div>
+        <div id="publicBoardList" class="public-board-list"></div>
+        <button type="button" id="publicBoardSignupBtn" class="primary-button" style="width:100%;">가입하고 자세히 보기</button>
+        <button type="button" id="publicBoardLoginBtn" class="link-button" style="width:100%;margin-top:4px;">이미 가입했어요 · 로그인 →</button>
       </div>
 
       <!-- ===================== 로그인 (모달) ===================== -->
@@ -1040,26 +1059,26 @@
         document.body.appendChild(box);
       })();
     </script>
-    <script src="credit-policy.js?v=219"></script>
-    <script src="post-dates.js?v=219"></script>
-    <script src="schedule-continuity.js?v=219"></script>
-    <script src="request-disclosure.js?v=219"></script>
-    <script src="swap-usage.js?v=219"></script>
-    <script src="post-history.js?v=219"></script>
-    <script src="roster-sync.js?v=219"></script>
-    <script src="post-details.js?v=219"></script>
-    <script src="mogiji-policy.js?v=219"></script>
-    <script src="cabin-policy.js?v=219"></script>
-    <script src="release-notice.js?v=219"></script>
-    <script src="selection-flow.js?v=219"></script>
-    <script src="airport-aliases.js?v=219"></script>
-    <script src="grade-policy.js?v=219"></script>
-    <script src="crew-seniority.js?v=219"></script>
-    <script src="duty-window.js?v=219"></script>
-    <script src="activity-codes.js?v=219"></script>
-    <script src="duty-limits.js?v=219"></script>
-    <script src="rest-window.js?v=219"></script>
-    <script src="app.js?v=219"></script>
+    <script src="credit-policy.js?v=221"></script>
+    <script src="post-dates.js?v=221"></script>
+    <script src="schedule-continuity.js?v=221"></script>
+    <script src="request-disclosure.js?v=221"></script>
+    <script src="swap-usage.js?v=221"></script>
+    <script src="post-history.js?v=221"></script>
+    <script src="roster-sync.js?v=221"></script>
+    <script src="post-details.js?v=221"></script>
+    <script src="mogiji-policy.js?v=221"></script>
+    <script src="cabin-policy.js?v=221"></script>
+    <script src="release-notice.js?v=221"></script>
+    <script src="selection-flow.js?v=221"></script>
+    <script src="airport-aliases.js?v=221"></script>
+    <script src="grade-policy.js?v=221"></script>
+    <script src="crew-seniority.js?v=221"></script>
+    <script src="duty-window.js?v=221"></script>
+    <script src="activity-codes.js?v=221"></script>
+    <script src="duty-limits.js?v=221"></script>
+    <script src="rest-window.js?v=221"></script>
+    <script src="app.js?v=221"></script>
     <script>
       if ('serviceWorker' in navigator) {
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
