@@ -45,7 +45,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PUBLIC_PATHS = new Set([
   '/api/send-verify', '/api/check-verify', '/api/user-signup', '/api/user-login',
-  '/api/user-reset-password', '/api/posts-get', '/api/premium-alert-config',
+  '/api/user-reset-password', '/api/posts-public', '/api/premium-alert-config',
 ]);
 
 const POLICY_VERSION = '2026-08-21';
@@ -1101,6 +1101,34 @@ const PRO_CREW_PREVIEW = false;
 // PRO 구독 혜택: 편조구성원(동료 이름)을 상호 수락 전에도 미리 볼 수 있다.
 // 무료 사용자에게는 이 글이 공개 목록에 뜨는 시점에 crewPublic을 아예 보내지
 // 않고, 상호 수락 완료 후(handleRequestsRequesterAccept)에만 별도로 공개한다.
+/* ── posts-public (가입 전 둘러보기) ──────────────────────────
+   회사 게시판처럼 누구나 보는 범위만 내준다: 운항/객실, 날짜, 편명, 체크인·체크아웃.
+   누가 올렸는지(닉네임·직책·베이스)와 노선·메모·기종은 가입해야 보인다(posts-get). */
+function publicBoardPost(p) {
+  const o = p.offered || {};
+  const days = (Array.isArray(o.daySchedules) && o.daySchedules.length ? o.daySchedules : [{
+    month: (o.startDate || '').slice(0, 7), day: Number((o.startDate || '').slice(8, 10)) || null,
+    title: null, reportTime: o.reportTime, releaseTime: o.releaseTime,
+  }]).map(d => ({
+    date: d.month && d.day ? `${d.month}-${String(d.day).padStart(2, '0')}` : null,
+    // 편명·근무코드만 (일부 근무는 title 에 'DAD-ICN' 같은 노선이 들어 있어 뺀다)
+    flight: d.title && !/[-→]/.test(d.title) ? d.title : null,
+    checkIn: d.reportTime || null,
+    checkOut: d.releaseTime || null,
+  }));
+  return { id: p.id, crewType: p.crewType === 'CABIN' ? 'CABIN' : 'PILOT', days };
+}
+
+async function handlePostsPublic(env) {
+  const idx = await getPostsIndex(env);
+  // 지난 근무는 뺀다 — 마감 처리 전이라 active 로 남은 글이 있다. 날짜는 한국 시간 기준.
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const posts = idx.filter(p => p && p.status === 'active').map(publicBoardPost)
+    .filter(p => p.days.some(d => d.date && d.date >= today))
+    .sort((a, b) => String(a.days[0]?.date).localeCompare(String(b.days[0]?.date)));
+  return json({ posts });
+}
+
 async function handlePostsGet(request, env) {
   try {
     const auth = await authenticateRequest(request, env);
@@ -2611,6 +2639,7 @@ export default {
       else if (path === '/api/schedules-sync') response = await handleSchedulesSync(request, env, auth.email);
       else if (path === '/api/user-reset-password') response = await handleUserResetPassword(request, env);
       else if (path === '/api/user-delete') response = await handleUserDelete(request, env, auth.email);
+      else if (path === '/api/posts-public') response = await handlePostsPublic(env);
       else if (path === '/api/posts-get') response = await handlePostsGet(request, env);
       else if (path === '/api/posts-get-mine') response = await handlePostsGetMine(request, env, auth.email);
       else if (path === '/api/posts-create') response = await handlePostsCreate(request, env, ctx, auth.email, allowSandboxPro);

@@ -59,7 +59,7 @@ test('근무표가 바뀌어 내린 글은 목록에서 빠지고 사유가 남�
   assert.equal(stored.withdrawReason, 'roster-changed');
 
   // 다른 사용자 목록에서 즉시 사라져야 한다 — 이게 이 기능의 핵심이다.
-  const list = await rawWorker.fetch(new Request('https://example.test/api/posts-get'), env, {});
+  const list = await rawWorker.fetch(new Request('https://example.test/api/posts-public'), env, {});
   const { posts } = await list.json();
   assert.deepEqual(posts.map(p => p.id), []);
 });

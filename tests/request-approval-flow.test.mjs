@@ -8,7 +8,7 @@ const worker = {
     env.AUTH_SECRET ||= TEST_AUTH_SECRET;
     env.VERIFY_SECRET ||= 'test-verify-secret-at-least-32-characters';
     const url = new URL(request.url);
-    const publicPath = ['/api/posts-get', '/api/premium-alert-config'].includes(url.pathname);
+    const publicPath = ['/api/posts-get', '/api/posts-public', '/api/premium-alert-config'].includes(url.pathname);
     if (publicPath || request.headers.has('Authorization')) return rawWorker.fetch(request, env, ctx);
     let email = url.searchParams.get('email');
     if (!email && request.method !== 'GET') {
@@ -456,17 +456,22 @@ test('private validation rosters are not exposed in the public post list', async
     ownerEmail: 'poster@jejuair.net',
     deleteToken: 'secret',
     status: 'active',
-    offered: { patternName: '8/2 국제선', days: [2] },
+    offered: { patternName: '8/2 국제선', days: [2], daySchedules: [{ month: '2099-08', day: 2, title: '7C2201', dep: 'ICN', arr: 'NRT', reportTime: '07:00', releaseTime: '15:00' }] },
     ownerValidationRoster: [{ month: '2026-08', day: 1, type: 'OFF' }],
   };
   const env = { POSTS: createKv({ 'idx:posts': [post] }) };
 
-  const response = await worker.fetch(new Request('https://example.test/api/posts-get'), env, {});
+  // 전체 목록은 로그인한 사람만 받는다(근무 상세가 외부로 나가지 않게).
+  const anonymous = await worker.fetch(new Request('https://example.test/api/posts-get'), env, {});
+  assert.equal(anonymous.status, 401);
+
+  // 가입 전 둘러보기는 운항/객실·날짜·편명·체크인/아웃만 — 누가 올렸는지는 없다.
+  const response = await worker.fetch(new Request('https://example.test/api/posts-public'), env, {});
   assert.equal(response.status, 200);
   const publicPost = (await response.json()).posts[0];
-  assert.equal(publicPost.ownerValidationRoster, undefined);
-  assert.equal(publicPost.ownerEmail, undefined);
-  assert.equal(publicPost.deleteToken, undefined);
+  assert.deepEqual(Object.keys(publicPost).sort(), ['crewType', 'days', 'id']);
+  assert.equal(publicPost.crewType, 'CABIN');
+  for (const day of publicPost.days) assert.deepEqual(Object.keys(day).sort(), ['checkIn', 'checkOut', 'date', 'flight']);
 
   const mineResponse = await worker.fetch(
     new Request('https://example.test/api/posts-get-mine?email=poster%40jejuair.net'),
