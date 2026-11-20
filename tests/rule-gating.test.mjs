@@ -15,8 +15,9 @@ const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 
 test('규정 위반으로 선택 버튼을 잠그지 않는다', () => {
-  assert.match(app, /regBtn\.disabled = !has \|\| hasPast;/);   // 요청 진행 버튼
-  assert.match(app, /regBtn\.disabled = !has \|\| hasPast \|\| !!partialTrip;/);
+  // 훈련·지상근무(lockReason)는 규정이 아니라 교환 대상이 아니어서 막는다(2026-11-20).
+  assert.match(app, /regBtn\.disabled = !has \|\| hasPast \|\| !!locked;/);   // 요청 진행 버튼
+  assert.match(app, /regBtn\.disabled = !has \|\| hasPast \|\| !!locked \|\| !!partialTrip;/);
   assert.doesNotMatch(app, /regBtn\.disabled = !has \|\| hasFail/);
 });
 

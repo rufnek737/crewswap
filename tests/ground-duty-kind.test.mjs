@@ -44,3 +44,13 @@ test('서버 근무표 파싱도 MED 를 신체검사로 저장한다', () => {
   assert.match(worker, /\\bMED\\b\/i\.test\(actPair\)\) \{[\s\S]{0,200}title = '신체검사'/);
   assert.match(worker, /e\.lockReason = `\$\{title\} — 비행 아님, SWAP 불가`/);
 });
+
+test('접두사 붙은 정기훈련 코드도 구분한다 (2026-12 R_SIM2·RT_G2)', () => {
+  assert.equal(ctx.groundDutyKind('R_SIM2').title, 'SIM 훈련');
+  assert.equal(ctx.groundDutyKind('RT_G2').title, '훈련');
+  assert.equal(ctx.groundDutyKind('OFC').title, '지상근무');
+  const s = ctx.relabelGroundDuty({ type: 'GND', title: '지상근무', ground: '지상', activityCode: 'R_SIM2' });
+  assert.equal(s.title, 'SIM 훈련');
+  assert.equal(codes.classify('R_SIM2', new Map()).title, 'SIM 훈련');
+  assert.equal(codes.classify('RT_G2', new Map()).title, '훈련');
+});

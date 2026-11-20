@@ -15,8 +15,8 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 문의가 들어왔을 때 어느 버전을 쓰는지 확인하는 용도이자, 새 빌드가 기기에 제대로
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
-const APP_VERSION = "1.2.8";
-const APP_RELEASE_DATE = "2026.11.17";
+const APP_VERSION = "1.2.9";
+const APP_RELEASE_DATE = "2026.11.20";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-public", "/api/premium-alert-config",
@@ -1314,7 +1314,9 @@ function setImportBusy(busy) {
 function groundDutyKind(text) {
   const t = String(text || "");
   if (/\bMED\b|physical\s*exam|신체\s*검사/i.test(t)) return { ground: "MED", title: "신체검사" };
-  if (/\b(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(t)) return { ground: "SIM", title: "SIM 훈련" };
+  // R_SIM2 처럼 앞에 접두사가 붙으면 _ 때문에 \b 가 안 걸린다(2026-12 근무표, 정기 심).
+  if (/(?:\b|_)(SIM|OPC|LPC|LOFT|SPT|UPRT)\d*\b|\bS_/i.test(t)) return { ground: "SIM", title: "SIM 훈련" };
+  if (/\b(RT_G|TR_|GRD|TRN)\w*/i.test(t)) return { ground: "훈련", title: "훈련" };
   return { ground: "지상", title: "지상근무" };
 }
 
@@ -2553,7 +2555,8 @@ function renderCalendar() {
     if (cum.warnDays.has(day)) cell.classList.add("is-warn-consec"); // ⚠ 연속근무 한도 임박 (calcCumulative 참고)
     // 👀 등록 글 카운트 — 다른 사용자가 이 날짜의 근무를 내놓은 스왑 글 건수
     // (post.offered.days에 해당 날짜가 포함된 글을 집계).
-    const watcherCount = state.posts.filter(p => p.offered.days.includes(day)).length;
+    // 날짜 숫자만 비교하면 11/7 글이 12/7 에도 세어진다(2026-11-20 Kay) — 월까지 맞춘다.
+    const watcherCount = state.posts.filter(p => window.CrewSwapPostDates.dateKeysForPost(p).includes(dayKey(day))).length;
     cell.innerHTML = `
       <div class="date-number">
         <span>${day}</span>
@@ -2610,6 +2613,9 @@ function renderSelection() {
   const ss = selectedSchedules();
   const has = ss.length > 0;
   const hasPast = has && selectionHasPastDuty(ss);
+  // 훈련·지상근무·임시코드는 회사 지정 근무라 교환 대상이 아니다 — 버튼부터 막는다(2026-11-20 Kay).
+  const locked = has ? ss.find(s => s.lockReason) : null;
+  const lockedTitle = locked ? `${schedMonthNum(locked)}/${locked.day} ${locked.lockReason}` : "";
   const checks = has ? checkRulesForSelection() : [];
   const failItems = checks.filter(c => c.status === "FAIL");
   const hasFail = failItems.length > 0;
@@ -2618,8 +2624,8 @@ function renderSelection() {
   if (pending) {
     // 의향묻기/요청하기로 진입한 상태 — 버튼이 '스왑 올리기'가 아니라 진행 버튼으로 바뀜
     regBtn.textContent = state.pendingRequestType === "ask" ? "의향묻기로 진행 →" : "요청하기로 진행 →";
-    regBtn.disabled = !has || hasPast;
-    regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다" : "";
+    regBtn.disabled = !has || hasPast || !!locked;
+    regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다" : lockedTitle;
   } else {
     regBtn.textContent = state.guideFlow === "post" ? "다음: 희망 조건 입력 →" : "이 근무로 스왑 올리기";
     /* 규정에 걸려도 등록은 막지 않는다. 앱의 판정은 사전 검토일 뿐이고 최종 판단은 회사가
@@ -2627,8 +2633,9 @@ function renderSelection() {
        목록에 그대로 보인다. 지난 근무는 규정이 아니라 사실의 문제라 그대로 막는다. */
     // 레이오버 일부만 고른 것은 규정이 아니라 조합 자체가 불가능해 지난 근무처럼 막는다.
     const partialTrip = checks.find(c => c.blocking);
-    regBtn.disabled = !has || hasPast || !!partialTrip;
+    regBtn.disabled = !has || hasPast || !!locked || !!partialTrip;
     regBtn.title = hasPast ? "이미 지난 근무는 교환할 수 없습니다"
+      : locked ? lockedTitle
       : partialTrip ? partialTrip.detail
       : hasFail ? `규정 확인 필요: ${failItems.map(c => c.label).join(", ")}` : "";
   }

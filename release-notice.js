@@ -15,7 +15,7 @@
   // '다시 보지 않기' 체크박스를 붙인 뒤에도 공지가 뜨지 않았다. 한 번 초기화한다.
   const current = Object.freeze({
     id: "launch-free-20270930-r4",
-    version: "1.2.8",
+    version: "1.2.9",
     date: "2026.09.23",
     title: "출시 기념 · 2027년 9월 30일까지 모든 기능 무료",
     summary: "정식 출시를 기념해 2027년 9월 30일까지 PRO 기능과 급구 쿠폰을 무료로 드립니다.",
@@ -31,18 +31,20 @@
   // 「다시 보지 않기」를 누른 사람에게는 새 항목이 안 뜬다.
   // 위의 current 는 공지함(알림 목록)에 남는 출시 기념 안내로, 이 팝업과는 따로 간다.
   const whatsNew = Object.freeze({
-    id: "whatsnew-1.2.8",
-    version: "1.2.8",
-    date: "2026.11.17",
+    id: "whatsnew-1.2.9",
+    version: "1.2.9",
+    date: "2026.11.20",
     items: Object.freeze([
+      Object.freeze({ version: "1.2.9", icon: "🎓", title: "지상 근무 표시 개선",
+        body: "SIM 훈련과 지상 훈련을 구분해 보여 드려요. 훈련·지상근무는 회사 지정 근무라 스왑이 불가합니다." }),
+      Object.freeze({ version: "1.2.9", icon: "🛠", title: "버그 수정",
+        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.8", icon: "🔍", title: "가입 전에도 올라온 근무 확인",
         body: "가입하지 않아도 앱 첫 화면에서 올라온 근무의 날짜·편명·체크인/아웃을 볼 수 있어요. 올린 사람·노선·희망 조건은 지금처럼 가입한 분만 볼 수 있어요. 아직 가입 안 한 동료에게 알려 주세요." }),
       Object.freeze({ version: "1.2.8", icon: "🎯", title: "날짜가 다른 교환도 쉽게",
         body: "상대와 날짜가 맞지 않아 상대 달력에서 바꿀 날을 고를 때, 내 일정이 비어 있고 휴식·모기지 기준을 통과하는 근무에 「추천」을 표시해 드려요. 요청이 오면 바로 알림이 가고, 2일 동안 답이 없으면 한 번 더 알려 드려요." }),
       Object.freeze({ version: "1.2.7", icon: "📢", title: "공지 탭에서 새 기능 안내",
         body: "이 안내를 놓쳐도 공지 탭에서 언제든 다시 볼 수 있어요." }),
-      Object.freeze({ version: "1.2.7", icon: "🛠", title: "버그 수정",
-        body: "확인된 오류를 수정해 안정성을 높였습니다." }),
       Object.freeze({ version: "1.2.6", icon: "🔔", title: "새 기능 「나만의 편조 알림」",
         body: "알림 받을 분을 최대 2명까지 등록해 두면, 그분과 같은 편조가 되는 스왑을 최종 확정 전에 알려드려요. 진행 여부는 직접 선택하실 수 있어요. 누구나 무료로 쓸 수 있어요." }),
       Object.freeze({ version: "1.2.5", icon: "🛠", title: "퀵턴·레이오버 구분 오류 수정",
