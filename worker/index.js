@@ -22,6 +22,7 @@ import { activateProTrial, getProStatus, PRO_SANDBOX_DURATION_MS } from './pro-e
 import { applyWalletCommand, normalizeWallet, publicWallet } from './credit-wallet.mjs';
 import { apnsConfigured, sanitizeNativeDevice, sendApnsNotification } from './apns.mjs';
 import { fcmConfigured, sendFcmNotification } from './fcm.mjs';
+import { offBalance } from './off-balance.mjs';
 import { AVOID_KEY, AVOID_MAX, avoidNamesOfRecord, normalizeAvoidName, dateKeysOf, dutyHasPerson, blockedKeys } from './avoid-person.mjs';
 import {
   CREWSWAP_BUNDLE_ID,
@@ -1537,6 +1538,11 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
     if (post.status !== 'active') return json({ error: '종료되었거나 이미 성사된 글입니다' }, 409);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
     if (post.friendDirect && !(post.visibleTo || []).includes(authEmail)) return json({ error: '글을 찾을 수 없음' }, 404);
+    // OFF 맞교환 — 보낼 때 이미 내 근무를 정했으면 여기서 먼저 막는다(수락 단계에서도 다시 본다).
+    if (offered && type !== 'ask') {
+      const offIssue = await offBalanceViolation(env, { fromEmail: authEmail, toEmail: post.ownerEmail, openRoster: safeOpenRoster }, post, offered);
+      if (offIssue) return offBalanceResponse(offIssue);
+    }
 
     const requestedId = String(requestId || '').trim();
     const id = /^REQ-[A-Za-z0-9-]{8,100}$/.test(requestedId)
@@ -1623,6 +1629,8 @@ async function handleRequestsAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    const offIssue = await offBalanceViolation(env, rec, post, rec.offered);
+    if (offIssue) return offBalanceResponse(offIssue);
     // 나만의 편조 알림 — 막지 않고 한 번 묻는다. 본인이 확인(avoidAck)하면 그대로 진행한다.
     if (!avoidAck && await avoidViolation(env, rec.toEmail, rec.fromEmail, dateKeysOf(rec.offered, rec.openRoster?.[0]?.month))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
@@ -1671,6 +1679,20 @@ function markerEntries(markers) {
     };
   }).filter(entry => entry.month && entry.day);
 }
+
+/* OFF 맞교환 — 스왑 뒤 어느 한쪽 OFF 가 줄면 막는다. 두 사람의 지금 근무표로 본다(2026-11-21 Kay). */
+async function offBalanceViolation(env, rec, post, requesterOffered) {
+  const posterKeys = dateKeysOf(post?.offered || rec.postOffered, post?.deadlineMonth);
+  const requesterKeys = dateKeysOf(requesterOffered, rec.openRoster?.[0]?.month || post?.deadlineMonth);
+  if (!posterKeys.length || !requesterKeys.length) return null;
+  const roster = async email => (await env.POSTS.get(`schedule:${String(email || '').toLowerCase()}`, { type: 'json' }))?.schedules || [];
+  const posterEmail = post?.ownerEmail || rec.toEmail;
+  const { aDelta: posterDelta, bDelta: requesterDelta } = offBalance(await roster(posterEmail), await roster(rec.fromEmail), posterKeys, requesterKeys);
+  if (requesterDelta < 0) return `이 스왑으로 요청한 사람의 OFF가 ${-requesterDelta}일 줄어요. OFF는 주고받는 수가 같아야 합니다.`;
+  if (posterDelta < 0) return `이 스왑으로 글 작성자의 OFF가 ${-posterDelta}일 줄어요. OFF는 주고받는 수가 같아야 합니다.`;
+  return null;
+}
+const offBalanceResponse = msg => json({ error: msg, code: 'OFF_BALANCE' }, 409);
 
 function validateMogijiExchange(rec, post, selectedOffered, requesterValidationRoster) {
   if (!mogijiPolicy || post?.crewType === 'CABIN') return null;
@@ -1750,6 +1772,8 @@ async function handleRequestsPosterSelect(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    const offIssue = await offBalanceViolation(env, rec, post, offered);
+    if (offIssue) return offBalanceResponse(offIssue);
     if (!avoidAck && await avoidViolation(env, rec.toEmail, rec.fromEmail, dateKeysOf(offered, rec.openRoster?.[0]?.month))) return AVOID_RESPONSE();
     rec.offered = offered;                  // 글작성자가 제안한 '요청자가 줄 근무'
     rec.stage = 2;
@@ -1785,6 +1809,8 @@ async function handleRequestsRequesterAccept(request, env, authEmail) {
     if (cabinViolation) return cabinRestViolationResponse(cabinViolation);
     const mogijiViolation = validateMogijiExchange(rec, post, rec.offered, requesterValidationRoster);
     if (mogijiViolation) return mogijiViolationResponse(mogijiViolation);
+    const offIssue = await offBalanceViolation(env, rec, post, rec.offered);
+    if (offIssue) return offBalanceResponse(offIssue);
     // 나만의 편조 알림 — 최종 단계에서 최신 근무표로 본다. 막지 않고 묻기만 한다.
     if (!avoidAck && await avoidViolation(env, rec.fromEmail, rec.toEmail, dateKeysOf(post?.offered || rec.postOffered, post?.deadlineMonth))) return AVOID_RESPONSE();
     if (!await claimPostForRequest(env, rec.postId, rec.id))
