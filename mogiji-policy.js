@@ -1,5 +1,6 @@
 (function attachCrewSwapMogijiPolicy(root) {
   const TRIP_TYPES = new Set(["국내선", "국제선", "LAYOV", "ARRIVAL"]);
+  const HOME_BASES = new Set(["GMP", "ICN", "PUS", "CJU"]);
 
   function requiredRestDays(daysAway) {
     if (daysAway < 3) return 0;
@@ -57,15 +58,27 @@
       }
     });
 
+    // 트립 끝 = ARRIVAL 이 있는 날, 또는 외지→베이스 복귀편이 있는 날.
+    // 복귀편이 자정 전 도착이면 다음 날 ARRIVAL 이 없어서 예전엔 트립을 못 찾았다(2026-11-21).
+    const isReturnFlight = entry => (entry.type === "국제선" || entry.type === "국내선")
+      && HOME_BASES.has(entry.arr) && entry.dep && !HOME_BASES.has(entry.dep);
     [...byDate.entries()].forEach(([arrivalKey, entries]) => {
-      if (!entries.some(entry => entry.type === "ARRIVAL")) return;
+      const hasArrival = entries.some(entry => entry.type === "ARRIVAL");
+      const returnsHome = !hasArrival && entries.some(isReturnFlight)
+        && !(byDate.get(shiftedKey(arrivalKey, 1)) || []).some(entry => entry.type === "ARRIVAL");
+      if (!hasArrival && !returnsHome) return;
       let tripStartKey = arrivalKey;
       let previousKey = shiftedKey(arrivalKey, -1);
       while (byDate.has(previousKey)) {
         const previousEntries = byDate.get(previousKey);
         const continuesTrip = previousEntries.some(entry =>
           TRIP_TYPES.has(entry.type) && entry.type !== "ARRIVAL");
-        if (!continuesTrip) break;
+        // 전날이 베이스로 돌아온 비행(퀵턴 등)이면 이번 트립과 이어지지 않는다.
+        const endedAtHome = previousEntries.some(entry =>
+          (entry.type === "국제선" || entry.type === "국내선") && HOME_BASES.has(entry.arr));
+        // 단, ARRIVAL 바로 전날의 복귀편(자정 넘어 도착)은 트립의 일부다.
+        const isOvernightLeg = hasArrival && previousKey === shiftedKey(arrivalKey, -1);
+        if (!continuesTrip || (endedAtHome && !isOvernightLeg)) break;
         tripStartKey = previousKey;
         previousKey = shiftedKey(previousKey, -1);
       }

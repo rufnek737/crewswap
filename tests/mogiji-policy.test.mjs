@@ -66,3 +66,22 @@ test("embedded protection marker survives a roster snapshot missing the trip", (
     { month: "2026-08", day: 24, type: "RSV" },
   ])?.requiredDays, 1);
 });
+
+test('자정 전에 베이스로 돌아오는 복귀편도 트립 끝으로 본다(ARRIVAL 없음)', async () => {
+  const pol = policy;
+  const r = [
+    { month: '2026-12', day: 12, type: '국내선', dep: 'GMP', arr: 'GMP' },
+    { month: '2026-12', day: 13, type: '국제선', dep: 'ICN', arr: 'PQC' },
+    { month: '2026-12', day: 14, type: 'LAYOV' },
+    { month: '2026-12', day: 15, type: '국제선', dep: 'PQC', arr: 'ICN' },
+    { month: '2026-12', day: 16, type: 'OFF' },
+  ];
+  const p = pol.collectProtectedDays(r);
+  assert.deepEqual([...p.keys()], ['2026-12-16']);
+  assert.equal(p.get('2026-12-16').tripDays, 3);
+  // 2일 트립(MFM 1박)은 보호 휴무 없음
+  assert.equal(pol.collectProtectedDays([
+    { month: '2026-12', day: 24, type: '국제선', dep: 'ICN', arr: 'MFM' },
+    { month: '2026-12', day: 25, type: '국제선', dep: 'MFM', arr: 'ICN' },
+  ]).size, 0);
+});
