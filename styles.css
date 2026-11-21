@@ -1422,6 +1422,12 @@ button.cmp-cell.has-req.is-picked .cmp-reco { background: rgba(255,255,255,.3); 
 .fc-row:first-child { border-top: none; }
 .fc-head { background: var(--panel); font-weight: 700; font-size: 13px; }
 .fc-head > div { padding: 8px; text-align: center; }
+.fc-head small { display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+.fc-head .fc-unfriend { display: block; margin: 2px auto 0; font-size: 11px; font-weight: 400; }
+.fc-head .fc-head-target { color: var(--primary); }
+/* 친구 여러 명 — 열이 좁아지면 가로로 밀어서 본다 */
+.fc-table.is-wide { overflow-x: auto; }
+.fc-table.is-wide .fc-row { min-width: calc(56px + var(--fc-cols, 4) * 92px); }
 .fc-date { display: grid; place-items: center; padding: 8px 4px; font-size: 13px; }
 .fc-date small { font-size: 10px; color: var(--muted); }
 .fc-date.is-sun small { color: #d33; }
@@ -1444,3 +1450,6 @@ button.fc-cell.is-picked small, button.fc-cell.is-picked .fd-time { color: rgba(
 .fc-swapbar-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .fc-swapbar-msg { padding: 8px 10px; border-radius: 8px; background: #fff5f5; color: #c53030; font-size: 13px; line-height: 1.45; }
 .friend-allow input[type="checkbox"] { width: 18px; height: 18px; min-width: 0; margin: 0; flex: none; }
+/* 가로로 밀어도 날짜 칸은 왼쪽에 붙어 있게 */
+.fc-table.is-wide .fc-row > :first-child { position: sticky; left: 0; z-index: 1; background: #fff; }
+.fc-table.is-wide .fc-head > :first-child { background: var(--panel); }

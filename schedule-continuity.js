@@ -76,7 +76,7 @@
       const label = /SIM/i.test(`${previous.title || ""} ${previous.activityCode || ""} ${entry.title || ""}`) ? "SIM 종료" : `${previous.title || "지상근무"} 종료`;
       if (entry.title === label) return;
       entry.title = label;
-      entry.routeSummary = label;
+      entry.routeSummary = null;   // 제목과 같은 글자가 두 줄로 나오지 않게
       entry.arrivalAirport = null;
       changed++;
     });

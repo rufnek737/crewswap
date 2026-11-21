@@ -2238,7 +2238,9 @@ async function openMyPostsManager() {
 // ── 친구 스케줄 (2026-11-21) ──
 // 서로 수락한 친구끼리 근무표를 나란히 본다. 서버는 편조 이름을 빼고 보낸다.
 // 친구는 서버가 정한 임의 id 로만 다룬다(이메일은 오지 않는다).
-const friendsState = { friends: [], results: [], selected: null, schedule: null, month: null, allowDirect: true, pickTheirs: new Set(), pickMine: new Set() };
+// shown: 비교표에 함께 띄운 친구(최대 FRIENDS_SHOWN_MAX명). selected/schedule: 지금 스왑을 고르는 친구 한 명.
+const FRIENDS_SHOWN_MAX = 5;
+const friendsState = { friends: [], results: [], shown: [], schedules: {}, selected: null, schedule: null, month: null, allowDirect: true, pickTheirs: new Set(), pickMine: new Set() };
 
 async function friendsApi(path, body) {
   const res = await apiFetch(`${API_BASE}/api/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
@@ -2254,9 +2256,29 @@ async function loadFriends() {
     friendsState.allowDirect = data.allowDirect !== false;
   } catch (e) { showToast(e.message); }
   const ids = friendsState.friends.filter(f => f.status === "friend").map(f => f.id);
-  if (!ids.includes(friendsState.selected)) { friendsState.selected = ids[0] || null; friendsState.schedule = null; }
+  friendsState.shown = friendsState.shown.filter(id => ids.includes(id));
+  if (!friendsState.shown.length && ids.length) friendsState.shown = ids.slice(0, 1);
+  if (!friendsState.shown.includes(friendsState.selected)) setSwapFriend(friendsState.shown[0] || null);
   renderFriends();
-  if (friendsState.selected && !friendsState.schedule) selectFriend(friendsState.selected);
+  await Promise.all(friendsState.shown.map(loadFriendSchedule));
+}
+
+async function loadFriendSchedule(id, force = false) {
+  if (!id || (friendsState.schedules[id] && !force)) return;
+  try {
+    const list = (await friendsApi("friends-schedule", { id })).schedules || [];
+    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(list);
+    friendsState.schedules[id] = list;
+  } catch (e) { showToast(e.message); friendsState.schedules[id] = []; }
+  if (id === friendsState.selected) friendsState.schedule = friendsState.schedules[id];
+  renderFriends();
+}
+
+// 스왑 상대를 바꾸면 받을 근무 선택은 비운다(내 근무 선택은 둔다).
+function setSwapFriend(id) {
+  if (friendsState.selected !== id) { friendsState.pickTheirs.clear(); friendsState.swapMsg = null; }
+  friendsState.selected = id;
+  friendsState.schedule = id ? friendsState.schedules[id] || null : null;
 }
 
 async function searchFriends() {
@@ -2269,16 +2291,19 @@ async function searchFriends() {
   renderFriends();
 }
 
+// 친구 칩 — 누를 때마다 비교표에 넣고 뺀다. 최대 5명까지 한 번에 본다(2026-11-21 Kay).
 async function selectFriend(id) {
-  friendsState.selected = id;
-  friendsState.pickTheirs.clear(); friendsState.pickMine.clear();
-  friendsState.schedule = null;
+  const shown = friendsState.shown;
+  if (shown.includes(id)) {
+    friendsState.shown = shown.filter(x => x !== id);
+    if (friendsState.selected === id) setSwapFriend(friendsState.shown[0] || null);
+    return renderFriends();
+  }
+  if (shown.length >= FRIENDS_SHOWN_MAX) { showToast(`한 번에 ${FRIENDS_SHOWN_MAX}명까지 볼 수 있어요. 다른 친구를 먼저 빼 주세요`); return; }
+  friendsState.shown = [...shown, id];
+  if (!friendsState.selected) setSwapFriend(id);
   renderFriends();
-  try {
-    friendsState.schedule = (await friendsApi("friends-schedule", { id })).schedules || [];
-    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(friendsState.schedule);
-  } catch (e) { showToast(e.message); friendsState.schedule = []; }
-  renderFriends();
+  await loadFriendSchedule(id);
 }
 
 async function onFriendsClick(e) {
@@ -2339,8 +2364,11 @@ function friendSwappable(s) {
 function patternKeys(list, s, bases) {
   return tripKeysOf(fdKey(s), list, bases);
 }
-function toggleFriendPick(action, key) {
+function toggleFriendPick(action, value) {
   const mine = action === "pick-mine";
+  // 친구 칸은 "친구id|날짜" — 다른 친구 칸을 누르면 그 친구가 스왑 상대가 된다.
+  let key = value;
+  if (!mine) { const [fid, k] = value.split("|"); key = k; setSwapFriend(fid); }
   const list = mine ? state.schedules : (friendsState.schedule || []);
   const set = mine ? friendsState.pickMine : friendsState.pickTheirs;
   const s = list.find(x => fdKey(x) === key);
@@ -2507,45 +2535,48 @@ function renderFriends() {
 
   const friends = friendsState.friends.filter(f => f.status === "friend");
   $("#friendChips").innerHTML = friends.length
-    ? friends.map(f => `<button type="button" class="friend-chip${f.id === friendsState.selected ? " is-active" : ""}" data-friend-action="select" data-friend-id="${escapeHtml(f.id)}"><span>${escapeHtml(f.name.slice(0, 1))}</span>${escapeHtml(f.name)}</button>`).join("")
+    ? friends.map(f => `<button type="button" class="friend-chip${friendsState.shown.includes(f.id) ? " is-active" : ""}" data-friend-action="select" data-friend-id="${escapeHtml(f.id)}"><span>${escapeHtml(f.name.slice(0, 1))}</span>${escapeHtml(f.name)}</button>`).join("")
     : `<p class="hint">아직 친구가 없어요. 위에서 사번이나 실명으로 찾아 요청해 보세요.</p>`;
   $("#friendChips").insertAdjacentHTML("beforeend", `<label class="friend-allow"><input type="checkbox" data-friend-action="allow-direct"${friendsState.allowDirect ? " checked" : ""}> 친구의 직접 스왑 요청 받기</label>`);
 
   const box = $("#friendCompare");
+  const shownFriends = friendsState.shown.map(id => friends.find(f => f.id === id)).filter(Boolean);
+  if (!shownFriends.length) { box.innerHTML = ""; return; }
+  if (shownFriends.some(f => !friendsState.schedules[f.id])) { box.innerHTML = `<p class="hint">불러오는 중…</p>`; return; }
   const friend = friends.find(f => f.id === friendsState.selected);
-  if (!friend) { box.innerHTML = ""; return; }
-  if (!friendsState.schedule) { box.innerHTML = `<p class="hint">불러오는 중…</p>`; return; }
-  const theirs = friendsState.schedule;
-  const months = [...new Set([...state.schedules.map(s => s.month || state.currentMonth), ...theirs.map(s => s.month)].filter(Boolean))].sort();
+  const all = shownFriends.flatMap(f => friendsState.schedules[f.id]);
+  const months = [...new Set([...state.schedules.map(s => s.month || state.currentMonth), ...all.map(s => s.month)].filter(Boolean))].sort();
   if (!months.includes(friendsState.month)) friendsState.month = months.includes(state.currentMonth) ? state.currentMonth : months[months.length - 1];
   const month = friendsState.month;
   if (!month) { box.innerHTML = `<p class="hint">아직 불러온 스케줄이 없어요.</p>`; return; }
   const [y, m] = month.split("-").map(Number);
   const days = new Date(y, m, 0).getDate();
   const mine = d => state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
-  const their = d => theirs.find(s => s.day === d && s.month === month);
-  const direct = friend.acceptsDirect !== false;
-  const cell = (s, kind) => {
-    const set = kind === "mine" ? friendsState.pickMine : friendsState.pickTheirs;
-    if (!direct || !friendSwappable(s)) return `<div class="fc-cell">${friendDutyHtml(s)}</div>`;
+  const their = (f, d) => friendsState.schedules[f.id].find(s => s.day === d && s.month === month);
+  const anyDirect = shownFriends.some(f => f.acceptsDirect !== false);
+  const cell = (s, f) => {
+    // f 가 없으면 내 칸. 친구 칸은 그 친구가 직접 요청을 받을 때만 고를 수 있다.
+    const pickable = (f ? f.acceptsDirect !== false : anyDirect) && friendSwappable(s);
+    if (!pickable) return `<div class="fc-cell">${friendDutyHtml(s)}</div>`;
     const key = fdKey(s);
-    return `<button type="button" class="fc-cell is-pickable${set.has(key) ? " is-picked" : ""}" data-friend-action="pick-${kind === "mine" ? "mine" : "theirs"}" data-friend-id="${key}">${friendDutyHtml(s)}</button>`;
+    const picked = f ? f.id === friendsState.selected && friendsState.pickTheirs.has(key) : friendsState.pickMine.has(key);
+    return `<button type="button" class="fc-cell is-pickable${picked ? " is-picked" : ""}" data-friend-action="pick-${f ? "theirs" : "mine"}" data-friend-id="${escapeHtml(f ? `${f.id}|${key}` : key)}">${friendDutyHtml(s)}</button>`;
   };
+  const cols = `grid-template-columns: 56px repeat(${shownFriends.length + 1}, minmax(0, 1fr)); --fc-cols: ${shownFriends.length + 1}`;
   const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   const rows = [];
   for (let d = 1; d <= days; d++) {
     const w = new Date(y, m - 1, d).getDay();
-    rows.push(`<div class="fc-row"><div class="fc-date${w === 0 ? " is-sun" : w === 6 ? " is-sat" : ""}"><strong>${m}/${d}</strong><small>${dow[w]}</small></div>${cell(mine(d), "mine")}${cell(their(d), "theirs")}</div>`);
+    rows.push(`<div class="fc-row" style="${cols}"><div class="fc-date${w === 0 ? " is-sun" : w === 6 ? " is-sat" : ""}"><strong>${m}/${d}</strong><small>${dow[w]}</small></div>${cell(mine(d))}${shownFriends.map(f => cell(their(f, d), f)).join("")}</div>`);
   }
+  const head = shownFriends.map(f => `<div class="${f.id === friendsState.selected && friendsState.pickTheirs.size ? "fc-head-target" : ""}">${escapeHtml(f.name)}${f.acceptsDirect === false ? "<small>직접 요청 안 받음</small>" : ""}<button type="button" class="link-button fc-unfriend" data-friend-action="remove" data-friend-id="${escapeHtml(f.id)}">끊기</button></div>`).join("");
   box.innerHTML = `
-    <div class="fc-months">${months.map(mo => `<button type="button" class="secondary-button${mo === month ? " is-active" : ""}" data-friend-action="month" data-friend-id="${mo}">${Number(mo.slice(5))}월</button>`).join("")}
-      ${btn("remove", friend.id, "친구 끊기", "link-button")}</div>
-    ${direct ? `<p class="hint fc-guide">스왑하려면 <b>${escapeHtml(friend.name)}</b> 님 근무(받을 근무)와 내 근무(줄 근무)를 눌러 고르세요. 레이오버는 패턴 전체가 함께 골라져요.</p>`
-      : `<p class="hint fc-guide">${escapeHtml(friend.name)} 님은 지금 직접 스왑 요청을 받지 않아요.</p>`}
-    <div class="fc-table"><div class="fc-row fc-head"><div>날짜</div><div>나</div><div>${escapeHtml(friend.name)}</div></div>${rows.join("")}</div>
-    ${direct && (friendsState.pickTheirs.size || friendsState.pickMine.size) ? `
+    <div class="fc-months">${months.map(mo => `<button type="button" class="secondary-button${mo === month ? " is-active" : ""}" data-friend-action="month" data-friend-id="${mo}">${Number(mo.slice(5))}월</button>`).join("")}</div>
+    <p class="hint fc-guide">위의 친구 이름을 눌러 최대 ${FRIENDS_SHOWN_MAX}명까지 함께 볼 수 있어요.${anyDirect ? " 스왑하려면 친구 근무(받을 근무)와 내 근무(줄 근무)를 눌러 고르세요. 한 번에 한 친구와만 고를 수 있고, 레이오버는 패턴 전체가 함께 골라져요." : ""}</p>
+    <div class="fc-table${shownFriends.length > 2 ? " is-wide" : ""}"><div class="fc-row fc-head" style="${cols}"><div>날짜</div><div>나</div>${head}</div>${rows.join("")}</div>
+    ${friend && (friendsState.pickTheirs.size || friendsState.pickMine.size) ? `
     <div class="fc-swapbar">
-      <div><small>받을 근무</small><strong>${friendsState.pickTheirs.size ? [...friendsState.pickTheirs].sort().map(k => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`).join(", ") : "친구 근무를 고르세요"}</strong></div>
+      <div><small>받을 근무${friendsState.pickTheirs.size ? ` · ${escapeHtml(friend.name)}` : ""}</small><strong>${friendsState.pickTheirs.size ? [...friendsState.pickTheirs].sort().map(k => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`).join(", ") : "친구 근무를 고르세요"}</strong></div>
       <div><small>줄 근무</small><strong>${friendsState.pickMine.size ? [...friendsState.pickMine].sort().map(k => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`).join(", ") : "내 근무를 고르세요"}</strong></div>
       ${friendsState.swapMsg ? `<div class="fc-swapbar-msg">${friendsState.swapMsg}</div>` : ""}
       <div class="fc-swapbar-actions">${btn("swap-clear", "", "다시 고르기")}${btn("swap-send", "", "스왑 요청 보내기", "primary-button")}</div>
