@@ -11,7 +11,7 @@ import gradePolicy from '../grade-policy.js';
 import crewGrades from '../crew-grades.js';
 import airportAliases from '../airport-aliases.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
-import { handleFriendsList, handleFriendsSearch, handleFriendsRequest, handleFriendsRespond, handleFriendsRemove, handleFriendsSchedule, removeAllFriends } from './friends.mjs';
+import { handleFriendsList, handleFriendsSearch, handleFriendsRequest, handleFriendsRespond, handleFriendsRemove, handleFriendsSchedule, handleFriendsSettings, handleFriendsSwapStart, removeAllFriends } from './friends.mjs';
 import {
   createStore, listPosts, listRequests, listRequestsForEmail,
   listPremiumAlerts, savePremiumAlerts, saveIndex,
@@ -1075,6 +1075,11 @@ async function handleFriends(path, request, env, me, ctx) {
   else if (path === '/api/friends-respond') r = await handleFriendsRespond(env, me, body.id, !!body.accept);
   else if (path === '/api/friends-remove') r = await handleFriendsRemove(env, me, body.id);
   else if (path === '/api/friends-schedule') r = await handleFriendsSchedule(env, me, body.id);
+  else if (path === '/api/friends-settings') r = await handleFriendsSettings(env, me, body.allowDirect);
+  else if (path === '/api/friends-swap-start') {
+    r = await handleFriendsSwapStart(env, me, body.id, body.days, mogijiPolicy);
+    if (r.created) { const idx = await getPostsIndex(env); idx.push(r.created); await savePostsIndex(env, idx); }
+  }
   else return json({ error: 'Not found' }, 404);
   if (r.notify && ctx?.waitUntil) {
     const user = await env.POSTS.get(`user:${me}`, { type: 'json' });
@@ -1221,7 +1226,7 @@ async function handlePostsPublic(env) {
   const idx = await getPostsIndex(env);
   // 지난 근무는 뺀다 — 마감 처리 전이라 active 로 남은 글이 있다. 날짜는 한국 시간 기준.
   const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-  const posts = idx.filter(p => p && p.status === 'active').map(publicBoardPost)
+  const posts = idx.filter(p => p && p.status === 'active' && !p.friendDirect).map(publicBoardPost)
     .filter(p => p.days.some(d => d.date && d.date >= today))
     .sort((a, b) => String(a.days[0]?.date).localeCompare(String(b.days[0]?.date)));
   return json({ posts });
@@ -1244,8 +1249,10 @@ async function handlePostsGet(request, env) {
         if (dutyHasPerson(await loadSchedules(p.ownerEmail), dateKeysOf(p.offered, p.deadlineMonth), avoidNames)) avoidBlockedIds.add(p.id);
       }));
     }
-    const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting')).map(p => {
-      const { deleteToken, ownerEmail, ownerValidationRoster, ...pub } = p;
+    // 친구 직접 요청용 비공개 글은 요청한 사람에게만 보인다.
+    const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting'))
+      .filter(p => !p.friendDirect || (auth && (p.visibleTo || []).includes(auth.email))).map(p => {
+      const { deleteToken, ownerEmail, ownerValidationRoster, visibleTo, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
       if (avoidBlockedIds.has(p.id)) pub.avoidBlocked = true;
@@ -1529,6 +1536,7 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
     if (!post) return json({ error: '글을 찾을 수 없음' }, 404);
     if (post.status !== 'active') return json({ error: '종료되었거나 이미 성사된 글입니다' }, 409);
     if (!post.ownerEmail) return json({ error: '상대방 연락 정보가 없는 글입니다 (구버전 글)' }, 400);
+    if (post.friendDirect && !(post.visibleTo || []).includes(authEmail)) return json({ error: '글을 찾을 수 없음' }, 404);
 
     const requestedId = String(requestId || '').trim();
     const id = /^REQ-[A-Za-z0-9-]{8,100}$/.test(requestedId)

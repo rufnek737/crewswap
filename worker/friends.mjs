@@ -13,7 +13,8 @@ const KEY = email => `friends:${email}`;
 
 // 근무표에서 친구에게 보여줄 칸만 남긴다. 편조·좌석·자격 정보는 보내지 않는다.
 const SHARED_FIELDS = ['month', 'day', 'type', 'title', 'dep', 'arr', 'routeSummary', 'reportTime',
-  'departureTime', 'arrivalTime', 'releaseTime', 'ground', 'station', 'standby', 'activityCode', 'aircraft'];
+  'departureTime', 'arrivalTime', 'releaseTime', 'ground', 'station', 'standby', 'activityCode', 'aircraft',
+  'patternId', 'lockReason'];
 export function sharedDuty(s) {
   const out = {};
   for (const k of SHARED_FIELDS) if (s?.[k] !== undefined && s[k] !== null) out[k] = s[k];
@@ -50,15 +51,97 @@ async function peerCard(env, email, status) {
   const user = await env.POSTS.get(`user:${email}`, { type: 'json' });
   if (!user) return null;                          // 탈퇴한 사람은 목록에서 뺀다
   const p = user.profile || {};
-  const { id } = await readRecord(env, email);
-  return { id, name: p.realName || p.nickname || user.username || '이름 없음',
-    crewType: p.crewType || null, roleType: p.roleType || null, base: p.base || null, status };
+  const rec = await readRecord(env, email);
+  return { id: rec.id, name: p.realName || p.nickname || user.username || '이름 없음',
+    crewType: p.crewType || null, roleType: p.roleType || null, base: p.base || null, status,
+    acceptsDirect: status === 'friend' ? rec.allowDirect !== false : undefined };
 }
 
 export async function handleFriendsList(env, me) {
   const rec = await readRecord(env, me);
   const cards = await Promise.all(rec.list.map(f => peerCard(env, f.email, f.status)));
-  return { myId: rec.id, friends: cards.filter(Boolean) };
+  return { myId: rec.id, allowDirect: rec.allowDirect !== false, friends: cards.filter(Boolean) };
+}
+
+// 「친구의 직접 스왑 요청 받기」 켜기/끄기. 끄면 친구 화면에서 내 근무에 요청 버튼이 안 보이고
+// 서버도 받지 않는다.
+export async function handleFriendsSettings(env, me, allowDirect) {
+  const rec = await readRecord(env, me);
+  rec.allowDirect = !!allowDirect;
+  await save(env, me, rec);
+  return { body: { ok: true, allowDirect: rec.allowDirect } };
+}
+
+/* 친구 근무에 바로 요청 — 친구가 글을 올리지 않았어도, 친구 근무(서버에 저장된 근무표)로
+   「나만 보이는 비공개 글」을 만들어 준다. 그다음은 보통 스왑 요청과 같은 길(크레딧·규정
+   확인·상호 수락·회사 상신)을 그대로 탄다. 글 주인은 친구, 볼 수 있는 사람은 나뿐이다.
+   days 는 친구 근무 중 받을 날들 [{month, day}]. 같은 날을 다시 요청하면 만든 글을 다시 쓴다. */
+const isDuty = s => s && s.type && !['OFF', 'VAC'].includes(String(s.type).toUpperCase()) && !s.lockReason;
+export async function handleFriendsSwapStart(env, me, id, days, mogijiPolicy, now = new Date()) {
+  const peer = await emailForId(env, id);
+  const mine = await readRecord(env, me);
+  if (!peer || mine.list.find(f => f.email === peer)?.status !== 'friend') {
+    return { status: 403, body: { error: '서로 친구인 경우에만 요청할 수 있습니다' } };
+  }
+  const theirs = await readRecord(env, peer);
+  if (theirs.allowDirect === false) return { status: 403, body: { error: '이 친구는 직접 스왑 요청을 받지 않고 있어요' } };
+  const roster = (await env.POSTS.get(`schedule:${peer}`, { type: 'json' }))?.schedules || [];
+  const wanted = (Array.isArray(days) ? days : []).slice(0, 10);
+  const ss = wanted.map(d => roster.find(s => s.month === d?.month && Number(s.day) === Number(d?.day)))
+    .filter(Boolean).sort((a, b) => `${a.month}-${String(a.day).padStart(2, '0')}`.localeCompare(`${b.month}-${String(b.day).padStart(2, '0')}`));
+  if (!ss.length || ss.length !== wanted.length) return { status: 400, body: { error: '친구 근무표에서 그 날짜를 찾을 수 없습니다' } };
+  if (!ss.some(isDuty) || ss.some(s => s.lockReason)) return { status: 400, body: { error: '교환할 수 없는 근무가 포함돼 있습니다' } };
+  const keys = ss.map(s => `${s.month}-${String(s.day).padStart(2, '0')}`);
+  const today = new Date(now.getTime() + 9 * 3600e3).toISOString().slice(0, 10);
+  if (keys[0] < today) return { status: 400, body: { error: '이미 지난 근무는 교환할 수 없습니다' } };
+
+  const postId = `FP-${mine.id}-${theirs.id}-${keys.join('_')}`;
+  const existing = await env.POSTS.get(`post:${postId}`, { type: 'json' });
+  if (existing?.status === 'active') return { body: { post: publicFriendPost(existing) } };
+
+  const user = await env.POSTS.get(`user:${peer}`, { type: 'json' });
+  const profile = user?.profile || {};
+  const protectedDays = profile.crewType !== 'CABIN' && mogijiPolicy ? mogijiPolicy.collectProtectedDays(roster) : null;
+  const first = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
+  const last = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
+  const tail = ss[ss.length - 1];
+  const md = s => `${Number(s.month.slice(5))}/${s.day}`;
+  const post = {
+    id: postId, registeredAt: now.toISOString(), status: 'active', creditSpent: 0, watchers: 0,
+    friendDirect: true, visibleTo: [me],
+    airline: profile.airline || null, crewType: profile.crewType || 'PILOT', ownerRole: profile.roleType || null,
+    ownerNick: profile.realName || profile.nickname || user?.username || '친구', ownerBase: profile.base || null,
+    ownerEmail: peer,
+    ownerValidationRoster: roster.map(({ crewComposition, crew, crewMembers, mySeat, ...rest }) => rest),
+    deadlineDay: ss[0].day, deadlineMonth: ss[0].month,
+    offered: {
+      patternName: ss.length > 1 ? `${md(ss[0])}~${md(tail)} 친구 근무` : `${md(ss[0])} 친구 근무`,
+      dateKeys: keys, startDate: keys[0], endDate: keys[keys.length - 1], days: ss.map(s => Number(s.day)),
+      daySchedules: ss.map(s => ({ month: s.month, day: s.day, type: s.type, title: s.title || null, dep: s.dep || null,
+        arr: s.arr || null, routeSummary: s.routeSummary || null, reportTime: s.reportTime || null,
+        departureTime: s.departureTime || null, releaseTime: s.releaseTime || null, arrivalTime: s.arrivalTime || null,
+        blockMinutes: Number.isFinite(s.blockMinutes) ? s.blockMinutes : null })),
+      summary: ss.map(s => s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : s.type)).join(' · '),
+      type: ss.find(isDuty)?.type || ss[0].type, aircraft: ss.find(s => s.aircraft)?.aircraft || null,
+      edto: ss.some(s => s.requiresEdto), cat3: ss.some(s => s.requiresCat3),
+      reportTime: first?.reportTime || null, firstDepartureTime: first?.departureTime || null, firstDepAirport: first?.dep || null,
+      releaseTime: last?.releaseTime || null,
+      lastReport: /^\d/.test(tail.reportTime || '') ? tail.reportTime : null,
+      lastArrival: /^\d/.test(tail.arrivalTime || '') ? tail.arrivalTime : null,
+      lastArrAirport: tail.arr || null,
+      hasLayover: ss.some(s => s.type === 'LAYOV' || s.type === 'ARRIVAL'),
+      mogijiProtectedDays: protectedDays ? [...protectedDays.values()].filter(info => info.dayKey.startsWith(ss[0].month)) : [],
+      crewPublic: null,
+    },
+    wanted: { types: ['아무거나'], memo: '친구 직접 요청' },
+  };
+  await env.POSTS.put(`post:${postId}`, JSON.stringify(post));
+  return { body: { post: publicFriendPost(post) }, created: post };
+}
+
+export function publicFriendPost(p) {
+  const { deleteToken, ownerEmail, ownerValidationRoster, visibleTo, ...pub } = p;
+  return { ...pub, contactable: true };
 }
 
 export async function handleFriendsSearch(env, me, q) {

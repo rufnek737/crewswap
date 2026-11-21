@@ -69,3 +69,31 @@ test('거절·끊기·탈퇴는 양쪽에서 함께 지운다', async () => {
   await removeAllFriends(e, A);
   assert.equal((await handleFriendsList(e, B)).friends.length, 0);
 });
+
+test('친구 근무로 비공개 글을 만든다 — 친구가 아니거나 받기를 끄면 막는다', async () => {
+  const { handleFriendsSwapStart, handleFriendsSettings } = await import('../worker/friends.mjs');
+  const e = env();
+  const [b] = (await handleFriendsSearch(e, A, '2002')).results;
+  const days = [{ month: '2026-12', day: 20 }];
+  const now = new Date('2026-11-21T00:00:00Z');
+  assert.equal((await handleFriendsSwapStart(e, A, b.id, days, null, now)).status, 403);   // 아직 친구 아님
+
+  const { myId: aId } = await handleFriendsList(e, A);
+  await handleFriendsRequest(e, A, b.id);
+  await handleFriendsRespond(e, B, aId, true);
+  const r = await handleFriendsSwapStart(e, A, b.id, days, null, now);
+  assert.equal(r.created.ownerEmail, B);
+  assert.deepEqual(r.created.visibleTo, [A]);
+  assert.equal(r.created.friendDirect, true);
+  assert.equal(r.created.creditSpent, 0);
+  assert.deepEqual(r.created.offered.dateKeys, ['2026-12-20']);
+  assert.doesNotMatch(JSON.stringify(r.body), /@|김모세|ownerValidationRoster/);       // 요청자에게 가는 쪽엔 이메일·편조 없음
+  assert.doesNotMatch(JSON.stringify(r.created.ownerValidationRoster), /김모세/);
+
+  assert.equal((await handleFriendsSwapStart(e, A, b.id, [{ month: '2026-12', day: 21 }], null, now)).status, 400); // 근무 없음
+  assert.equal((await handleFriendsSwapStart(e, A, b.id, days, null, new Date('2026-12-25T00:00:00Z'))).status, 400); // 지난 근무
+
+  await handleFriendsSettings(e, B, false);
+  assert.equal((await handleFriendsSwapStart(e, A, b.id, days, null, now)).status, 403);
+  assert.equal((await handleFriendsList(e, A)).friends[0].acceptsDirect, false);
+});
