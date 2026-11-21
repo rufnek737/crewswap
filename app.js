@@ -4621,6 +4621,11 @@ function openRequestModal(postId, directOffer = null) {
   const confirmButton = document.getElementById("reqConfirmButton");
   confirmButton.textContent = isPremiumUser() ? "요청 보내기 · PRO 무제한" : "요청 보내기 · 1크레딧";
   confirmButton.disabled = (!directOffer && roster.length === 0) || !CREDIT_POLICY.canSpend(state, 1, isPremiumUser());
+  // OFF 맞교환 — 내 근무를 정해서 보낼 때만 미리 본다. 상대 쪽은 글에 올린 날만 보여서 서버가 최종 확인한다.
+  if (directOffer) {
+    const offMsg = offBalanceMessage(offBalanceDelta(state.schedules, p.offered.daySchedules || [], offeredKeys(directOffer), offeredKeys(p.offered)), false);
+    if (offMsg) { hintEl.textContent = offMsg; hintEl.style.color = "#c53030"; confirmButton.disabled = true; }
+  }
   openGenericModal("reqDialog", "reqOverlay");
 }
 
@@ -5464,6 +5469,32 @@ function posterPickRestCheck(reqId) {
   return posterPickRestCheckFor(reqId, [...(_posterPick[reqId] || [])]);
 }
 
+/* OFF 맞교환 미리 안내 — 서버(off-balance.mjs)와 같은 계산. 스왑 뒤 OFF 가 몇 일 바뀌는지.
+   theirRoster 는 화면에서 볼 수 있는 상대 근무만 담겨 있어, 상대 쪽 결과는 참고용이다(서버가 최종 확인). */
+function offeredKeys(o) {
+  if (Array.isArray(o?.dateKeys) && o.dateKeys.length) return o.dateKeys;
+  return (o?.daySchedules || []).map(fdKey);
+}
+function offBalanceDelta(myRoster, theirRoster, myKeys, theirKeys) {
+  const isOff = s => !!s && String(s.type || "").toUpperCase() === "OFF";
+  const mine = new Map((myRoster || []).map(s => [fdKey(s), s]));
+  const theirs = new Map((theirRoster || []).map(s => [fdKey(s), s]));
+  const myGive = new Set(myKeys), theirGive = new Set(theirKeys);
+  let me = 0, them = 0;
+  for (const k of new Set([...myGive, ...theirGive])) {
+    const myAfter = theirGive.has(k) ? isOff(theirs.get(k)) : myGive.has(k) ? true : isOff(mine.get(k));
+    const theirAfter = myGive.has(k) ? isOff(mine.get(k)) : theirGive.has(k) ? true : isOff(theirs.get(k));
+    me += (myAfter ? 1 : 0) - (isOff(mine.get(k)) ? 1 : 0);
+    them += (theirAfter ? 1 : 0) - (isOff(theirs.get(k)) ? 1 : 0);
+  }
+  return { me, them };
+}
+function offBalanceMessage(d, checkThem = true) {
+  if (d.me < 0) return `❌ 이 스왑으로 내 OFF가 ${-d.me}일 줄어요. OFF는 주고받는 수가 같아야 해요 — 다른 날 상대 OFF를 함께 받거나 내 비행을 고르세요.`;
+  if (checkThem && d.them < 0) return `❌ 이 스왑으로 상대 OFF가 ${-d.them}일 줄어요. OFF는 주고받는 수가 같아야 해요 — 다른 날 내 OFF를 함께 주도록 고르세요.`;
+  return null;
+}
+
 function posterPickRestCheckFor(reqId, days) {
   const r = (state.requests.received || []).find(x => x.id === reqId);
   if (!r) return { offered: null, msg: null, fixed: false };
@@ -5499,6 +5530,7 @@ function posterPickRestCheckFor(reqId, days) {
   const policy = window.CrewSwapMogijiPolicy;
   const myIncomingViolation = policy?.findProtectedRestViolation(state.schedules, entries);
   const msg =
+    offBalanceMessage(offBalanceDelta(state.schedules, r.openRoster || [], offeredKeys(myPost?.offered), entries.map(fdKey))) ||
     protectedMogijiIssueMessage(myIncomingViolation, "내 일정에서") ||
     restIssueMessage(restCheckIncoming(offered, givenDays)) ||
     mogijiIssueMessage(mogijiRestCheckIncoming(offered, givenDays));
