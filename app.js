@@ -632,17 +632,18 @@ function flightMinutesOf(s) {
 // 근무시간 (report→release) — 11h/24h 룰 등 별도 계산용
 function dutyMinutesOf(s) {
   // 출두가 전날 밤인 복귀편 — 전날 출두 시각에서 하루를 빼고 센다.
-  if (!s.reportTime && s.reportPrevDay && s.releaseTime) {
-    const pm = absMinAt(0, s.reportPrevDay), rm = absMinAt(1, s.releaseTime);
+  const rel = s.releaseTime || s.releaseEst;   // 외지 도착편은 체크아웃이 비어 추정값을 쓴다
+  if (!s.reportTime && s.reportPrevDay && rel) {
+    const pm = absMinAt(0, s.reportPrevDay), rm = absMinAt(1, rel);
     return pm == null || rm == null ? 0 : Math.max(0, rm - pm);
   }
-  if (!s.reportTime || !s.releaseTime || !/^\d/.test(s.reportTime)) return 0;
+  if (!s.reportTime || !rel || !/^\d/.test(s.reportTime)) return 0;
   const parseMin = (t) => {
     const m = /^(\d{1,2}):(\d{2})(\+1)?$/.exec(t);
     if (!m) return null;
     return parseInt(m[1],10)*60 + parseInt(m[2],10) + (m[3] ? 24*60 : 0);
   };
-  const a = parseMin(s.reportTime), b = parseMin(s.releaseTime);
+  const a = parseMin(s.reportTime), b = parseMin(rel);
   if (a == null || b == null) return 0;
   return Math.max(0, b - a);
 }

@@ -37,7 +37,7 @@
       // 출두가 전날 밤인 복귀편(reportPrevDay, schedule-continuity 가 채움)
       const start = e.reportTime ? toMinutes(e, e.reportTime)
         : (toMinutes(e, e.reportPrevDay) ?? NaN) - DAY;
-      const end = toMinutes(e, e.releaseTime);
+      const end = toMinutes(e, e.releaseTime || e.releaseEst);
       if (start === null || Number.isNaN(start) || end === null) continue;
       const close = end < start ? end + DAY : end;
       // 근무가 끝나도 범퍼만큼은 휴식으로 치지 않는다.

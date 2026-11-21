@@ -42,13 +42,31 @@
     let changed = 0;
     // CrewConnex 는 복귀편 출두가 전날 밤이면 그 시각을 전날 LAYOV 칸에 적고 복귀편 출두는 비운다.
     // 그대로 두면 복귀 근무가 통째로 휴식으로 계산된다(2026-11-21, PQC·CNX). 전날 시각으로 옮겨 적는다.
+    // 전날 칸이 LAYOV·ARRIVAL 이거나, 해제 시각 없이 밤새 이어지는 비행(PUS-TAG→TAG-PUS 같은 야간 왕복)이면 같은 근무다.
     schedules.forEach(entry => {
       if (!entry || !FLIGHT_TYPES.has(entry.type) || entry.reportTime || entry.reportPrevDay) return;
       const previous = byDate.get(shiftedKey(entry, -1));
-      if (previous?.type === "LAYOV" && minuteOf(previous.reportTime) != null) {
+      const carriesReport = previous && minuteOf(previous.reportTime) != null && (
+        previous.type === "LAYOV" || previous.type === "ARRIVAL" ||
+        (FLIGHT_TYPES.has(previous.type) && !previous.releaseTime));
+      if (carriesReport) {
         entry.reportPrevDay = previous.reportTime;
+        // 전날 비행은 이 근무의 앞부분 — 따로 체크아웃을 추정하면 근무시간이 두 번 더해진다.
+        if (FLIGHT_TYPES.has(previous.type)) previous.continuesNextDay = true;
         changed++;
       }
+    });
+    // 외지에 내리는 편은 CrewConnex 가 체크아웃을 비워 두는 일이 많다. 그대로 두면 그 근무가 휴식으로 센다.
+    // 실제 기록상 외지 체크아웃은 램프인 +20분이라(2026-11 실비행, DPS·VTE·CEB·PQC·CNX) 그 값으로 추정한다.
+    schedules.forEach(entry => {
+      if (!entry || !FLIGHT_TYPES.has(entry.type) || entry.releaseTime || entry.releaseEst || entry.continuesNextDay) return;
+      if (!entry.arr || HOME_BASES.has(entry.arr)) return;
+      const m = /^(\d{1,2}):(\d{2})(\+1)?$/.exec(String(entry.arrivalTime || "").trim());
+      if (!m) return;
+      let total = Number(m[1]) * 60 + Number(m[2]) + 20 + (m[3] ? 1440 : 0);
+      const plus = total >= 1440; total %= 1440;
+      entry.releaseEst = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}${plus ? "+1" : ""}`;
+      changed++;
     });
     schedules.forEach(entry => {
       if (!entry || entry.type !== "UNKNOWN") return;
