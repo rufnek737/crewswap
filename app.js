@@ -631,6 +631,11 @@ function flightMinutesOf(s) {
 
 // 근무시간 (report→release) — 11h/24h 룰 등 별도 계산용
 function dutyMinutesOf(s) {
+  // 출두가 전날 밤인 복귀편 — 전날 출두 시각에서 하루를 빼고 센다.
+  if (!s.reportTime && s.reportPrevDay && s.releaseTime) {
+    const pm = absMinAt(0, s.reportPrevDay), rm = absMinAt(1, s.releaseTime);
+    return pm == null || rm == null ? 0 : Math.max(0, rm - pm);
+  }
   if (!s.reportTime || !s.releaseTime || !/^\d/.test(s.reportTime)) return 0;
   const parseMin = (t) => {
     const m = /^(\d{1,2}):(\d{2})(\+1)?$/.exec(t);
@@ -787,7 +792,10 @@ function restCheckIncomingInMonth(offered, givenAwayDays) {
         // 운항: 새 근무 막날 C/O → 다음 근무 C/I, 막날 FDT 기준
         if (offered.releaseTime && /^\d/.test(offered.releaseTime)) {
           const lastCI = offered.lastReport && /^\d/.test(offered.lastReport) ? offered.lastReport : firstCI;
-          const blockFDT = Math.max(0, absMinAt(lastDay, offered.releaseTime) - absMinAt(lastDay, lastCI));
+          // 막날이 출두가 전날 밤인 복귀편이면 전날 출두부터 센다(예전엔 첫날 출두로 계산돼 0이 됐다).
+          const lastCIMin = !offered.lastReport && offered.lastReportPrev
+            ? absMinAt(lastDay - 1, offered.lastReportPrev) : absMinAt(lastDay, lastCI);
+          const blockFDT = Math.max(0, absMinAt(lastDay, offered.releaseTime) - lastCIMin);
           gap = nextCI - (absMinAt(lastDay, offered.releaseTime) + REST_START_BUMPER_MIN);
           need = minRestMinForFDT(blockFDT);
         }
@@ -2267,6 +2275,7 @@ async function selectFriend(id) {
   renderFriends();
   try {
     friendsState.schedule = (await friendsApi("friends-schedule", { id })).schedules || [];
+    window.CrewSwapScheduleContinuity?.normalizeScheduleContinuity(friendsState.schedule);
   } catch (e) { showToast(e.message); friendsState.schedule = []; }
   renderFriends();
 }
@@ -4247,6 +4256,7 @@ function validationRosterSnapshot() {
       layoverAirport: s.layoverAirport || null,
       routeSummary: s.routeSummary || (s.dep && s.arr ? `${s.dep}-${s.arr}` : null),
       reportTime: s.reportTime || null,
+      reportPrevDay: s.reportPrevDay || null,
       departureTime: s.departureTime || null,
       releaseTime: s.releaseTime || null,
       arrivalTime: s.arrivalTime || null,
@@ -4324,6 +4334,7 @@ function offeredFromRosterDays(rosterEntries, ownerRole = state.user.roleType) {
       arr: s.arr || null,
       routeSummary: s.routeSummary || null,
       reportTime: s.reportTime || null,
+      reportPrevDay: s.reportPrevDay || null,
       departureTime: s.departureTime || null,
       arrivalTime: s.arrivalTime || null,
       releaseTime: s.releaseTime || null,
@@ -4335,6 +4346,7 @@ function offeredFromRosterDays(rosterEntries, ownerRole = state.user.roleType) {
     firstDepAirport: (ss.find(s => s.dep) || {}).dep || null,
     releaseTime: ([...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime)) || {}).releaseTime || null,
     lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
+    lastReportPrev: ss[ss.length - 1]?.reportPrevDay || null,
     lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
     lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
     hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),
@@ -6993,6 +7005,7 @@ function bindEvents() {
           firstDepAirport: firstFlight?.dep || null,
           releaseTime: lastFlight ? lastFlight.releaseTime : null,
           lastReport: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].reportTime || "")) ? ss[ss.length - 1].reportTime : null,
+    lastReportPrev: ss[ss.length - 1]?.reportPrevDay || null,
           lastArrival: (ss[ss.length - 1] && /^\d/.test(ss[ss.length - 1].arrivalTime || "")) ? ss[ss.length - 1].arrivalTime : null,
           lastArrAirport: (ss[ss.length - 1] && ss[ss.length - 1].arr) || null,
           hasLayover: ss.some(s => s.type === "LAYOV" || s.type === "ARRIVAL"),

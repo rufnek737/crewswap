@@ -40,6 +40,16 @@
     });
 
     let changed = 0;
+    // CrewConnex 는 복귀편 출두가 전날 밤이면 그 시각을 전날 LAYOV 칸에 적고 복귀편 출두는 비운다.
+    // 그대로 두면 복귀 근무가 통째로 휴식으로 계산된다(2026-11-21, PQC·CNX). 전날 시각으로 옮겨 적는다.
+    schedules.forEach(entry => {
+      if (!entry || !FLIGHT_TYPES.has(entry.type) || entry.reportTime || entry.reportPrevDay) return;
+      const previous = byDate.get(shiftedKey(entry, -1));
+      if (previous?.type === "LAYOV" && minuteOf(previous.reportTime) != null) {
+        entry.reportPrevDay = previous.reportTime;
+        changed++;
+      }
+    });
     schedules.forEach(entry => {
       if (!entry || entry.type !== "UNKNOWN") return;
       const previous = byDate.get(shiftedKey(entry, -1));
