@@ -257,6 +257,10 @@
               <strong>🔔 나만의 편조 알림</strong>
               <small>최대 2명 · 무료</small>
             </button>
+            <button id="openFriends" type="button" class="main-avoid-button">
+              <strong>👥 친구 스케줄</strong>
+              <small>서로 수락한 친구와 공유</small>
+            </button>
             <button id="openMainPro" type="button" class="main-pro-button">
               <strong>👑 PRO 안내·구매</strong>
               <small>맞춤 알림 · 무제한 크레딧</small>
@@ -363,6 +367,25 @@
           </div>
         </div>
         <div id="avoidPersonBox" class="avoid-box"></div>
+      </section>
+
+      <!-- ===================== 친구 스케줄 ===================== -->
+      <section id="friends" class="view">
+        <div class="premium-alert-page-head">
+          <button type="button" id="friendsBack" class="secondary-button">← 내 근무</button>
+          <div>
+            <h2>👥 친구 스케줄</h2>
+            <p>사번이나 실명으로 친구를 찾아 요청하세요. 서로 수락하면 근무표(편명·구간·시간)를 나란히 볼 수 있어요. 함께 비행하는 동료 이름(편조)은 보이지 않아요.</p>
+          </div>
+        </div>
+        <form id="friendSearchForm" class="friend-search">
+          <input id="friendSearchInput" type="search" placeholder="사번 또는 실명 (정확히 입력)" autocomplete="off">
+          <button type="submit" class="primary-button">찾기</button>
+        </form>
+        <div id="friendSearchResults" class="friend-list"></div>
+        <div id="friendRequests" class="friend-list"></div>
+        <div id="friendChips" class="friend-chips"></div>
+        <div id="friendCompare"></div>
       </section>
 
       <!-- ===================== 스왑하기: PRO 자동 알림 ===================== -->

@@ -1398,3 +1398,35 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 button.cmp-cell.has-req.is-recommended { border: 2px solid #1a7a3f; box-shadow: 0 0 0 1px rgba(26,122,63,.15); }
 .cmp-cell .cmp-reco { align-self: flex-start; font-size: 8px; font-weight: 800; color: #fff; background: #1a7a3f; border-radius: 3px; padding: 0 3px; }
 button.cmp-cell.has-req.is-picked .cmp-reco { background: rgba(255,255,255,.3); }
+
+/* 친구 스케줄 */
+.friend-search { display: flex; gap: 8px; margin: 8px 0 12px; }
+.friend-search input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+.friend-list { display: grid; gap: 8px; margin-bottom: 10px; }
+.friend-list h3 { font-size: 14px; margin: 6px 0 0; }
+.friend-card { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.friend-card small { display: block; color: var(--muted); font-size: 12px; }
+.friend-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.friend-actions button { padding: 6px 12px; font-size: 13px; }
+.friend-tag { font-size: 12px; color: var(--muted); }
+.friend-chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; }
+.friend-chip { display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 6px 12px 6px 6px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 14px; }
+.friend-chip span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--line); font-weight: 700; }
+.friend-chip.is-active { border-color: var(--primary); background: var(--primary); color: #fff; }
+.friend-chip.is-active span { background: rgba(255,255,255,.25); }
+.fc-months { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.fc-months .is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.fc-months .link-button { margin-left: auto; font-size: 13px; }
+.fc-table { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.fc-row { display: grid; grid-template-columns: 56px 1fr 1fr; border-top: 1px solid var(--line); }
+.fc-row:first-child { border-top: none; }
+.fc-head { background: var(--panel); font-weight: 700; font-size: 13px; }
+.fc-head > div { padding: 8px; text-align: center; }
+.fc-date { display: grid; place-items: center; padding: 8px 4px; font-size: 13px; }
+.fc-date small { font-size: 10px; color: var(--muted); }
+.fc-date.is-sun small { color: #d33; }
+.fc-date.is-sat small { color: #2f6fd6; }
+.fc-cell { display: grid; align-content: center; justify-items: center; gap: 1px; padding: 8px 4px; text-align: center; border-left: 1px solid var(--line); font-size: 13px; min-width: 0; }
+.fc-cell small { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.fc-cell .fd-time { color: #c86a1a; }
+.fc-cell .fd-off, .fc-cell .fd-empty { color: var(--muted); }

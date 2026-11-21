@@ -2226,6 +2226,132 @@ async function openMyPostsManager() {
   renderMyPosts();
 }
 
+// ── 친구 스케줄 (2026-11-21) ──
+// 서로 수락한 친구끼리 근무표를 나란히 본다. 서버는 편조 이름을 빼고 보낸다.
+// 친구는 서버가 정한 임의 id 로만 다룬다(이메일은 오지 않는다).
+const friendsState = { friends: [], results: [], selected: null, schedule: null, month: null };
+
+async function friendsApi(path, body) {
+  const res = await apiFetch(`${API_BASE}/api/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "잠시 후 다시 시도해 주세요");
+  return data;
+}
+
+async function loadFriends() {
+  try {
+    friendsState.friends = (await friendsApi("friends-list")).friends || [];
+  } catch (e) { showToast(e.message); }
+  const ids = friendsState.friends.filter(f => f.status === "friend").map(f => f.id);
+  if (!ids.includes(friendsState.selected)) { friendsState.selected = ids[0] || null; friendsState.schedule = null; }
+  renderFriends();
+  if (friendsState.selected && !friendsState.schedule) selectFriend(friendsState.selected);
+}
+
+async function searchFriends() {
+  const q = $("#friendSearchInput").value.trim();
+  if (q.length < 2) { showToast("사번 또는 실명을 정확히 입력해 주세요"); return; }
+  try {
+    friendsState.results = (await friendsApi("friends-search", { q })).results || [];
+    if (!friendsState.results.length) showToast("일치하는 사람이 없어요. 사번·실명을 정확히 입력했는지 확인해 주세요");
+  } catch (e) { showToast(e.message); }
+  renderFriends();
+}
+
+async function selectFriend(id) {
+  friendsState.selected = id;
+  friendsState.schedule = null;
+  renderFriends();
+  try {
+    friendsState.schedule = (await friendsApi("friends-schedule", { id })).schedules || [];
+  } catch (e) { showToast(e.message); friendsState.schedule = []; }
+  renderFriends();
+}
+
+async function onFriendsClick(e) {
+  const btn = e.target.closest("[data-friend-action]");
+  if (!btn) return;
+  const { friendAction: action, friendId: id } = btn.dataset;
+  try {
+    if (action === "select") return selectFriend(id);
+    if (action === "month") { friendsState.month = id; return renderFriends(); }
+    if (action === "request") { await friendsApi("friends-request", { id }); showToast("친구 요청을 보냈어요"); }
+    if (action === "accept" || action === "decline") await friendsApi("friends-respond", { id, accept: action === "accept" });
+    if (action === "remove") {
+      const f = friendsState.friends.find(x => x.id === id);
+      const label = f?.status === "friend" ? `${f.name} 님과 친구를 끊을까요? 서로의 스케줄이 더 이상 보이지 않아요.` : "보낸 친구 요청을 취소할까요?";
+      if (!confirm(label)) return;
+      await friendsApi("friends-remove", { id });
+    }
+    friendsState.results = friendsState.results.map(r => r.id === id ? { ...r, status: action === "request" ? "outgoing" : r.status } : r);
+    await loadFriends();
+  } catch (err) { showToast(err.message); }
+}
+
+function friendRoleText(f) {
+  const role = ROLE_LABELS[f.roleType] || CABIN_ROLE_LABELS[f.roleType] || "";
+  return [f.crewType === "CABIN" ? "객실" : f.crewType === "PILOT" ? "운항" : "", role, f.base].filter(Boolean).join(" · ");
+}
+
+function friendDutyHtml(s) {
+  if (!s) return `<span class="fd-empty">-</span>`;
+  const t = String(s.type || "");
+  if (["OFF", "VAC"].includes(t.toUpperCase()) || /휴가/.test(s.title || "")) return `<strong class="fd-off">${escapeHtml(s.title || t)}</strong>`;
+  const route = s.dep && s.arr ? `${s.dep}-${s.arr}` : (s.routeSummary || s.station || "");
+  const time = s.reportTime || s.departureTime ? `${s.reportTime || s.departureTime}~${s.releaseTime || s.arrivalTime || ""}` : "";
+  return `<strong>${escapeHtml(s.title || t)}</strong>${route ? `<small>${escapeHtml(route)}</small>` : ""}${time ? `<small class="fd-time">${escapeHtml(time)}</small>` : ""}`;
+}
+
+function renderFriends() {
+  const card = (f, actions) => `<div class="friend-card"><div><strong>${escapeHtml(f.name)}</strong><small>${escapeHtml(friendRoleText(f))}</small></div><div class="friend-actions">${actions}</div></div>`;
+  const btn = (action, id, label, cls = "secondary-button") => `<button type="button" class="${cls}" data-friend-action="${action}" data-friend-id="${escapeHtml(id)}">${label}</button>`;
+  const statusOf = id => friendsState.friends.find(f => f.id === id)?.status || "none";
+
+  $("#friendSearchResults").innerHTML = friendsState.results.map(r => {
+    const st = statusOf(r.id);
+    return card(r, st === "friend" ? "<span class=\"friend-tag\">친구</span>"
+      : st === "outgoing" ? "<span class=\"friend-tag\">요청 보냄</span>"
+      : st === "incoming" ? btn("accept", r.id, "수락", "primary-button")
+      : btn("request", r.id, "친구 요청", "primary-button"));
+  }).join("");
+
+  const incoming = friendsState.friends.filter(f => f.status === "incoming");
+  const outgoing = friendsState.friends.filter(f => f.status === "outgoing");
+  $("#friendRequests").innerHTML = [
+    incoming.length ? `<h3>받은 요청</h3>` + incoming.map(f => card(f, btn("accept", f.id, "수락", "primary-button") + btn("decline", f.id, "거절"))).join("") : "",
+    outgoing.length ? `<h3>보낸 요청</h3>` + outgoing.map(f => card(f, btn("remove", f.id, "취소"))).join("") : "",
+  ].join("");
+
+  const friends = friendsState.friends.filter(f => f.status === "friend");
+  $("#friendChips").innerHTML = friends.length
+    ? friends.map(f => `<button type="button" class="friend-chip${f.id === friendsState.selected ? " is-active" : ""}" data-friend-action="select" data-friend-id="${escapeHtml(f.id)}"><span>${escapeHtml(f.name.slice(0, 1))}</span>${escapeHtml(f.name)}</button>`).join("")
+    : `<p class="hint">아직 친구가 없어요. 위에서 사번이나 실명으로 찾아 요청해 보세요.</p>`;
+
+  const box = $("#friendCompare");
+  const friend = friends.find(f => f.id === friendsState.selected);
+  if (!friend) { box.innerHTML = ""; return; }
+  if (!friendsState.schedule) { box.innerHTML = `<p class="hint">불러오는 중…</p>`; return; }
+  const theirs = friendsState.schedule;
+  const months = [...new Set([...state.schedules.map(s => s.month || state.currentMonth), ...theirs.map(s => s.month)].filter(Boolean))].sort();
+  if (!months.includes(friendsState.month)) friendsState.month = months.includes(state.currentMonth) ? state.currentMonth : months[months.length - 1];
+  const month = friendsState.month;
+  if (!month) { box.innerHTML = `<p class="hint">아직 불러온 스케줄이 없어요.</p>`; return; }
+  const [y, m] = month.split("-").map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const mine = d => state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
+  const their = d => theirs.find(s => s.day === d && s.month === month);
+  const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  const rows = [];
+  for (let d = 1; d <= days; d++) {
+    const w = new Date(y, m - 1, d).getDay();
+    rows.push(`<div class="fc-row"><div class="fc-date${w === 0 ? " is-sun" : w === 6 ? " is-sat" : ""}"><strong>${m}/${d}</strong><small>${dow[w]}</small></div><div class="fc-cell">${friendDutyHtml(mine(d))}</div><div class="fc-cell">${friendDutyHtml(their(d))}</div></div>`);
+  }
+  box.innerHTML = `
+    <div class="fc-months">${months.map(mo => `<button type="button" class="secondary-button${mo === month ? " is-active" : ""}" data-friend-action="month" data-friend-id="${mo}">${Number(mo.slice(5))}월</button>`).join("")}
+      ${btn("remove", friend.id, "친구 끊기", "link-button")}</div>
+    <div class="fc-table"><div class="fc-row fc-head"><div>날짜</div><div>나</div><div>${escapeHtml(friend.name)}</div></div>${rows.join("")}</div>`;
+}
+
 // 내 근무 상단 버튼 → 「나만의 편조 알림」 전용 화면.
 function openAvoidAlert() {
   resetScheduleSelection(false);
@@ -3768,9 +3894,10 @@ function settleNativePushWaiters(error, device = null) {
 }
 
 async function handleNativePushRoute(data = {}) {
-  const route = ['myPostsManager', 'requests'].includes(data.route) ? data.route : 'find';
+  const route = ['myPostsManager', 'requests', 'friends'].includes(data.route) ? data.route : 'find';
   if (route === 'myPostsManager') await openMyPostsManager();
   else if (route === 'requests') switchTab('requests');
+  else if (route === 'friends') switchTab('friends');
   else {
     switchTab('find');
     await fetchPosts();
@@ -5827,7 +5954,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   state.managingMyPosts = name === "myPostsManager";
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
   const SWAP_VIEWS = ["swapGuide", "find", "post", "myPostsManager", "premiumAlerts"];
-  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name === "crewAlert" ? "schedule" : name;
+  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : ["crewAlert", "friends"].includes(name) ? "schedule" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   // 사용자·크레딧 헤더는 모든 메뉴에서 숨기고 알림종만 화면에 고정한다.
@@ -5837,6 +5964,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   if (name === "find") fetchPosts();
   if (name === "premiumAlerts") renderSavedSearches();
   if (name === "crewAlert") renderAvoidBox();
+  if (name === "friends") loadFriends();
   if (name === "myPostsManager") fetchMyPosts();
   // 하단 탭 등으로 요청함을 직접 열면 전체 목록을 보여준다.
   // (알림에서 들어오는 경로는 switchTab 이후에 focusedRequestId를 세팅한다.)
@@ -5959,6 +6087,10 @@ function bindEvents() {
   $("#openMainPro")?.addEventListener("click", openPremiumAlertManager);
   $("#openAvoidAlert")?.addEventListener("click", openAvoidAlert);
   $("#crewAlertBack")?.addEventListener("click", () => switchTab("schedule"));
+  $("#openFriends")?.addEventListener("click", () => { resetScheduleSelection(false); switchTab("friends"); });
+  $("#friendsBack")?.addEventListener("click", () => switchTab("schedule"));
+  $("#friendSearchForm")?.addEventListener("submit", e => { e.preventDefault(); searchFriends(); });
+  $("#friends")?.addEventListener("click", onFriendsClick);
   $("#premiumAlertBack")?.addEventListener("click", () => exitGuideFlow("swapGuide"));
   $("#closeMyPostsManager")?.addEventListener("click", () => {
     state.managingMyPosts = false;
