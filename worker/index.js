@@ -2172,7 +2172,7 @@ async function handleRequestsGet(request, env, authEmail) {
     const friendNames = await friendRealNames(env, email);
     const withFriendName = r => {
       const fromName = friendNames.get(r.fromEmail), toName = friendNames.get(r.toEmail);
-      return fromName || toName ? { ...r, ...(fromName && { fromNick: fromName }), ...(toName && { toNick: toName }) } : r;
+      return fromName || toName ? { ...r, friendPeer: true, ...(fromName && { fromNick: fromName }), ...(toName && { toNick: toName }) } : r;
     };
     const view = r => withAvoid(forViewer(withFriendName(r)));
     const sent = await Promise.all(idx.filter(r => r.fromEmail === email).map(view));

@@ -5766,7 +5766,8 @@ function requestCard(r) {
         const friendDirect = !!r.friendDirect || String(r.postId || "").startsWith("FP-");
         const iAmPoster = friendDirect ? isSent : !isSent;
         const submitterRole = friendDirect ? "요청한 사람" : "글 작성자";
-        const myId = state.user.nickname || "나";
+        // 친구끼리는 실명으로 — 상대 화면의 이름과 같게(2026-11-21 Kay).
+        const myId = (r.friendPeer && state.user.realName) || state.user.nickname || "나";
         const submitted = !!r.submitted;
         const submitRejected = !!r.submitRejected;
         const submitterBanner = iAmPoster
