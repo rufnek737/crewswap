@@ -2452,6 +2452,24 @@ function friendSwapIssue(post) {
       return fail ? `❌ ${who} 일정에서 「${fail.label}」 기준을 넘어요 — ${fail.detail}` : null;
     } finally { state.schedules = saved; }
   };
+  // OFF 맞교환 — 월 보장 OFF 수(현재 31일 달 10일·30일 이하 9일)는 바뀔 수 있어 총수로 따지지 않는다.
+  // 대신 스왑으로 한쪽의 OFF 가 줄면 안 된다: 내가 OFF 를 하나 받으면 하나 줘야 한다(2026-11-21 Kay).
+  {
+    const isOff = s => !!s && String(s.type).toUpperCase() === "OFF";
+    const mine = new Map(state.schedules.map(s => [fdKey(s), s]));
+    const theirMap = new Map(theirs.map(s => [fdKey(s), s]));
+    let myDelta = 0, theirDelta = 0;
+    for (const k of new Set([...picks, ...theirGives])) {
+      // 고른 날은 서로의 근무가 맞바뀐다. 한쪽만 고른 날은 고른 사람이 비우고(OFF) 상대가 그 근무를 맡는다.
+      const myBefore = mine.get(k), theirBefore = theirMap.get(k);
+      const myAfterOff = theirGives.has(k) ? isOff(theirBefore) : picks.has(k) ? true : isOff(myBefore);
+      const theirAfterOff = picks.has(k) ? isOff(myBefore) : theirGives.has(k) ? true : isOff(theirBefore);
+      myDelta += (myAfterOff ? 1 : 0) - (isOff(myBefore) ? 1 : 0);
+      theirDelta += (theirAfterOff ? 1 : 0) - (isOff(theirBefore) ? 1 : 0);
+    }
+    if (myDelta < 0) return `❌ 이 스왑으로 내 OFF가 ${-myDelta}일 줄어요. OFF는 주고받는 수가 같아야 해요 — 친구에게서 OFF를 ${-myDelta}일 더 받도록 고르세요.`;
+    if (theirDelta < 0) return `❌ 이 스왑으로 친구 OFF가 ${-theirDelta}일 줄어요. OFF는 주고받는 수가 같아야 해요 — 친구에게 OFF를 ${-theirDelta}일 더 주도록 고르세요.`;
+  }
   const restApi = window.CrewSwapRestWindow;
   if (restApi) {
     const theirAfter = after(theirs, new Set([...theirGives, ...myGives.map(fdKey)]), myGives);
