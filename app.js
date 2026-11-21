@@ -2316,8 +2316,10 @@ function friendDutyHtml(s) {
 
 // 친구 근무에 바로 요청 — 근무 하나를 누르면 같은 패턴(레이오버 등) 전체가 함께 골라진다.
 const fdKey = s => `${s.month || state.currentMonth}-${String(s.day).padStart(2, "0")}`;
+// OFF 도 주고받을 수 있다 — 날짜가 안 맞을 때 OFF 를 끼워 맞추는 경우가 있다(2026-11-21 Kay).
+// 휴가·훈련·지상근무(lockReason)·지난 날만 못 고른다.
 function friendSwappable(s) {
-  if (!s || !s.type || ["OFF", "VAC"].includes(String(s.type).toUpperCase()) || s.lockReason) return false;
+  if (!s || !s.type || String(s.type).toUpperCase() === "VAC" || /휴가/.test(s.title || "") || s.lockReason) return false;
   const d = dayToDate(s.day, s.month || state.currentMonth);
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return d && d >= today;
@@ -2345,6 +2347,10 @@ function toggleFriendPick(action, key) {
 async function sendFriendSwap() {
   const friend = friendsState.friends.find(f => f.id === friendsState.selected);
   if (!friend || !friendsState.pickTheirs.size || !friendsState.pickMine.size) return;
+  const isOff = (list, k) => String(list.find(s => fdKey(s) === k)?.type || "").toUpperCase() === "OFF";
+  if ([...friendsState.pickTheirs].every(k => isOff(friendsState.schedule || [], k)) && [...friendsState.pickMine].every(k => isOff(state.schedules, k))) {
+    friendsState.swapMsg = "❌ 양쪽 모두 OFF 만 골랐어요. 적어도 한쪽은 근무를 골라 주세요."; renderFriends(); return;
+  }
   if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧이 부족합니다 — 다음 달 기본 크레딧 또는 PRO를 이용해주세요."); return; }
   const days = [...friendsState.pickTheirs].sort().map(k => ({ month: k.slice(0, 7), day: Number(k.slice(8)) }));
   let post;

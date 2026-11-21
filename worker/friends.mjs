@@ -92,7 +92,8 @@ export async function handleFriendsSwapStart(env, me, id, days, mogijiPolicy, no
   const ss = wanted.map(d => roster.find(s => s.month === d?.month && Number(s.day) === Number(d?.day)))
     .filter(Boolean).sort((a, b) => `${a.month}-${String(a.day).padStart(2, '0')}`.localeCompare(`${b.month}-${String(b.day).padStart(2, '0')}`));
   if (!ss.length || ss.length !== wanted.length) return { status: 400, body: { error: '친구 근무표에서 그 날짜를 찾을 수 없습니다' } };
-  if (!ss.some(isDuty) || ss.some(s => s.lockReason)) return { status: 400, body: { error: '교환할 수 없는 근무가 포함돼 있습니다' } };
+  // OFF 도 주고받을 수 있다(날짜를 맞추려고 OFF 를 끼우는 경우). 휴가·훈련·지상근무만 막는다.
+  if (ss.some(s => s.lockReason || String(s.type).toUpperCase() === 'VAC')) return { status: 400, body: { error: '교환할 수 없는 근무가 포함돼 있습니다' } };
   const keys = ss.map(s => `${s.month}-${String(s.day).padStart(2, '0')}`);
   const today = new Date(now.getTime() + 9 * 3600e3).toISOString().slice(0, 10);
   if (keys[0] < today) return { status: 400, body: { error: '이미 지난 근무는 교환할 수 없습니다' } };

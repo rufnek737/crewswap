@@ -90,7 +90,7 @@ test('친구 근무로 비공개 글을 만든다 — 친구가 아니거나 받
   assert.doesNotMatch(JSON.stringify(r.body), /@|김모세|ownerValidationRoster/);       // 요청자에게 가는 쪽엔 이메일·편조 없음
   assert.doesNotMatch(JSON.stringify(r.created.ownerValidationRoster), /김모세/);
 
-  assert.equal((await handleFriendsSwapStart(e, A, b.id, [{ month: '2026-12', day: 21 }], null, now)).status, 400); // 근무 없음
+  assert.equal((await handleFriendsSwapStart(e, A, b.id, [{ month: '2026-12', day: 21 }], null, now)).status, 400); // 근무표에 없는 날
   assert.equal((await handleFriendsSwapStart(e, A, b.id, days, null, new Date('2026-12-25T00:00:00Z'))).status, 400); // 지난 근무
 
   await handleFriendsSettings(e, B, false);
