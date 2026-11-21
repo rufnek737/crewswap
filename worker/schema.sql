@@ -87,3 +87,9 @@ CREATE INDEX IF NOT EXISTS idx_submit_rejections_at ON submit_rejections(at);
 -- 2026-09-25 security: opaque, limited-use email verification challenges.
 CREATE TABLE IF NOT EXISTS verification_challenges (email TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS crew_grades (name TEXT PRIMARY KEY, data TEXT NOT NULL);
+
+-- 친구 스케줄 (2026-11-21). 서로 수락한 친구끼리 근무표를 본다. data = { id, list:[{email,status,at}] }
+CREATE TABLE IF NOT EXISTS friends (
+  email TEXT PRIMARY KEY,
+  data  TEXT NOT NULL
+);

@@ -11,6 +11,7 @@ import gradePolicy from '../grade-policy.js';
 import crewGrades from '../crew-grades.js';
 import airportAliases from '../airport-aliases.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
+import { handleFriendsList, handleFriendsSearch, handleFriendsRequest, handleFriendsRespond, handleFriendsRemove, handleFriendsSchedule, removeAllFriends } from './friends.mjs';
 import {
   createStore, listPosts, listRequests, listRequestsForEmail,
   listPremiumAlerts, savePremiumAlerts, saveIndex,
@@ -417,6 +418,7 @@ async function handleUserDelete(request, env, authEmail) {
       env.POSTS.delete(`wallet:${email}`),
       env.POSTS.delete(`schedule:${email}`),
       env.POSTS.delete(AVOID_KEY(email)),
+      removeAllFriends(env, email),
       ...(user?.proPurchase?.originalTransactionId
         ? [
             env.POSTS.delete(`iap:apple:${user.proPurchase.originalTransactionId}`),
@@ -1060,6 +1062,31 @@ async function remindStalledRequests(env, now = Date.now()) {
     await updateRequestsIndexEntry(env, rec);
   }
   return sent;
+}
+
+// 친구 스케줄 — 처리는 friends.mjs, 여기서는 입출력과 알림만.
+async function handleFriends(path, request, env, me, ctx) {
+  let body = {};
+  try { body = await request.json(); } catch { /* 목록 조회는 본문 없음 */ }
+  let r;
+  if (path === '/api/friends-list') r = { body: await handleFriendsList(env, me) };
+  else if (path === '/api/friends-search') r = { body: await handleFriendsSearch(env, me, body.q) };
+  else if (path === '/api/friends-request') r = await handleFriendsRequest(env, me, body.id);
+  else if (path === '/api/friends-respond') r = await handleFriendsRespond(env, me, body.id, !!body.accept);
+  else if (path === '/api/friends-remove') r = await handleFriendsRemove(env, me, body.id);
+  else if (path === '/api/friends-schedule') r = await handleFriendsSchedule(env, me, body.id);
+  else return json({ error: 'Not found' }, 404);
+  if (r.notify && ctx?.waitUntil) {
+    const user = await env.POSTS.get(`user:${me}`, { type: 'json' });
+    const name = user?.profile?.realName || user?.profile?.nickname || '동료';
+    const accepted = r.body?.status === 'friend';
+    ctx.waitUntil(notifyUser(env, r.notify, {
+      title: accepted ? '👥 친구가 되었어요' : '👥 친구 요청이 왔어요',
+      body: accepted ? `${name} 님과 서로 스케줄을 볼 수 있어요` : `${name} 님이 스케줄 공유 친구를 요청했어요`,
+      tag: `crewswap-friend-${accepted ? 'ok' : 'req'}`, route: 'friends',
+    }).catch(() => {}));
+  }
+  return json(r.body, r.status || 200);
 }
 
 async function notifyPremiumSubscribers(env, post) {
@@ -2719,6 +2746,7 @@ export default {
       else if (path === '/api/posts-delete') response = await handlePostsDelete(request, env, auth.email);
       else if (path === '/api/posts-update') response = await handlePostsUpdate(request, env, auth.email, ctx);
       else if (path === '/api/requests-create') response = await handleRequestsCreate(request, env, auth.email, allowSandboxPro, ctx);
+      else if (path.startsWith('/api/friends-')) response = await handleFriends(path, request, env, auth.email, ctx);
       else if (path === '/api/requests-get') response = await handleRequestsGet(request, env, auth.email);
       else if (path === '/api/requests-accept') response = await handleRequestsAccept(request, env, auth.email);
       else if (path === '/api/requests-poster-select') response = await handleRequestsPosterSelect(request, env, auth.email);

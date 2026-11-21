@@ -19,6 +19,7 @@ function route(rawKey) {
   if (key.startsWith('agrade:')) return { table: 'crew_grades', column: 'name', id: key.slice(7) };
   if (key.startsWith('user:')) return { table: 'users', column: 'email', id: key.slice(5) };
   if (key.startsWith('wallet:')) return { table: 'wallets', column: 'email', id: key.slice(7) };
+  if (key.startsWith('friends:')) return { table: 'friends', column: 'email', id: key.slice(8) };
   if (key.startsWith('schedule:')) return { table: 'schedules', column: 'email', id: key.slice(9) };
   if (key.startsWith('reqval:')) return { table: 'request_validations', column: 'id', id: key.slice(7) };
   if (key.startsWith('req:')) return { table: 'requests', column: 'id', id: key.slice(4) };
