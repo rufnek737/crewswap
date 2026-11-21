@@ -8,6 +8,8 @@
  * 저장: friends:<email> → { id, list: [{ email, status: 'friend'|'outgoing'|'incoming', at }] }
  */
 
+import gradePolicy from '../grade-policy.js';
+
 export const FRIENDS_MAX = 50;
 const KEY = email => `friends:${email}`;
 
@@ -101,6 +103,13 @@ export async function handleFriendsSwapStart(env, me, id, days, mogijiPolicy, no
 
   const user = await env.POSTS.get(`user:${peer}`, { type: 'json' });
   const profile = user?.profile || {};
+  const myProfile = (await env.POSTS.get(`user:${me}`, { type: 'json' }))?.profile || {};
+  // 운항↔객실, 기장↔부기장처럼 서로 바꿀 수 없는 직군·포지션이면 글을 만들지 않는다.
+  if ((myProfile.crewType || 'PILOT') !== (profile.crewType || 'PILOT')) return { status: 400, body: { error: '운항과 객실은 서로 스왑할 수 없습니다' } };
+  if (profile.crewType !== 'CABIN' && gradePolicy.check(myProfile.roleType, profile.roleType).status === 'FAIL') {
+    return { status: 400, body: { error: '포지션·등급이 맞지 않아 스왑할 수 없습니다' } };
+  }
+  const gradeSrc = ss.find(s => s.captainGrade || s.foGrade) || {};
   const protectedDays = profile.crewType !== 'CABIN' && mogijiPolicy ? mogijiPolicy.collectProtectedDays(roster) : null;
   const first = ss.find(s => s.reportTime && /^\d/.test(s.reportTime));
   const last = [...ss].reverse().find(s => s.releaseTime && /^\d/.test(s.releaseTime));
@@ -132,6 +141,8 @@ export async function handleFriendsSwapStart(env, me, id, days, mogijiPolicy, no
       hasLayover: ss.some(s => s.type === 'LAYOV' || s.type === 'ARRIVAL'),
       mogijiProtectedDays: protectedDays ? [...protectedDays.values()].filter(info => info.dayKey.startsWith(ss[0].month)) : [],
       crewPublic: null,
+      captainGrade: gradeSrc.captainGrade || null, foGrade: gradeSrc.foGrade || null,
+      oppositeGrades: profile.crewType !== 'CABIN' ? gradePolicy.narrowOpposite(profile.roleType) : null,
     },
     wanted: { types: ['아무거나'], memo: '친구 직접 요청' },
   };
