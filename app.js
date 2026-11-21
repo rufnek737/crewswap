@@ -4668,10 +4668,13 @@ async function fetchRequests() {
     const sent = (data.sent || []).map(r => normalizeRoster({ ...r, sentAgo: ago(r.createdAt), nickname: r.toNick, base: r.base })).reverse();
     state.requests.sent = sent;
     // 받은 요청 중 아직 종 알림 안 띄운 것 → 종 알림 추가 (있던 것/새 것 모두 한 번씩)
+    // 지나간 요청을 가리키는 알림도 함께 지운다.
+    const pastIds = new Set([...received, ...sent].filter(requestIsPast).map(r => r.id));
+    if (pastIds.size) state.alerts = state.alerts.filter(a => !(a.requestId && pastIds.has(a.requestId)));
     const alerted = getAlertedReqIds();
     let changed = false;
     received.forEach(r => {
-      if (alerted.has(r.id)) return;
+      if (alerted.has(r.id) || requestIsPast(r)) return;
       alerted.add(r.id); changed = true;
       const isAsk = r.type === "ask";
       state.alerts.unshift({
@@ -4855,8 +4858,8 @@ function startRequestPolling() {
 function renderReqTabBadge() {
   const badge = document.getElementById("reqTabBadge");
   if (!badge) return;
-  const pendingReceived = (state.requests.received || []).filter(r => (r.stage || 1) < 3).length;
-  const pendingSentApproval = (state.requests.sent || []).filter(r =>
+  const pendingReceived = (state.requests.received || []).filter(r => (r.stage || 1) < 3 && !requestIsPast(r)).length;
+  const pendingSentApproval = (state.requests.sent || []).filter(r => !requestIsPast(r) &&
     !!r.posterSelected && !!r.offered && (r.stage || 1) === 2).length;
   const pending = pendingReceived + pendingSentApproval;
   if (pending > 0) { badge.textContent = pending; badge.hidden = false; }
@@ -5033,8 +5036,26 @@ function renderRequestFocusBar(shownReqs) {
   bar.hidden = false;
 }
 
+// 지나간 요청 — 교환하려던 날짜가 모두 오늘 이전이면 더 할 수 있는 게 없다. 목록에서 뺀다(2026-11-21 Kay).
+// 서버 기록은 지우지 않는다(상신 반려 분석 등에 쓰인다). 날짜를 알 수 없는 요청은 그대로 둔다.
+function requestDateKeys(r) {
+  const keysOf = o => {
+    if (!o) return [];
+    if (Array.isArray(o.dateKeys) && o.dateKeys.length) return o.dateKeys;
+    return (o.daySchedules || []).filter(d => d?.month && d?.day).map(d => `${d.month}-${String(d.day).padStart(2, "0")}`);
+  };
+  return [...keysOf(r.postOffered), ...keysOf(r.offered)];
+}
+function requestIsPast(r) {
+  const keys = requestDateKeys(r);
+  if (!keys.length) return false;
+  const t = new Date();
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  return keys.every(k => k < today);
+}
+
 function renderRequests() {
-  const all = state.requests[state.reqViewMode];
+  const all = (state.requests[state.reqViewMode] || []).filter(r => !requestIsPast(r));
   // 알림에서 들어온 경우 그 요청 하나만 보여준다. 목록 전체를 띄우면 최신순 정렬 탓에
   // 다른 요청이 맨 위에 와서, 방금 누른 알림과 다른 내용을 보고 있다고 오해하기 쉽다.
   const focused = state.focusedRequestId
