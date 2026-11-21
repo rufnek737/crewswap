@@ -2403,6 +2403,20 @@ function friendSwapIssue(post) {
     return cabinRestIssueMessage(v, "내 일정");
   }
   const policy = window.CrewSwapMogijiPolicy;
+  // 친구 쪽도 본다 — 내가 주는 근무가 친구의 모기지 휴무일에 들어가거나, 친구의 7일 30시간 휴식을 깨면 회사에서 반려된다(2026-11-21 Kay).
+  const theirs = friendsState.schedule || [];
+  const theirMogiji = protectedMogijiIssueMessage(policy?.findProtectedRestViolation(theirs, myGives), "친구 일정에서");
+  if (theirMogiji) return theirMogiji;
+  const after = (base, removeKeys, add) => [...base.filter(s => !removeKeys.has(fdKey(s))), ...add.map(x => ({ ...x }))];
+  const restApi = window.CrewSwapRestWindow;
+  if (restApi) {
+    const theirAfter = after(theirs, new Set([...theirGives, ...myGives.map(fdKey)]), myGives);
+    const r1 = restApi.check(theirAfter, { focusEntries: myGives });
+    if (r1.status === "FAIL") return `❌ 친구 일정에서 7일 안에 30시간 연속 휴식이 없어져요(가장 긴 휴식 ${Math.floor(r1.worstRestMin / 60)}시간 ${r1.worstRestMin % 60}분). 다른 날을 고르세요.`;
+    const myAfter = after(state.schedules, new Set([...picks, ...incoming.map(fdKey)]), incoming);
+    const r2 = restApi.check(myAfter, { focusEntries: incoming });
+    if (r2.status === "FAIL") return `❌ 내 일정에서 7일 안에 30시간 연속 휴식이 없어져요(가장 긴 휴식 ${Math.floor(r2.worstRestMin / 60)}시간 ${r2.worstRestMin % 60}분). 다른 날을 고르세요.`;
+  }
   return protectedMogijiIssueMessage(policy?.findProtectedRestViolation(state.schedules, incoming), "내 일정에서") ||
     restIssueMessage(restCheckIncoming(post.offered, givenDays)) ||
     mogijiIssueMessage(mogijiRestCheckIncoming(post.offered, givenDays)) || null;
