@@ -2397,7 +2397,8 @@ function friendSwapIssue(post) {
   const incoming = post.offered.daySchedules || [];
   const givenDays = myGives.map(s => s.day);
   // 겹치는 근무 — 받는 날에 내 다른 근무가 남아 있거나, 친구가 받을 날에 친구 다른 근무가 있으면 안 된다.
-  const busy = s => s && s.type && String(s.type).toUpperCase() !== "OFF";
+  // ARRIVAL(전날 근무의 도착·종료 표시)은 그날 근무가 아니다 — 같은 날 새 근무 가능 여부는 휴식 검사가 본다.
+  const busy = s => s && s.type && !["OFF", "ARRIVAL"].includes(String(s.type).toUpperCase());
   const theirGives = new Set(friendsState.pickTheirs);
   const myClash = incoming.map(d => state.schedules.find(s => fdKey(s) === fdKey(d)))
     .find(s => busy(s) && !picks.has(fdKey(s)));
@@ -2424,14 +2425,42 @@ function friendSwapIssue(post) {
   const theirMogiji = protectedMogijiIssueMessage(policy?.findProtectedRestViolation(theirs, myGives), "친구 일정에서");
   if (theirMogiji) return theirMogiji;
   const after = (base, removeKeys, add) => [...base.filter(s => !removeKeys.has(fdKey(s))), ...add.map(x => ({ ...x }))];
+  // 일반 스왑과 같은 회사 룰(연속 24시간 승무, 7·28일 근무시간, 28일 승무시간, 7일 30시간 휴식)을
+  // 스왑 뒤 양쪽 근무표에 그대로 돌린다. 친구 쪽만 따로 만든 검사는 빠뜨리기 쉬웠다(2026-11-21 Kay).
+  const friend = friendsState.friends.find(f => f.id === friendsState.selected) || {};
+  const qualIssue = (who, flights, aircraft, edto) => {
+    const f = flights.find(s => s.aircraft && aircraft && aircraft !== "NG_MAX" && s.aircraft !== aircraft);
+    if (f) return `❌ ${who}는 ${escapeHtml(f.aircraft)} 자격이 없어 ${schedMonthNumFromEntry(f)}/${f.day} ${escapeHtml(f.title)}를 할 수 없어요.`;
+    const e = flights.find(s => s.requiresEdto);
+    if (e && !edto) return `❌ ${who}는 EDTO 자격이 없어 ${schedMonthNumFromEntry(e)}/${e.day} ${escapeHtml(e.title)}를 할 수 없어요.`;
+    return null;
+  };
+  const q = qualIssue("나", incoming, state.user.aircraft, state.user.edto) ||
+    (friend.aircraft !== undefined ? qualIssue("친구", myGives, friend.aircraft, friend.edto) : null);
+  if (q) return q;
+  const partialRsv = (list, picked) => list.find(s => ["RSV", "STBY"].includes(s.type) && picked.has(fdKey(s)) &&
+    [-1, 1].some(d => { const n = list.find(x => fdKey(x) === fdKey({ ...s, day: s.day + d })); return n && ["RSV", "STBY"].includes(n.type) && !picked.has(fdKey(n)); }));
+  const pr = partialRsv(state.schedules, picks) || partialRsv(theirs, theirGives);
+  if (pr) return `❌ 이어진 RSV·STBY는 나눠서 바꿀 수 없어요(${schedMonthNumFromEntry(pr)}/${pr.day}). 이어진 날을 모두 함께 고르세요.`;
+  const rulesFor = (who, list, focus) => {
+    const saved = state.schedules;
+    try {
+      state.schedules = list;
+      const rules = currentRules();
+      const fail = [consecutive24hCheck(focus, rules), ...cumulativeLimitChecks(rules, focus), restWindowCheck(focus)]
+        .find(c => c && c.status === "FAIL");
+      return fail ? `❌ ${who} 일정에서 「${fail.label}」 기준을 넘어요 — ${fail.detail}` : null;
+    } finally { state.schedules = saved; }
+  };
   const restApi = window.CrewSwapRestWindow;
   if (restApi) {
     const theirAfter = after(theirs, new Set([...theirGives, ...myGives.map(fdKey)]), myGives);
-    const r1 = restApi.check(theirAfter, { focusEntries: myGives });
-    if (r1.status === "FAIL") return `❌ 친구 일정에서 7일 안에 30시간 연속 휴식이 없어져요(가장 긴 휴식 ${Math.floor(r1.worstRestMin / 60)}시간 ${r1.worstRestMin % 60}분). 다른 날을 고르세요.`;
-    const myAfter = after(state.schedules, new Set([...picks, ...incoming.map(fdKey)]), incoming);
-    const r2 = restApi.check(myAfter, { focusEntries: incoming });
-    if (r2.status === "FAIL") return `❌ 내 일정에서 7일 안에 30시간 연속 휴식이 없어져요(가장 긴 휴식 ${Math.floor(r2.worstRestMin / 60)}시간 ${r2.worstRestMin % 60}분). 다른 날을 고르세요.`;
+    // 받는 근무는 친구 근무표 원본을 쓴다 — 글용 요약(daySchedules)에는 승무시간이 없다.
+    const theirPicked = theirs.filter(s => theirGives.has(fdKey(s)));
+    const myAfter = after(state.schedules, new Set([...picks, ...theirPicked.map(fdKey)]), theirPicked);
+    const changed = [...myGives, ...theirPicked];
+    const r = rulesFor("친구", theirAfter, changed) || rulesFor("내", myAfter, changed);
+    if (r) return r;
   }
   return protectedMogijiIssueMessage(policy?.findProtectedRestViolation(state.schedules, incoming), "내 일정에서") ||
     restIssueMessage(restCheckIncoming(post.offered, givenDays)) ||

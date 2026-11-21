@@ -16,6 +16,7 @@ const KEY = email => `friends:${email}`;
 // 근무표에서 친구에게 보여줄 칸만 남긴다. 편조·좌석·자격 정보는 보내지 않는다.
 const SHARED_FIELDS = ['month', 'day', 'type', 'title', 'dep', 'arr', 'routeSummary', 'reportTime',
   'departureTime', 'arrivalTime', 'releaseTime', 'ground', 'station', 'standby', 'activityCode', 'aircraft',
+  'blockMinutes', 'requiresEdto', 'requiresCat3', 'specialAirports',   // 회사 룰 검사(승무시간·자격)에 필요
   'patternId', 'lockReason'];
 export function sharedDuty(s) {
   const out = {};
@@ -56,6 +57,7 @@ async function peerCard(env, email, status) {
   const rec = await readRecord(env, email);
   return { id: rec.id, name: p.realName || p.nickname || user.username || '이름 없음',
     crewType: p.crewType || null, roleType: p.roleType || null, base: p.base || null, status,
+    aircraft: status === 'friend' ? p.aircraft || null : undefined, edto: status === 'friend' ? !!p.edto : undefined,
     acceptsDirect: status === 'friend' ? rec.allowDirect !== false : undefined };
 }
 
