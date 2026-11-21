@@ -960,10 +960,11 @@ function lastArrivalOf(s) {
   const route = String(s?.routeSummary || "").split("→").map(x => x.trim()).filter(Boolean);
   return (route[route.length - 1] || s?.arr || "").toUpperCase();
 }
-function samePatternDayKeys(k1, k2) {
+// list·bases 를 넘기면 친구 근무표에도 같은 규칙을 쓴다(친구 스케줄 화면).
+function samePatternDayKeys(k1, k2, list = state.schedules, bases = myBaseAirports()) {
   const find = key => {
     const { day, month } = parseDayKey(key);
-    return (state.schedules || []).find(s => s.day === day && (s.month || state.currentMonth) === month);
+    return (list || []).find(s => s.day === day && (s.month || state.currentMonth) === month);
   };
   const a = find(k1), b = find(k2);
   if (!a || !b) return true;                  // 근무표에 없는 날은 예전처럼 날짜로만
@@ -976,7 +977,6 @@ function samePatternDayKeys(k1, k2) {
   if (isFlight(a)) {
     if (b.type === "LAYOV" || b.type === "ARRIVAL") return true;
     if (!isFlight(b)) return false;
-    const bases = myBaseAirports();
     if (!bases.length) return true;           // 베이스를 모르면 비행끼리는 예전처럼 묶는다
     return !bases.includes(lastArrivalOf(a)); // 전날 베이스 복귀로 끝났으면 다른 패턴(퀵턴)
   }
@@ -1614,16 +1614,16 @@ function dateKeyShift(key, delta) {
   d.setDate(d.getDate() + delta);
   return dayKey(d.getDate(), `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
 }
-function tripKeysOf(key) {
+function tripKeysOf(key, list = state.schedules, bases = myBaseAirports()) {
   const find = k => { const { day, month } = parseDayKey(k);
-    return (state.schedules || []).find(s => s.day === day && (s.month || state.currentMonth) === month); };
+    return (list || []).find(s => s.day === day && (s.month || state.currentMonth) === month); };
   const isTrip = s => s && ["국내선", "국제선", "LAYOV", "ARRIVAL"].includes(s.type);
   if (!isTrip(find(key))) return [key];
   const keys = [key];
   for (let k = key; ; ) { const prev = dateKeyShift(k, -1);
-    if (!isTrip(find(prev)) || !samePatternDayKeys(prev, k)) break; keys.unshift(prev); k = prev; }
+    if (!isTrip(find(prev)) || !samePatternDayKeys(prev, k, list, bases)) break; keys.unshift(prev); k = prev; }
   for (let k = key; ; ) { const next = dateKeyShift(k, 1);
-    if (!isTrip(find(next)) || !samePatternDayKeys(k, next)) break; keys.push(next); k = next; }
+    if (!isTrip(find(next)) || !samePatternDayKeys(k, next, list, bases)) break; keys.push(next); k = next; }
   return keys;
 }
 function partialTripCheck() {
@@ -2229,7 +2229,7 @@ async function openMyPostsManager() {
 // ── 친구 스케줄 (2026-11-21) ──
 // 서로 수락한 친구끼리 근무표를 나란히 본다. 서버는 편조 이름을 빼고 보낸다.
 // 친구는 서버가 정한 임의 id 로만 다룬다(이메일은 오지 않는다).
-const friendsState = { friends: [], results: [], selected: null, schedule: null, month: null };
+const friendsState = { friends: [], results: [], selected: null, schedule: null, month: null, allowDirect: true, pickTheirs: new Set(), pickMine: new Set() };
 
 async function friendsApi(path, body) {
   const res = await apiFetch(`${API_BASE}/api/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
@@ -2240,7 +2240,9 @@ async function friendsApi(path, body) {
 
 async function loadFriends() {
   try {
-    friendsState.friends = (await friendsApi("friends-list")).friends || [];
+    const data = await friendsApi("friends-list");
+    friendsState.friends = data.friends || [];
+    friendsState.allowDirect = data.allowDirect !== false;
   } catch (e) { showToast(e.message); }
   const ids = friendsState.friends.filter(f => f.status === "friend").map(f => f.id);
   if (!ids.includes(friendsState.selected)) { friendsState.selected = ids[0] || null; friendsState.schedule = null; }
@@ -2260,6 +2262,7 @@ async function searchFriends() {
 
 async function selectFriend(id) {
   friendsState.selected = id;
+  friendsState.pickTheirs.clear(); friendsState.pickMine.clear();
   friendsState.schedule = null;
   renderFriends();
   try {
@@ -2275,6 +2278,15 @@ async function onFriendsClick(e) {
   try {
     if (action === "select") return selectFriend(id);
     if (action === "month") { friendsState.month = id; return renderFriends(); }
+    if (action === "pick-theirs" || action === "pick-mine") return toggleFriendPick(action, id);
+    if (action === "swap-send") return sendFriendSwap();
+    if (action === "swap-clear") { friendsState.pickTheirs.clear(); friendsState.pickMine.clear(); friendsState.swapMsg = null; return renderFriends(); }
+    if (action === "allow-direct") {
+      const data = await friendsApi("friends-settings", { allowDirect: !friendsState.allowDirect });
+      friendsState.allowDirect = data.allowDirect;
+      showToast(data.allowDirect ? "친구의 직접 스왑 요청을 받습니다" : "친구의 직접 스왑 요청을 받지 않습니다");
+      return renderFriends();
+    }
     if (action === "request") { await friendsApi("friends-request", { id }); showToast("친구 요청을 보냈어요"); }
     if (action === "accept" || action === "decline") await friendsApi("friends-respond", { id, accept: action === "accept" });
     if (action === "remove") {
@@ -2302,6 +2314,85 @@ function friendDutyHtml(s) {
   return `<strong>${escapeHtml(s.title || t)}</strong>${route ? `<small>${escapeHtml(route)}</small>` : ""}${time ? `<small class="fd-time">${escapeHtml(time)}</small>` : ""}`;
 }
 
+// 친구 근무에 바로 요청 — 근무 하나를 누르면 같은 패턴(레이오버 등) 전체가 함께 골라진다.
+const fdKey = s => `${s.month || state.currentMonth}-${String(s.day).padStart(2, "0")}`;
+function friendSwappable(s) {
+  if (!s || !s.type || ["OFF", "VAC"].includes(String(s.type).toUpperCase()) || s.lockReason) return false;
+  const d = dayToDate(s.day, s.month || state.currentMonth);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return d && d >= today;
+}
+// 레이오버 트립은 내 달력과 같은 규칙(tripKeysOf)으로 묶는다. 근무표의 patternId 는
+// 날짜마다 따로 붙어 있어 묶음 기준이 못 된다(2026-11-21 Kay — 12/8~10 중 일부만 골라짐).
+function patternKeys(list, s, bases) {
+  return tripKeysOf(fdKey(s), list, bases);
+}
+function toggleFriendPick(action, key) {
+  const mine = action === "pick-mine";
+  const list = mine ? state.schedules : (friendsState.schedule || []);
+  const set = mine ? friendsState.pickMine : friendsState.pickTheirs;
+  const s = list.find(x => fdKey(x) === key);
+  if (!s) return;
+  const friend = friendsState.friends.find(f => f.id === friendsState.selected);
+  const fb = String(friend?.base || "").toUpperCase();
+  const bases = mine ? myBaseAirports() : !fb ? [] : SEOUL_BASES.includes(fb) ? SEOUL_BASES : [fb];
+  const keys = patternKeys(list, s, bases);
+  const on = set.has(key);
+  keys.forEach(k => on ? set.delete(k) : set.add(k));
+  friendsState.swapMsg = null;
+  renderFriends();
+}
+async function sendFriendSwap() {
+  const friend = friendsState.friends.find(f => f.id === friendsState.selected);
+  if (!friend || !friendsState.pickTheirs.size || !friendsState.pickMine.size) return;
+  if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧이 부족합니다 — 다음 달 기본 크레딧 또는 PRO를 이용해주세요."); return; }
+  const days = [...friendsState.pickTheirs].sort().map(k => ({ month: k.slice(0, 7), day: Number(k.slice(8)) }));
+  let post;
+  try { post = (await friendsApi("friends-swap-start", { id: friend.id, days })).post; }
+  catch (e) { showToast(e.message); return; }
+  state.posts = [post, ...state.posts.filter(p => p.id !== post.id)];
+  // 회사 규정 — 보내기 전에 내 쪽(받게 될 친구 근무)을 일반 스왑과 같은 기준으로 확인하고,
+  // 걸리면 보내지 않는다. 친구 쪽은 친구가 수락할 때 같은 검사가 다시 돈다(서버도 한 번 더).
+  const issue = friendSwapIssue(post);
+  friendsState.swapMsg = issue;
+  if (issue) { renderFriends(); return; }
+  // 내가 줄 근무 — 일반 1:1 요청과 같은 모양(offered)으로 만든다. 편조는 내 근무라 원본에서 붙인다.
+  const picks = friendsState.pickMine;
+  const entries = validationRosterSnapshot().filter(s => picks.has(fdKey(s))).map(e => {
+    const src = state.schedules.find(s => fdKey(s) === fdKey(e));
+    return src?.crewComposition ? { ...e, crewComposition: src.crewComposition } : e;
+  });
+  const offer = offeredFromRosterDays(entries);
+  if (!offer) { showToast("내 근무를 다시 골라 주세요"); return; }
+  openRequestModal(post.id, offer);
+}
+
+function friendSwapIssue(post) {
+  const grade = postGradeCheck(post);
+  if (grade.status === "FAIL") return `❌ ${grade.reason}${grade.detail ? ` (${grade.detail})` : ""}`;
+  const picks = friendsState.pickMine;
+  const myGives = state.schedules.filter(s => picks.has(fdKey(s)));
+  const incoming = post.offered.daySchedules || [];
+  const givenDays = myGives.map(s => s.day);
+  // 겹치는 근무 — 받는 날에 내 다른 근무가 남아 있거나, 친구가 받을 날에 친구 다른 근무가 있으면 안 된다.
+  const busy = s => s && s.type && String(s.type).toUpperCase() !== "OFF";
+  const theirGives = new Set(friendsState.pickTheirs);
+  const myClash = incoming.map(d => state.schedules.find(s => fdKey(s) === fdKey(d)))
+    .find(s => busy(s) && !picks.has(fdKey(s)));
+  if (myClash) return `❌ 받을 날 ${schedMonthNumFromEntry(myClash)}/${myClash.day}에 내 근무(${escapeHtml(myClash.title || myClash.type)})가 남아 있어요. 그 근무도 함께 내주거나 다른 날을 고르세요.`;
+  const theirClash = myGives.map(g => (friendsState.schedule || []).find(s => fdKey(s) === fdKey(g)))
+    .find(s => busy(s) && !theirGives.has(fdKey(s)));
+  if (theirClash) return `❌ 친구가 받을 날 ${schedMonthNumFromEntry(theirClash)}/${theirClash.day}에 친구 근무(${escapeHtml(theirClash.title || theirClash.type)})가 있어요. 그 근무도 함께 받거나 다른 날을 고르세요.`;
+  if (state.user.crewType === "CABIN") {
+    const v = window.CrewSwapCabinPolicy?.findRestViolation(state.schedules, myGives, incoming);
+    return cabinRestIssueMessage(v, "내 일정");
+  }
+  const policy = window.CrewSwapMogijiPolicy;
+  return protectedMogijiIssueMessage(policy?.findProtectedRestViolation(state.schedules, incoming), "내 일정에서") ||
+    restIssueMessage(restCheckIncoming(post.offered, givenDays)) ||
+    mogijiIssueMessage(mogijiRestCheckIncoming(post.offered, givenDays)) || null;
+}
+
 function renderFriends() {
   const card = (f, actions) => `<div class="friend-card"><div><strong>${escapeHtml(f.name)}</strong><small>${escapeHtml(friendRoleText(f))}</small></div><div class="friend-actions">${actions}</div></div>`;
   const btn = (action, id, label, cls = "secondary-button") => `<button type="button" class="${cls}" data-friend-action="${action}" data-friend-id="${escapeHtml(id)}">${label}</button>`;
@@ -2326,6 +2417,7 @@ function renderFriends() {
   $("#friendChips").innerHTML = friends.length
     ? friends.map(f => `<button type="button" class="friend-chip${f.id === friendsState.selected ? " is-active" : ""}" data-friend-action="select" data-friend-id="${escapeHtml(f.id)}"><span>${escapeHtml(f.name.slice(0, 1))}</span>${escapeHtml(f.name)}</button>`).join("")
     : `<p class="hint">아직 친구가 없어요. 위에서 사번이나 실명으로 찾아 요청해 보세요.</p>`;
+  $("#friendChips").insertAdjacentHTML("beforeend", `<label class="friend-allow"><input type="checkbox" data-friend-action="allow-direct"${friendsState.allowDirect ? " checked" : ""}> 친구의 직접 스왑 요청 받기</label>`);
 
   const box = $("#friendCompare");
   const friend = friends.find(f => f.id === friendsState.selected);
@@ -2340,16 +2432,34 @@ function renderFriends() {
   const days = new Date(y, m, 0).getDate();
   const mine = d => state.schedules.find(s => s.day === d && (s.month || state.currentMonth) === month);
   const their = d => theirs.find(s => s.day === d && s.month === month);
+  const direct = friend.acceptsDirect !== false;
+  const cell = (s, kind) => {
+    const set = kind === "mine" ? friendsState.pickMine : friendsState.pickTheirs;
+    if (!direct || !friendSwappable(s)) return `<div class="fc-cell">${friendDutyHtml(s)}</div>`;
+    const key = fdKey(s);
+    return `<button type="button" class="fc-cell is-pickable${set.has(key) ? " is-picked" : ""}" data-friend-action="pick-${kind === "mine" ? "mine" : "theirs"}" data-friend-id="${key}">${friendDutyHtml(s)}</button>`;
+  };
   const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   const rows = [];
   for (let d = 1; d <= days; d++) {
     const w = new Date(y, m - 1, d).getDay();
-    rows.push(`<div class="fc-row"><div class="fc-date${w === 0 ? " is-sun" : w === 6 ? " is-sat" : ""}"><strong>${m}/${d}</strong><small>${dow[w]}</small></div><div class="fc-cell">${friendDutyHtml(mine(d))}</div><div class="fc-cell">${friendDutyHtml(their(d))}</div></div>`);
+    rows.push(`<div class="fc-row"><div class="fc-date${w === 0 ? " is-sun" : w === 6 ? " is-sat" : ""}"><strong>${m}/${d}</strong><small>${dow[w]}</small></div>${cell(mine(d), "mine")}${cell(their(d), "theirs")}</div>`);
   }
   box.innerHTML = `
     <div class="fc-months">${months.map(mo => `<button type="button" class="secondary-button${mo === month ? " is-active" : ""}" data-friend-action="month" data-friend-id="${mo}">${Number(mo.slice(5))}월</button>`).join("")}
       ${btn("remove", friend.id, "친구 끊기", "link-button")}</div>
-    <div class="fc-table"><div class="fc-row fc-head"><div>날짜</div><div>나</div><div>${escapeHtml(friend.name)}</div></div>${rows.join("")}</div>`;
+    ${direct ? `<p class="hint fc-guide">스왑하려면 <b>${escapeHtml(friend.name)}</b> 님 근무(받을 근무)와 내 근무(줄 근무)를 눌러 고르세요. 레이오버는 패턴 전체가 함께 골라져요.</p>`
+      : `<p class="hint fc-guide">${escapeHtml(friend.name)} 님은 지금 직접 스왑 요청을 받지 않아요.</p>`}
+    <div class="fc-table"><div class="fc-row fc-head"><div>날짜</div><div>나</div><div>${escapeHtml(friend.name)}</div></div>${rows.join("")}</div>
+    ${direct && (friendsState.pickTheirs.size || friendsState.pickMine.size) ? `
+    <div class="fc-swapbar">
+      <div><small>받을 근무</small><strong>${friendsState.pickTheirs.size ? [...friendsState.pickTheirs].sort().map(k => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`).join(", ") : "친구 근무를 고르세요"}</strong></div>
+      <div><small>줄 근무</small><strong>${friendsState.pickMine.size ? [...friendsState.pickMine].sort().map(k => `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`).join(", ") : "내 근무를 고르세요"}</strong></div>
+      ${friendsState.swapMsg ? `<div class="fc-swapbar-msg">${friendsState.swapMsg}</div>` : ""}
+      <div class="fc-swapbar-actions">${btn("swap-clear", "", "다시 고르기")}${btn("swap-send", "", "스왑 요청 보내기", "primary-button")}</div>
+    </div>` : ""}`;
+  const sendBtn = box.querySelector('[data-friend-action="swap-send"]');
+  if (sendBtn) sendBtn.disabled = !friendsState.pickTheirs.size || !friendsState.pickMine.size;
 }
 
 // 내 근무 상단 버튼 → 「나만의 편조 알림」 전용 화면.
@@ -2993,7 +3103,7 @@ function wantedSummary(w) {
 async function reconcileMyPostsWithRoster() {
   const sync = window.CrewSwapRosterSync;
   if (!sync || !state.myPosts.length || !state.schedules.length) return;
-  const stale = sync.findStalePosts(state.myPosts, state.schedules, state.currentMonth);
+  const stale = sync.findStalePosts(state.myPosts.filter(p => !p.friendDirect), state.schedules, state.currentMonth);
   if (!stale.length) return;
 
   const withdrawn = [];
@@ -3044,6 +3154,8 @@ async function reconcileMyPostsWithRoster() {
 }
 
 function renderMyPosts() {
+  // 친구 직접 요청으로 생긴 비공개 글은 내가 올린 글이 아니라 목록에서 뺀다.
+  const myPosts = state.myPosts.filter(p => !p.friendDirect);
   const el = $("#myPostList");
   if (!el) return;
   const section = $("#myPostSection");
@@ -3054,11 +3166,11 @@ function renderMyPosts() {
   if (title) title.textContent = managing ? "📋 내가 올린 스왑 관리" : "📋 이미 올린 스케줄";
   if (closeButton) closeButton.hidden = !managing;
   if (menuCount) {
-    menuCount.textContent = state.myPosts.length
-      ? `현재 ${state.myPosts.length}건 · 진행 중인 글은 수정·취소하고, 환급 완료 기록은 삭제할 수 있습니다.`
+    menuCount.textContent = myPosts.length
+      ? `현재 ${myPosts.length}건 · 진행 중인 글은 수정·취소하고, 환급 완료 기록은 삭제할 수 있습니다.`
       : "등록한 스왑이 있는지 서버에서 확인합니다.";
   }
-  if (state.myPosts.length === 0) {
+  if (myPosts.length === 0) {
     el.innerHTML = managing
       ? `<div class="empty-state">이 계정으로 등록한 스왑이 없습니다.</div>`
       : "";
@@ -3066,7 +3178,7 @@ function renderMyPosts() {
     return;
   }
   if (section) section.hidden = false;
-  el.innerHTML = state.myPosts.map(p => {
+  el.innerHTML = myPosts.map(p => {
     const rd = p.registeredAt;
     const rdDisplay = (rd && rd.includes('T'))
       ? (() => { const d = new Date(rd); return `${d.getMonth()+1}/${d.getDate()} 등록`; })()
@@ -5954,7 +6066,7 @@ function switchTab(name, { preserveSelection = false } = {}) {
   state.managingMyPosts = name === "myPostsManager";
   // "스왑하기" 하나로 묶인 find/post는 같은 하단 탭(data-tab="find")을 함께 활성화
   const SWAP_VIEWS = ["swapGuide", "find", "post", "myPostsManager", "premiumAlerts"];
-  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : ["crewAlert", "friends"].includes(name) ? "schedule" : name;
+  const bottomActive = SWAP_VIEWS.includes(name) ? "swapGuide" : name === "crewAlert" ? "schedule" : name;
   $$(".tab").forEach(t => t.classList.toggle("is-active", t.dataset.tab === bottomActive));
   $$(".view").forEach(v => v.classList.toggle("is-active", v.id === name));
   // 사용자·크레딧 헤더는 모든 메뉴에서 숨기고 알림종만 화면에 고정한다.
@@ -6906,7 +7018,7 @@ function bindEvents() {
     if (!CREDIT_POLICY.canSpend(state, 1, isPremiumUser())) { showToast("크레딧 부족"); return; }
     // 중복 등록 방지: 일(day) 숫자가 아닌 YYYY-MM-DD 전체 날짜로 활성 글만 비교한다.
     // 구버전 글은 patternName(예: 7/23~7/25)에서 날짜를 복원한다.
-    const dupPost = window.CrewSwapPostDates.findDuplicatePost(state.myPosts, [...state.selectedDays]);
+    const dupPost = window.CrewSwapPostDates.findDuplicatePost(state.myPosts.filter(p => !p.friendDirect), [...state.selectedDays]);
     if (dupPost) {
       showToast(`이미 같은 날짜로 등록된 글이 있습니다 (${dupPost.offered.patternName})`);
       return;
@@ -7603,12 +7715,12 @@ function syncFormsFromState() {
 /* ====== 언어 토글 (KO ↔ EN) — 핵심 라벨만 ====== */
 const I18N = {
   KO: {
-    "탭.스케줄":"📅 내 근무","탭.찾기":"🔄 스왑하기","탭.등록":"➕ 스왑하기","탭.요청함":"📨 요청","탭.정보":"👤 내 정보",
+    "탭.스케줄":"📅 내 근무","탭.찾기":"🔄 스왑하기","탭.등록":"➕ 스왑하기","탭.요청함":"📨 요청","탭.친구":"👥 친구","탭.정보":"👤 내 정보",
     "버튼.불러오기":"📥 CrewConnex 불러오기","버튼.삭제":"데이터 삭제",
     "월":"월","주":"주","리스트":"리스트","제목.내스케줄":"내 근무","제목.스왑찾기":"가능한 스왑 보기","제목.스왑등록":"내 스왑 올리기","제목.요청함":"받은/보낸 요청","제목.내정보":"내 정보",
   },
   EN: {
-    "탭.스케줄":"📅 My Roster","탭.찾기":"🔄 Swap","탭.등록":"➕ Swap","탭.요청함":"📨 Requests","탭.정보":"👤 Profile",
+    "탭.스케줄":"📅 My Roster","탭.찾기":"🔄 Swap","탭.등록":"➕ Swap","탭.요청함":"📨 Requests","탭.친구":"👥 Friends","탭.정보":"👤 Profile",
     "버튼.불러오기":"📥 Import from CrewConnex","버튼.삭제":"Clear data",
     "월":"Month","주":"Week","리스트":"List","제목.내스케줄":"My Roster","제목.스왑찾기":"Available swaps","제목.스왑등록":"Post my swap","제목.요청함":"Requests","제목.내정보":"Profile",
   }
@@ -7618,7 +7730,7 @@ state.lang = localStorage.getItem("jjswap_lang") || "KO";
 function applyLang() {
   const t = I18N[state.lang] || I18N.KO;
   // 하단 탭 라벨
-  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", myPostsManager:"탭.찾기", premiumAlerts:"탭.찾기", post:"탭.등록", requests:"탭.요청함", profile:"탭.정보" };
+  const tabMap = { schedule:"탭.스케줄", swapGuide:"탭.찾기", find:"탭.찾기", myPostsManager:"탭.찾기", premiumAlerts:"탭.찾기", post:"탭.등록", requests:"탭.요청함", friends:"탭.친구", profile:"탭.정보" };
   document.querySelectorAll(".tab[data-tab]").forEach(b => {
     const k = tabMap[b.dataset.tab];
     if (k && t[k]) b.textContent = t[k];
