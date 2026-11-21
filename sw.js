@@ -1,6 +1,6 @@
 // CrewSwap Service Worker
-const CACHE = 'crewswap-v223';
-const SHELL = ['./index.html', './styles.css?v=223', './credit-policy.js?v=223', './post-dates.js?v=223', './schedule-continuity.js?v=223', './request-disclosure.js?v=223', './swap-usage.js?v=223', './post-history.js?v=223', './roster-sync.js?v=223', './post-details.js?v=223', './mogiji-policy.js?v=223', './cabin-policy.js?v=223', './release-notice.js?v=223', './selection-flow.js?v=223', './airport-aliases.js?v=223', './grade-policy.js?v=223', './crew-seniority.js?v=223', './duty-window.js?v=223', './activity-codes.js?v=223', './duty-limits.js?v=223', './rest-window.js?v=223', './app.js?v=223', './manifest.json', './privacy.html', './terms.html', './support.html'];
+const CACHE = 'crewswap-v224';
+const SHELL = ['./index.html', './styles.css?v=224', './credit-policy.js?v=224', './post-dates.js?v=224', './schedule-continuity.js?v=224', './request-disclosure.js?v=224', './swap-usage.js?v=224', './post-history.js?v=224', './roster-sync.js?v=224', './post-details.js?v=224', './mogiji-policy.js?v=224', './cabin-policy.js?v=224', './release-notice.js?v=224', './selection-flow.js?v=224', './airport-aliases.js?v=224', './grade-policy.js?v=224', './crew-seniority.js?v=224', './duty-window.js?v=224', './activity-codes.js?v=224', './duty-limits.js?v=224', './rest-window.js?v=224', './app.js?v=224', './manifest.json', './privacy.html', './terms.html', './support.html'];
 
 // 설치 — 앱 쉘 캐시
 self.addEventListener('install', e => {
@@ -38,7 +38,19 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 앱 쉘 — 캐시 우선, 없으면 네트워크
+  // 페이지(index.html) — 네트워크 우선. 캐시 우선이면 업데이트 후 첫 접속에 옛 화면이
+  // 떠서, 새로고침을 몇 번 해야 새 기능이 보였다(2026-11-21 Kay). 오프라인이면 캐시.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then(res => {
+        if (res.ok) { const clone = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', clone)); }
+        return res;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // 앱 쉘(js·css) — 캐시 우선. 파일 주소에 ?v= 버전이 붙어 있어 새 index.html 이 새 파일을 부른다.
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
