@@ -68,6 +68,18 @@
       entry.releaseEst = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}${plus ? "+1" : ""}`;
       changed++;
     });
+    // 야간 SIM(20:45~02:45) 다음 날은 예전 가져오기에서 「← R_SIM2 도착」으로 저장됐다. 비행 도착이 아니므로 「SIM 종료」로 보인다.
+    schedules.forEach(entry => {
+      if (!entry || entry.type !== "ARRIVAL") return;
+      const previous = byDate.get(shiftedKey(entry, -1));
+      if (previous?.type !== "GND") return;
+      const label = /SIM/i.test(`${previous.title || ""} ${previous.activityCode || ""} ${entry.title || ""}`) ? "SIM 종료" : `${previous.title || "지상근무"} 종료`;
+      if (entry.title === label) return;
+      entry.title = label;
+      entry.routeSummary = label;
+      entry.arrivalAirport = null;
+      changed++;
+    });
     schedules.forEach(entry => {
       if (!entry || entry.type !== "UNKNOWN") return;
       const previous = byDate.get(shiftedKey(entry, -1));

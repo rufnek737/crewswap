@@ -40,3 +40,12 @@ test('야간 왕복(PUS-TAG→TAG-PUS)은 하나의 근무, 외지 도착편은 
   assert.equal(iv.length, 2);
   assert.equal(iv[0].end - rw.REST_START_BUMPER_MIN - iv[0].start, 11 * 60 + 45);
 });
+
+test('야간 SIM 다음 날의 「도착」은 「SIM 종료」로 보인다', () => {
+  const r = [
+    { month: '2026-12', day: 22, type: 'GND', title: 'SIM 훈련', reportTime: '20:45', releaseTime: '02:45+1' },
+    { month: '2026-12', day: 23, type: 'ARRIVAL', title: '← R_SIM2 도착', arrivalTime: '02:45+1' },
+  ];
+  cont.normalizeScheduleContinuity(r);
+  assert.equal(r[1].title, 'SIM 종료');
+});

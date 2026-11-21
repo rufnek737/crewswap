@@ -2395,10 +2395,19 @@ function friendSwapIssue(post) {
   const theirGives = new Set(friendsState.pickTheirs);
   const myClash = incoming.map(d => state.schedules.find(s => fdKey(s) === fdKey(d)))
     .find(s => busy(s) && !picks.has(fdKey(s)));
-  if (myClash) return `❌ 받을 날 ${schedMonthNumFromEntry(myClash)}/${myClash.day}에 내 근무(${escapeHtml(myClash.title || myClash.type)})가 남아 있어요. 그 근무도 함께 내주거나 다른 날을 고르세요.`;
+  // 훈련·지상근무처럼 바꿀 수 없는 근무와 겹치면 「함께 내주라」가 아니라 「그날은 안 된다」고 말한다(2026-11-21 Kay).
+  const clashText = (who, s) => {
+    const md = `${schedMonthNumFromEntry(s)}/${s.day}`, name = escapeHtml(s.title || s.type);
+    if (s.lockReason || /VAC|휴가/i.test(`${s.type} ${s.title || ""}`))
+      return `❌ ${md}은 ${who} ${name} 날이라 근무를 넣을 수 없어요. 훈련·지상근무·휴가는 바꿀 수 없으니 다른 날을 고르세요.`;
+    return who === "내"
+      ? `❌ ${md}에 이미 내 근무(${name})가 있어요. 내 ${name}도 함께 내주거나 다른 날을 고르세요.`
+      : `❌ ${md}에 이미 친구 근무(${name})가 있어요. 친구 ${name}도 함께 받거나 다른 날을 고르세요.`;
+  };
+  if (myClash) return clashText("내", myClash);
   const theirClash = myGives.map(g => (friendsState.schedule || []).find(s => fdKey(s) === fdKey(g)))
     .find(s => busy(s) && !theirGives.has(fdKey(s)));
-  if (theirClash) return `❌ 친구가 받을 날 ${schedMonthNumFromEntry(theirClash)}/${theirClash.day}에 친구 근무(${escapeHtml(theirClash.title || theirClash.type)})가 있어요. 그 근무도 함께 받거나 다른 날을 고르세요.`;
+  if (theirClash) return clashText("친구", theirClash);
   if (state.user.crewType === "CABIN") {
     const v = window.CrewSwapCabinPolicy?.findRestViolation(state.schedules, myGives, incoming);
     return cabinRestIssueMessage(v, "내 일정");
