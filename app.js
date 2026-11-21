@@ -2384,6 +2384,12 @@ async function sendFriendSwap() {
 }
 
 function friendSwapIssue(post) {
+  // 회사 제출 마감 — 바뀌는 날 중 가장 이른 날 기준(운항 2영업일 전 17시). 지나면 회사가 받지 않는다.
+  const firstKey = [...friendsState.pickMine, ...friendsState.pickTheirs].sort()[0];
+  if (firstKey) {
+    const dd = dDayInfo(Number(firstKey.slice(8)), firstKey.slice(0, 7));
+    if (dd.expired) return `❌ ${companyDeadlineText(Number(firstKey.slice(8)), firstKey.slice(0, 7), dd)}. 회사에 제출할 수 없어서 보낼 수 없어요. 더 뒤의 날을 고르세요.`;
+  }
   const grade = postGradeCheck(post);
   if (grade.status === "FAIL") return `❌ ${grade.reason}${grade.detail ? ` (${grade.detail})` : ""}`;
   const picks = friendsState.pickMine;
