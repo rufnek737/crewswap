@@ -11,7 +11,7 @@ import gradePolicy from '../grade-policy.js';
 import crewGrades from '../crew-grades.js';
 import airportAliases from '../airport-aliases.js';
 import { buildAccountDeletionPlan } from './account-delete.mjs';
-import { handleFriendsList, handleFriendsSearch, handleFriendsRequest, handleFriendsRespond, handleFriendsRemove, handleFriendsSchedule, handleFriendsSettings, handleFriendsSwapStart, removeAllFriends } from './friends.mjs';
+import { handleFriendsList, handleFriendsSearch, handleFriendsRequest, handleFriendsRespond, handleFriendsRemove, handleFriendsSchedule, handleFriendsSettings, handleFriendsSwapStart, removeAllFriends, friendRealNames } from './friends.mjs';
 import {
   createStore, listPosts, listRequests, listRequestsForEmail,
   listPremiumAlerts, savePremiumAlerts, saveIndex,
@@ -1565,7 +1565,7 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
       quals: [post.offered?.edto ? 'EDTO' : null, post.offered?.cat3 ? 'CAT III' : null].filter(Boolean).join(' / ') || '일반',
       base: post.ownerBase || null,
       message: message || '',
-      fromEmail: authEmail, fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
+      fromEmail: authEmail, fromNick: (post.friendDirect && (await friendRealNames(env, post.ownerEmail)).get(authEmail)) || fromNick, fromBase: fromBase || null, fromRole: fromRole || null,
       fromRealName: fromRealName || '', fromEmployeeId: fromEmployeeId || '', fromPhone: fromPhone || '',
       offered: offered || null,             // 상대가 날짜를 고르면 확정됨 (구버전은 즉시 값 있음)
       openRoster: Array.isArray(openRoster) ? safeOpenRoster : null, // 비공개 날짜를 서버에서도 강제 제거
@@ -2168,8 +2168,15 @@ async function handleRequestsGet(request, env, authEmail) {
       }
       return record;
     };
-    const sent = await Promise.all(idx.filter(r => r.fromEmail === email).map(forViewer).map(withAvoid));
-    const received = await Promise.all(idx.filter(r => r.toEmail === email).map(forViewer).map(withAvoid));
+    // 친구끼리는 실명으로 — 이메일은 forViewer 에서 지워지므로 그 전에 바꾼다.
+    const friendNames = await friendRealNames(env, email);
+    const withFriendName = r => {
+      const fromName = friendNames.get(r.fromEmail), toName = friendNames.get(r.toEmail);
+      return fromName || toName ? { ...r, ...(fromName && { fromNick: fromName }), ...(toName && { toNick: toName }) } : r;
+    };
+    const view = r => withAvoid(forViewer(withFriendName(r)));
+    const sent = await Promise.all(idx.filter(r => r.fromEmail === email).map(view));
+    const received = await Promise.all(idx.filter(r => r.toEmail === email).map(view));
     return json({ sent, received });
   } catch (e) { return json({ error: e.message }, 500); }
 }

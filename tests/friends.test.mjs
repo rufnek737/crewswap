@@ -97,3 +97,15 @@ test('친구 근무로 비공개 글을 만든다 — 친구가 아니거나 받
   assert.equal((await handleFriendsSwapStart(e, A, b.id, days, null, now)).status, 403);
   assert.equal((await handleFriendsList(e, A)).friends[0].acceptsDirect, false);
 });
+
+test('친구끼리만 실명 이름표를 준다', async () => {
+  const { friendRealNames } = await import('../worker/friends.mjs');
+  const e = env();
+  const [b] = (await handleFriendsSearch(e, A, '2002')).results;
+  const { myId: aId } = await handleFriendsList(e, A);
+  await handleFriendsRequest(e, A, b.id);
+  assert.equal((await friendRealNames(e, A)).size, 0);          // 요청만 한 상태
+  await handleFriendsRespond(e, B, aId, true);
+  assert.equal((await friendRealNames(e, A)).get(B), '박다라');
+  assert.equal((await friendRealNames(e, B)).get(A), '김가나');
+});

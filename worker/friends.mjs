@@ -238,3 +238,15 @@ export async function removeAllFriends(env, me) {
   }
   await env.POSTS.delete(KEY(me));
 }
+
+// 친구끼리 오가는 요청·알림은 닉네임 대신 실명으로 보인다 — 친구 화면도 실명이라 같은 사람이 두 이름으로 보이지 않게.
+export async function friendRealNames(env, me) {
+  const rec = await env.POSTS.get(KEY(me), { type: 'json' });
+  const names = new Map();
+  for (const f of rec?.list || []) {
+    if (f.status !== 'friend') continue;
+    const profile = (await env.POSTS.get(`user:${f.email}`, { type: 'json' }))?.profile || {};
+    if (profile.realName) names.set(f.email, profile.realName);
+  }
+  return names;
+}
