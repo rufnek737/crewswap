@@ -5744,13 +5744,16 @@ function requestCard(r) {
           ? `변경 시작일의 ${rules.deadline.businessDays}영업일 전 ${rules.deadline.hour || 17}시까지`
           : "회사 마감 시각까지";
         // 회사 상신 주체 = 글을 올린 사람(포스트 작성자). received 뷰 = 내가 작성자.
-        const iAmPoster = !isSent;
+        // 친구 근무에 바로 요청한 건은 요청한 사람이 상신한다(2026-11-21 Kay).
+        const friendDirect = !!r.friendDirect || String(r.postId || "").startsWith("FP-");
+        const iAmPoster = friendDirect ? isSent : !isSent;
+        const submitterRole = friendDirect ? "요청한 사람" : "글 작성자";
         const myId = state.user.nickname || "나";
         const submitted = !!r.submitted;
         const submitRejected = !!r.submitRejected;
         const submitterBanner = iAmPoster
-          ? `<div class="submit-owner me">📮 회사 상신은 <strong>${escapeHtml(myId)}(글 작성자)</strong>님이 진행합니다.</div>`
-          : `<div class="submit-owner other">📮 회사 상신은 <strong>글 작성자(${r.nickname && r.nickname !== "비공개" ? escapeHtml(r.nickname) : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
+          ? `<div class="submit-owner me">📮 회사 상신은 <strong>${escapeHtml(myId)}(${submitterRole})</strong>님이 진행합니다.</div>`
+          : `<div class="submit-owner other">📮 회사 상신은 <strong>${submitterRole}(${r.nickname && r.nickname !== "비공개" ? escapeHtml(r.nickname) : "상대"})</strong>가 진행합니다. 상대의 상신 완료를 기다려 주세요.</div>`;
         // 상신 반려 버튼 — 상신 전후 모두 필요하다. 상신하자마자 반려될 수도 있고,
         // 완료 표시를 한 뒤에 회사에서 반려 통보가 올 수도 있다.
         const rejectBtn = `<button class="withdraw-button submit-rejected-btn" data-req-id="${escapeHtml(r.id)}">⛔ 회사에서 반려됨</button>`;
@@ -5765,7 +5768,7 @@ function requestCard(r) {
         } else if (submitted) {
           const doneMsg = iAmPoster
             ? `<div class="submit-status done">✅ 회사 상신 완료 표시함 — 상대에게 알림이 전송되었습니다.</div>`
-            : `<div class="submit-status done">✅ 글 작성자가 회사 상신을 완료했습니다.</div>`;
+            : `<div class="submit-status done">✅ ${submitterRole}가 회사 상신을 완료했습니다.</div>`;
           // 완료 표시 뒤에 반려 통보가 오는 경우가 있어 글 작성자에게는 버튼을 남겨둔다
           submitAction = iAmPoster
             ? `${doneMsg}<div class="submit-actions" style="margin-top:8px;">${rejectBtn}</div>`

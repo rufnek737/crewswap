@@ -1571,6 +1571,8 @@ async function handleRequestsCreate(request, env, authEmail, allowSandbox = fals
       openRoster: Array.isArray(openRoster) ? safeOpenRoster : null, // 비공개 날짜를 서버에서도 강제 제거
       lockedDays: safeLockedDays,
       toEmail: post.ownerEmail, toNick: post.ownerNick || null,
+      // 친구 근무에 바로 요청한 건 — 요청한 사람이 먼저 바꾸자고 했으니 회사 상신도 요청한 사람이 한다.
+      friendDirect: !!post.friendDirect,
       status: offered ? (type === 'ask' ? '의향 문의' : '요청 대기') : '상대가 바꿀 날 고르는 중',
       stage: 1,
       creditSpent: debitSpent,
@@ -1904,7 +1906,7 @@ async function handleRequestsSubmitNudge(request, env, authEmail) {
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.fromEmail !== email) return json({ error: '확인 메세지 권한이 없습니다' }, 403); // 요청 보낸 사람만
+    if (nudgerEmail(rec) !== email) return json({ error: '확인 메세지 권한이 없습니다' }, 403); // 상신하지 않는 쪽만
     if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 확인 메세지를 보낼 수 있습니다' }, 400);
     if (rec.submitted) return json({ error: '이미 상신 완료된 건입니다' }, 400);
     rec.submitNudgedAt = new Date().toISOString();
@@ -1914,6 +1916,11 @@ async function handleRequestsSubmitNudge(request, env, authEmail) {
     return json({ ok: true });
   } catch (e) { return json({ error: e.message }, 500); }
 }
+
+// 회사 상신을 하는 사람. 보통은 글 작성자(받은 쪽), 친구 직접 요청은 요청한 사람.
+function isFriendDirectRequest(rec) { return !!rec?.friendDirect || String(rec?.postId || '').startsWith('FP-'); }
+function submitterEmail(rec) { return isFriendDirectRequest(rec) ? rec.fromEmail : rec.toEmail; }
+function nudgerEmail(rec) { return isFriendDirectRequest(rec) ? rec.toEmail : rec.fromEmail; }
 
 /* 상호 수락된 글은 더 이상 다른 사람이 요청할 수 없어야 한다.
    글을 목록에서 지우는 대신 'submitting'(회사 상신중)으로 바꿔, 남들에게는
@@ -1967,7 +1974,7 @@ async function handleRequestsSubmitDone(request, env, authEmail) {
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.toEmail !== email) return json({ error: '상신 완료 권한이 없습니다 (글 작성자만)' }, 403);
+    if (submitterEmail(rec) !== email) return json({ error: '상신 완료 권한이 없습니다 (상신하는 사람만)' }, 403);
     if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 상신할 수 있습니다' }, 400);
     rec.submitted = true;
     rec.submittedAt = new Date().toISOString();
@@ -2053,7 +2060,7 @@ async function handleRequestsSubmitRejected(request, env, authEmail) {
   try {
     const rec = await env.POSTS.get(`req:${id}`, { type: 'json' });
     if (!rec) return json({ error: '요청을 찾을 수 없음' }, 404);
-    if (rec.toEmail !== email) return json({ error: '상신 결과를 기록할 권한이 없습니다 (글 작성자만)' }, 403);
+    if (submitterEmail(rec) !== email) return json({ error: '상신 결과를 기록할 권한이 없습니다 (상신하는 사람만)' }, 403);
     if ((rec.stage || 1) < 3) return json({ error: '상호 수락 후에만 기록할 수 있습니다' }, 400);
     if (rec.submitRejected) return json({ ok: true, alreadyRejected: true });
 
