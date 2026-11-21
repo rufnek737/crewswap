@@ -4616,8 +4616,40 @@ function saveSeenAskAcceptedIds(set) {
   localStorage.setItem("crewswap_seen_ask_accepted", JSON.stringify([...set].slice(-200)));
 }
 
+// 친구 요청·수락도 알림 창에 남긴다 — 푸시만 오고 앱 안 어디에도 없었다(2026-11-21).
+// 한 번 띄운 건 다시 띄우지 않는다.
+async function syncFriendAlerts() {
+  if (!state.user.email || !state.sessionToken) return;
+  let friends;
+  try { friends = (await friendsApi("friends-list")).friends || []; } catch { return; }
+  friendsState.friends = friends;
+  let seen;
+  try { seen = new Set(JSON.parse(localStorage.getItem("crewswap_alerted_friends") || "[]")); } catch { seen = new Set(); }
+  let changed = false;
+  friends.forEach(f => {
+    const key = `${f.status}:${f.id}`;
+    if (!["incoming", "friend"].includes(f.status) || seen.has(key)) return;
+    seen.add(key); changed = true;
+    // 처음 켤 때 이미 친구인 사람까지 「친구가 되었어요」로 쏟아내지 않도록, 받은 요청만 바로 알리고
+    // 친구는 내가 요청을 보냈던(보낸 요청 기록이 남은) 경우에만 알린다.
+    if (f.status === "friend" && !seen.has(`outgoing:${f.id}`)) return;
+    state.alerts.unshift({
+      kind: "match", goTo: "friends",
+      title: f.status === "incoming" ? "👥 친구 요청 도착" : "👥 친구가 되었어요",
+      body: f.status === "incoming" ? `${f.name} 님이 스케줄 공유 친구를 요청했어요 — 친구 탭에서 수락해 주세요` : `${f.name} 님과 서로 스케줄을 볼 수 있어요`,
+      time: "방금", createdAt: new Date().toISOString(),
+    });
+  });
+  friends.filter(f => f.status === "outgoing").forEach(f => { const k = `outgoing:${f.id}`; if (!seen.has(k)) { seen.add(k); changed = true; } });
+  if (changed) {
+    localStorage.setItem("crewswap_alerted_friends", JSON.stringify([...seen].slice(-300)));
+    saveState(); renderAlerts();
+  }
+}
+
 async function fetchRequests() {
   if (!state.user.email) return;
+  syncFriendAlerts();
   try {
     const res = await apiFetch(`${API_BASE}/api/requests-get`);
     if (!res.ok) return;
@@ -5905,6 +5937,7 @@ function alertActionLabel(a) {
     return "내 스왑 관리로 이동";
   }
   if (a.goTo === "find") return "해당 스왑 확인";
+  if (a.goTo === "friends") return "친구 화면으로 이동";
   if (a.kind === "match") {
     return /확정|승인|완료|거절/.test(a.title || "") ? "매칭 결과 확인" : "요청 내용 확인";
   }
@@ -5913,6 +5946,11 @@ function alertActionLabel(a) {
 
 async function openAlertDestination(a) {
   if (!a) return;
+  if (a.goTo === "friends") {
+    switchTab("friends");
+    setAlertPanel(false);
+    return;
+  }
   if (a.goTo === "find") {
     switchTab("find");
     setAlertPanel(false);
