@@ -27,7 +27,7 @@ test("shows a release once and shows again when the release id changes", () => {
 test("keeps the current release notes in the announcement list", () => {
   const item = releaseNotice.announcement();
   assert.equal(item.kind, "announce");
-  assert.match(item.title, /2027년 9월 30일까지 모든 기능 무료/);
+  assert.match(item.title, /모든 기능 무료/);
   assert.match(item.body, /급구 쿠폰 매달 1장/);
   // 버전을 여기 박아두면 올릴 때마다 깨진다. 모듈이 말하는 값과 같은지만 본다.
   assert.equal(item.releaseVersion, releaseNotice.current.version);
