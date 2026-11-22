@@ -177,7 +177,7 @@ test("the final Q&A matches the current privacy, credit, and PRO policies", () =
   assert.match(app, /상호 수락한 뒤에만 공개됩니다/);
   assert.match(app, /매월 첫 실행 시 기본 3크레딧이 제공되며/);
   assert.match(app, /매칭 없이 마감되면 사용한 크레딧의 50%가 자동 환급/);
-  assert.match(app, /PRO 영구 이용권은 최초 1회만 구매하는 상품/);
+  assert.match(app, /지금은 PRO 기능을 포함한 모든 기능이 무료/);
   assert.match(app, /편조구성원은 상호 수락이 끝난 뒤에 확인할 수 있습니다/);
   assert.match(app, /월 2회, 연 12회 한도/);
   assert.match(app, /PRO 정보, 크레딧은 서버 계정에 연결/);
