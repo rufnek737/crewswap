@@ -6760,6 +6760,12 @@ function bindEvents() {
   $("#publicBoardSignupBtn")?.addEventListener("click", () => { closePublicBoard(); openSignupModal(); });
   $("#publicBoardLoginBtn")?.addEventListener("click", () => { closePublicBoard(); openLoginModal(state.user.email || ""); });
   $("#goToBoardBtn")?.addEventListener("click", openPublicBoard);
+  // 로그인 창 ✕ — 로그인하지 않은 상태면 가입 없이 둘러보기로 보낸다. 빈 앱 화면에 두면
+  // 뒤에서 도는 요청이 「로그인 만료」로 창을 다시 띄운다(2026-11-22 Kay).
+  $("#loginCloseBtn")?.addEventListener("click", () => {
+    closeLoginModal();
+    if (!state.sessionToken) openPublicBoard();
+  });
   $("#goToSignupBtn")?.addEventListener("click", () => { closeLoginModal(); openSignupModal(); });
   $("#goToResetBtn")?.addEventListener("click", () => openResetModal());
   $("#resetBackBtn")?.addEventListener("click", () => { closeResetModal(); openLoginModal(); });

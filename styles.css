@@ -1463,3 +1463,6 @@ button.fc-cell.is-picked small, button.fc-cell.is-picked .fd-time { color: rgba(
 .find-keyword-form { display: flex; gap: 8px; margin: 12px 0 10px; }
 .find-keyword-form input { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; }
 .find-keyword-form button { flex-shrink: 0; }
+
+/* 로그인 창 닫기 ✕ */
+.dialog-close-x { position: absolute; top: 10px; right: 10px; z-index: 2; width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(255,255,255,.25); color: #fff; font-size: 18px; line-height: 36px; cursor: pointer; }
