@@ -1250,12 +1250,15 @@ async function handlePostsGet(request, env) {
         if (dutyHasPerson(await loadSchedules(p.ownerEmail), dateKeysOf(p.offered, p.deadlineMonth), avoidNames)) avoidBlockedIds.add(p.id);
       }));
     }
+    // 친구가 올린 글은 닉네임 대신 실명으로 보인다(2026-11-22 Kay).
+    const friendNames = auth ? await friendRealNames(env, auth.email) : new Map();
     // 친구 직접 요청용 비공개 글은 요청한 사람에게만 보인다.
     const posts = idx.filter(p => p && (p.status === 'active' || p.status === 'submitting'))
       .filter(p => !p.friendDirect || (auth && (p.visibleTo || []).includes(auth.email))).map(p => {
       const { deleteToken, ownerEmail, ownerValidationRoster, visibleTo, ...pub } = p;
       // 이메일 자체는 비공개, 연락 가능 여부만 노출 (구버전 글 식별용)
       pub.contactable = !!ownerEmail;
+      if (friendNames.has(ownerEmail)) { pub.ownerNick = friendNames.get(ownerEmail); pub.friendOwner = true; }
       if (avoidBlockedIds.has(p.id)) pub.avoidBlocked = true;
       if (pub.offered && !viewerIsPro) {
         const { crewPublic, ...offeredPublic } = pub.offered;

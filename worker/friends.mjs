@@ -127,7 +127,8 @@ export async function handleFriendsSwapStart(env, me, id, days, mogijiPolicy, no
     ownerValidationRoster: roster.map(({ crewComposition, crew, crewMembers, mySeat, ...rest }) => rest),
     deadlineDay: ss[0].day, deadlineMonth: ss[0].month,
     offered: {
-      patternName: ss.length > 1 ? `${md(ss[0])}~${md(tail)} 친구 근무` : `${md(ss[0])} 친구 근무`,
+      // 일반 글과 같은 이름 — 「친구 근무」라고 따로 붙이지 않는다(2026-11-22 Kay).
+      patternName: `${ss.map(md).join(',')} · ${(ss.find(isDuty) || ss[0]).type} 패턴`,
       dateKeys: keys, startDate: keys[0], endDate: keys[keys.length - 1], days: ss.map(s => Number(s.day)),
       daySchedules: ss.map(s => ({ month: s.month, day: s.day, type: s.type, title: s.title || null, dep: s.dep || null,
         arr: s.arr || null, routeSummary: s.routeSummary || null, reportTime: s.reportTime || null,
