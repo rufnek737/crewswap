@@ -38,6 +38,8 @@
     items: Object.freeze([
       Object.freeze({ version: "1.3.1", icon: "🎉", title: "모든 기능 무료",
         body: "PRO 기능(조건 알림·무제한 크레딧)과 급구 쿠폰까지 모든 기능을 무료로 쓰실 수 있어요." }),
+      Object.freeze({ version: "1.3.1", icon: "✨", title: "사용 편의성 향상",
+        body: "스왑하기와 알림받기 화면을 더 간단하게 바꿨어요. 키워드로 찾거나 모든 스케줄을 바로 볼 수 있어요." }),
       Object.freeze({ version: "1.3.0", icon: "👥", title: "친구 탭",
         body: "사번이나 실명으로 친구를 추가하고, 수락하면 서로 전체 스케줄을 볼 수 있습니다." }),
       Object.freeze({ version: "1.2.8", icon: "🔍", title: "가입 전에도 스왑 글 확인",
