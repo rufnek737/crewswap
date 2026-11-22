@@ -1459,3 +1459,7 @@ button.fc-cell.is-picked small, button.fc-cell.is-picked .fd-time { color: rgba(
 .friend-manage-list { display: grid; gap: 6px; width: 100%; margin: 4px 0 8px; }
 .friend-manage-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .friend-x { width: 32px; height: 32px; border: 1px solid #e0b4b4; border-radius: 8px; background: #fff5f5; color: #c62828; font-size: 15px; cursor: pointer; }
+/* 올라온 스왑글 확인하기 — 키워드 찾기 */
+.find-keyword-form { display: flex; gap: 8px; margin: 12px 0 10px; }
+.find-keyword-form input { flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px; }
+.find-keyword-form button { flex-shrink: 0; }

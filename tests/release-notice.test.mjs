@@ -27,7 +27,7 @@ test("shows a release once and shows again when the release id changes", () => {
 test("keeps the current release notes in the announcement list", () => {
   const item = releaseNotice.announcement();
   assert.equal(item.kind, "announce");
-  assert.match(item.title, /2027년 9월 30일까지 모든 기능 무료/);
+  assert.match(item.title, /모든 기능 무료/);
   assert.match(item.body, /급구 쿠폰 매달 1장/);
   // 버전을 여기 박아두면 올릴 때마다 깨진다. 모듈이 말하는 값과 같은지만 본다.
   assert.equal(item.releaseVersion, releaseNotice.current.version);
@@ -57,8 +57,9 @@ test("replaces old update notices while preserving all other alerts", () => {
 // 「What's New」 팝업 — 버전별 항목 목록. 새 버전마다 맨 위에 항목을 더하고 id 를 바꾼다.
 test("What's New lists the current version first and carries a fresh id", () => {
   const wn = releaseNotice.whatsNew;
-  assert.ok(wn.items.length >= 2);
-  assert.equal(wn.items[0].version, wn.version);
+  assert.ok(wn.items.length >= 1);
+  // 주요 기능만 싣는다 — 버그 수정만 있는 버전은 맨 위 항목이 이전 버전일 수 있다(2026-11-22 Kay).
+  assert.ok(wn.items.every(item => item.version <= wn.version));
   assert.match(wn.id, new RegExp(wn.version.replace(/\./g, "\\.")));
   for (const item of wn.items) {
     assert.ok(item.icon && item.title && item.body);

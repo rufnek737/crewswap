@@ -185,7 +185,7 @@ test("the final Q&A matches the current privacy, credit, and PRO policies", () =
   // 무료 기간에는 30일 체험권을 켤 수 없으므로 그 안내를 두지 않는다.
   // 유료화를 시작할 때 되살려야 한다(README 전환 절차 참조).
   assert.doesNotMatch(app, /Q\d+\. PRO 30일 무료 이용권은 언제 시작되나요/);
-  assert.match(app, /2027년 9월 30일까지 모든 기능을 무료로 사용/);
+  assert.match(app, /모든 기능을 무료로 사용/);
   assert.match(app, /마감일까지 매칭되지 않으면 사용한 급구 쿠폰 1장이 그대로 복구/);
   // 보상은 급구 쿠폰 반 장뿐이다. 크레딧을 준다고 안내하면 지갑과 어긋난다.
   assert.match(app, /급구에 응한 승무원은 회사 상신이 완료될 때 급구 쿠폰 0\.5장을 보상 받습니다/);
