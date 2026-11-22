@@ -1940,7 +1940,14 @@ function checkRulesForSelection() {
 }
 
 /* ====== 7. 매칭 / 점수 ====== */
+// 친구 직접 요청으로 서버가 만든 비공개 글(FP-) — 이미 요청이 간 글이라 스왑하기 목록·👀 수·알림에서 뺀다.
+// state.posts 에는 남겨 둔다(요청함에서 이 글을 찾아 쓴다). 2026-11-22 Kay
+function isFriendDirectPost(post) {
+  return !!post?.friendDirect || String(post?.id || "").startsWith("FP-");
+}
+
 function matchScore(post) {
+  if (isFriendDirectPost(post)) return null;
   // 필수 통과: 동일 회사 + 동일 직군
   if ((post.airline || "JEJU") !== state.user.airline) return null;
   if ((post.crewType || "PILOT") !== state.user.crewType) return null;
@@ -2148,11 +2155,11 @@ function visiblePosts() {
 // 내 글이 노출되는 범위 = 목록 필터와 같은 기준(동일 포지션). 등급은 노출을 가르지 않는다.
 function exposureCount() {
   const isCabin = state.user.crewType === "CABIN";
-  return state.posts.filter(p =>
+  return state.posts.filter(p => !isFriendDirectPost(p) && (
     isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
       : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole)
-  ).length;
+  )).length;
 }
 
 function candidateCountForOffered() {
@@ -2164,6 +2171,7 @@ function candidateCountForOffered() {
   const isCabin = state.user.crewType === "CABIN";
   const isFlight = ["국내선","국제선","LAYOV"].includes(myType);
   return state.posts.filter(p => {
+    if (isFriendDirectPost(p)) return false;
     const roleOK = isCabin
       ? p.crewType === "CABIN" && p.airline === state.user.airline
       : GRADE_POLICY.samePosition(state.user.roleType, p.ownerRole);
@@ -2937,7 +2945,7 @@ function renderCalendar() {
     // 👀 등록 글 카운트 — 다른 사용자가 이 날짜의 근무를 내놓은 스왑 글 건수
     // (post.offered.days에 해당 날짜가 포함된 글을 집계).
     // 날짜 숫자만 비교하면 11/7 글이 12/7 에도 세어진다(2026-11-20 Kay) — 월까지 맞춘다.
-    const watcherCount = state.posts.filter(p => window.CrewSwapPostDates.dateKeysForPost(p).includes(dayKey(day))).length;
+    const watcherCount = state.posts.filter(p => !isFriendDirectPost(p) && window.CrewSwapPostDates.dateKeysForPost(p).includes(dayKey(day))).length;
     cell.innerHTML = `
       <div class="date-number">
         <span>${day}</span>
@@ -3646,6 +3654,7 @@ function renderMatches() {
           <div class="badges">
             <span class="badge ${post.offered.type==="OFF"?"off":post.offered.type==="국내선"?"dom":post.offered.type==="RSV"?"rsv":""}">${escapeHtml(post.offered.type)}</span>
             <span class="badge badge-position">${positionLabel(post.ownerRole)}</span>
+            ${post.friendOwner && post.ownerNick ? `<span class="badge badge-friend">👥 ${escapeHtml(post.ownerNick)}</span>` : ""}
             ${post.offered.aircraft ? `<span class="badge badge-aircraft">✈ ${aircraftLabel(post.offered.aircraft)}</span>` : ""}
             ${post.offered.edto ? `<span class="badge">EDTO</span>` : ""}
             ${post.offered.cat3 ? `<span class="badge">CAT III</span>` : ""}

@@ -964,6 +964,7 @@ dialog::backdrop { background: rgba(15, 22, 32, 0.56); }
 /* ===== Position 배지 ===== */
 .badge-position { background: #eef0f4; color: #3a4a5c; font-weight: 700; }
 .badge-aircraft { background: #fff3e0; color: #b45309; font-weight: 800; border: 1px solid #f3c98a; }
+.badge-friend { background: #e8f5ee; color: #1f7a4d; font-weight: 800; border: 1px solid #b7e0c8; }
 
 /* ===== 상대가 내놓음 상세 펼침 ===== */
 .give-expand { border: 0; background: transparent; padding: 0; }
