@@ -16,7 +16,7 @@ const API_BASE = "https://api.rufnekcrew.com";
 // 반영됐는지 판별하는 기준이기도 하다(빌드 번호는 Debug/Release가 공유해 구분이 안 됨).
 // 코드를 배포할 때마다 날짜를 갱신할 것.
 const APP_VERSION = "1.3.0";
-const APP_RELEASE_DATE = "2026.11.21";
+const APP_RELEASE_DATE = "2026.11.22";
 const PUBLIC_API_PATHS = new Set([
   "/api/send-verify", "/api/check-verify", "/api/user-signup", "/api/user-login",
   "/api/user-reset-password", "/api/posts-public", "/api/premium-alert-config",
@@ -7713,7 +7713,10 @@ function toggleModal(panelId, overlayId, show) {
 function openLoginModal(prefillEmail) {
   closeSignupModal();
   toggleModal("resetPanel", "resetOverlay", false);
-  if (prefillEmail) { const el = document.getElementById("loginEmail"); if (el) el.value = prefillEmail; }
+  // 이미 열려 있는 로그인 창은 건드리지 않는다. 로그인 전 백그라운드 API 가 401 을 받을 때마다 이 함수가
+  // 다시 불려, 사용자가 입력 중인 이메일을 예전 계정 주소로 덮어쓰고 있었다(2026-11-22 Kay, 안드로이드).
+  const alreadyOpen = document.getElementById("loginPanel")?.hidden === false;
+  if (prefillEmail && !alreadyOpen) { const el = document.getElementById("loginEmail"); if (el) el.value = prefillEmail; }
   // 이전에 실패했던 로그인 시도의 빨간 오류 메시지가 남아있다가, 비밀번호
   // 재설정 완료 후 이 창이 다시 열릴 때 "서버 오류"처럼 보이는 문제 방지.
   const st = document.getElementById("loginStatus");
